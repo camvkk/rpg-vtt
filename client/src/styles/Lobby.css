@@ -1,0 +1,113 @@
+/* ── Lobby ── */
+.lobby {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.lobby-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+  z-index: 0;
+}
+.lobby-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(226,183,20,0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(199,125,255,0.08) 0%, transparent 50%);
+}
+
+.lobby-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  padding: 2rem;
+}
+
+.lobby-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.lobby-card {
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226,183,20,0.2) !important;
+}
+
+.lobby-tabs {
+  display: flex;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-surface-light);
+  border: 1px solid var(--color-border);
+}
+.lobby-tab {
+  flex: 1;
+  padding: 0.8rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all var(--transition-fast);
+}
+.lobby-tab:hover { background: rgba(226,183,20,0.1); color: var(--color-text); }
+.lobby-tab.active {
+  background: linear-gradient(135deg, var(--color-primary), #b8950f);
+  color: var(--bg-primary);
+}
+
+.lobby-code-input {
+  text-align: center;
+  font-size: 1.3rem !important;
+  letter-spacing: 0.25em;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+}
+
+.lobby-error {
+  background: rgba(255,107,107,0.1);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: 0.8rem;
+  color: var(--color-accent);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.lobby-submit {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.lobby-desc {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1.2rem;
+  margin-top: 1.5rem;
+}
+.lobby-desc h3 { margin-bottom: 0.4rem; }
+.lobby-desc p { margin-bottom: 0.8rem; font-size: 0.85rem; }
+
+.lobby-features {
+  list-style: none;
+  padding: 0;
+}
+.lobby-features li {
+  padding: 0.2rem 0;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+}

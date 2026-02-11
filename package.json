@@ -1,0 +1,33 @@
+{
+  "name": "rpg-vtt-backend",
+  "version": "1.0.0",
+  "description": "Backend for RPG Virtual Tabletop - A modern Roll20 alternative",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "server": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [
+    "rpg",
+    "vtt",
+    "virtual-tabletop",
+    "dnd",
+    "websocket",
+    "multiplayer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4",
+    "sql.js": "^1.13.0",
+    "sqlite3": "^5.1.6",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
