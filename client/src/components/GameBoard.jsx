@@ -4,7 +4,9 @@ import MapCanvas from './MapCanvas';
 import DiceRoller from './DiceRoller';
 import ChatPanel from './ChatPanel';
 import Initiative from './Initiative';
+import InitiativeTracker from './InitiativeTracker';
 import CharSheet from './CharSheet';
+import CharacterSheet from './CharacterSheet';
 import Ambiance from './Ambiance';
 import SystemImporter from './SystemImporter';
 import DMDashboard from './DMDashboard';
@@ -32,6 +34,7 @@ export default function GameBoard({ onLeaveRoom }) {
   const { state, actions } = useGame();
   const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled } = state;
   const isDM = player.isDM;
+  const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
@@ -367,24 +370,14 @@ export default function GameBoard({ onLeaveRoom }) {
                   </div>
                 </div>
 
-                {/* Initiative */}
-                <Initiative
-                  combatants={initiative.players?.map((p, i) => ({
-                    id: p.playerId,
-                    name: p.playerName,
-                    initiative: p.initiative,
-                    hp: { current: 100, max: 100 },
-                    ac: 15,
-                    conditions: p.conditions || [],
-                  })) || []}
-                  currentTurn={initiative.currentTurn}
-                  isInCombat={initiative.active}
-                  isDM={isDM}
-                  onNextTurn={() => actions.nextTurn()}
-                  onRollInitiative={() => actions.rollInitiative(player.id)}
-                  onStartCombat={() => actions.rollInitiative(player.id)}
-                  onEndCombat={() => actions.clearInitiative()}
-                />
+                {/* Initiative Toggle */}
+                <button
+                  onClick={() => setShowInitiativeTracker(!showInitiativeTracker)}
+                  className={`btn ${showInitiativeTracker ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ width: '100%', marginTop: 'var(--spacing-sm)' }}
+                >
+                  ⚔️ {showInitiativeTracker ? 'Ocultar' : 'Mostrar'} Iniciativa
+                </button>
               </>
             )}
 
@@ -452,21 +445,18 @@ export default function GameBoard({ onLeaveRoom }) {
         )}
       </div>
 
-      {/* Character Sheet Modal */}
+      {/* Floating Initiative Tracker */}
+      {showInitiativeTracker && <InitiativeTracker />}
+
+      {/* Character Sheet Modal (new full-page) */}
       {showCharSheet && (
-        <div className="gb-charsheet-overlay">
-          <div className="gb-charsheet-container">
-            <CharSheet
-              character={character}
-              isEditable={!isDM} // Jogadores editam, DM só visualiza
-              onUpdateCharacter={(char) => actions.updateCharacter(char)}
-              onRollDice={handleDiceRoll}
-              onToggleCollapse={() => setShowCharSheet(false)}
-              system={campaign.system || room.system || 'dnd5e'}
-              systemData={systemData}
-            />
-          </div>
-        </div>
+        <CharacterSheet
+          character={character}
+          isEditable={!isDM}
+          onUpdateCharacter={(char) => actions.updateCharacter(char)}
+          onRollDice={handleDiceRoll}
+          onClose={() => setShowCharSheet(false)}
+        />
       )}
 
       {/* Map Upload Modal */}
