@@ -27,8 +27,12 @@ const initialState = {
   // Tokens (array for simplicity — Map doesn't serialize in reducer)
   tokens: [],
 
-  // Fog of war revealed areas
+  // Fog of war revealed areas (rects, polygons, circles)
   fogAreas: [],
+  fogEnabled: true,
+
+  // Doors on walls
+  doors: [],
 
   // Drawings on the map
   drawings: [],
@@ -47,6 +51,20 @@ const initialState = {
 
   // AoE Effects
   aoeEffects: [],
+
+  // Scenes
+  scenes: [],
+
+  // Journal
+  journal: [],
+
+  // Jukebox
+  jukebox: {
+    playlists: [],
+    currentTrack: null,
+    isPlaying: false,
+    volume: 0.7,
+  },
 
   // UI
   ui: {
@@ -91,8 +109,10 @@ function gameReducer(state, action) {
         players: players || [],
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
+        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : true,
         drawings: gs?.drawings || [],
         walls: gs?.walls || [],
+        doors: gs?.doors || [],
         aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
@@ -119,8 +139,10 @@ function gameReducer(state, action) {
         character: character,
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
+        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : true,
         drawings: gs?.drawings || [],
         walls: gs?.walls || [],
+        doors: gs?.doors || [],
         aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
@@ -139,6 +161,7 @@ function gameReducer(state, action) {
         tokens: d.gameState?.tokens || state.tokens,
         fogAreas: d.gameState?.fog || state.fogAreas,
         walls: d.gameState?.walls || state.walls,
+        doors: d.gameState?.doors || state.doors,
         aoeEffects: d.gameState?.aoeEffects || state.aoeEffects,
         map: { ...state.map, url: d.gameState?.map || state.map.url },
       };
@@ -211,8 +234,35 @@ function gameReducer(state, action) {
     case 'FOG_REVEAL':
       return { ...state, fogAreas: [...state.fogAreas, action.payload] };
 
+    case 'FOG_HIDE':
+      return { ...state, fogAreas: state.fogAreas.filter(a => a.id !== action.payload.areaId) };
+
+    case 'FOG_RESET':
+      return { ...state, fogAreas: [] };
+
     case 'FOG_CLEAR':
-      return { ...state, fogAreas: [{ x: 0, y: 0, radius: 9999 }] };
+      return { ...state, fogAreas: [{ id: 'clear-all', type: 'circle', x: 0, y: 0, radius: 9999 }] };
+
+    case 'FOG_SYNC':
+      return { ...state, fogAreas: action.payload };
+
+    case 'FOG_TOGGLE':
+      return { ...state, fogEnabled: action.payload };
+
+    // Doors
+    case 'DOOR_ADD':
+      return { ...state, doors: [...state.doors, action.payload] };
+
+    case 'DOOR_UPDATE': {
+      const doorUpdate = action.payload;
+      return { ...state, doors: state.doors.map(d => d.id === doorUpdate.id ? { ...d, ...doorUpdate } : d) };
+    }
+
+    case 'DOOR_REMOVE':
+      return { ...state, doors: state.doors.filter(d => d.id !== action.payload.doorId) };
+
+    case 'DOOR_CLEAR':
+      return { ...state, doors: [] };
 
     // Drawings
     case 'DRAW_ADD':
@@ -274,6 +324,42 @@ function gameReducer(state, action) {
 
     case 'SET_AOE_CONFIG':
       return { ...state, ui: { ...state.ui, aoeConfig: { ...state.ui.aoeConfig, ...action.payload } } };
+
+    // Scenes
+    case 'SCENES_LOADED':
+      return { ...state, scenes: action.payload };
+
+    case 'SCENE_ACTIVATED': {
+      const scene = action.payload;
+      if (!scene) return state;
+      return {
+        ...state,
+        map: { ...state.map, url: scene.mapUrl || null },
+        tokens: scene.tokens || [],
+        fogAreas: scene.fog || [],
+        walls: scene.walls || [],
+        drawings: scene.drawings || [],
+        aoeEffects: scene.aoeEffects || [],
+        gridConfig: scene.gridConfig || state.gridConfig,
+      };
+    }
+
+    // Journal
+    case 'JOURNAL_LOADED':
+      return { ...state, journal: action.payload };
+
+    // Jukebox
+    case 'JUKEBOX_PLAYLISTS':
+      return { ...state, jukebox: { ...state.jukebox, playlists: action.payload } };
+
+    case 'JUKEBOX_PLAY':
+      return { ...state, jukebox: { ...state.jukebox, currentTrack: action.payload, isPlaying: true } };
+
+    case 'JUKEBOX_STOP':
+      return { ...state, jukebox: { ...state.jukebox, isPlaying: false, currentTrack: null } };
+
+    case 'JUKEBOX_VOLUME':
+      return { ...state, jukebox: { ...state.jukebox, volume: action.payload.volume } };
 
     default:
       return state;
@@ -425,7 +511,17 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Fog
     socket.on('fog:reveal', (data) => dispatch({ type: 'FOG_REVEAL', payload: data }));
+    socket.on('fog:hide', (data) => dispatch({ type: 'FOG_HIDE', payload: data }));
+    socket.on('fog:reset', () => dispatch({ type: 'FOG_RESET' }));
     socket.on('fog:clear', () => dispatch({ type: 'FOG_CLEAR' }));
+    socket.on('fog:sync', (data) => dispatch({ type: 'FOG_SYNC', payload: data }));
+    socket.on('fog:toggle', (data) => dispatch({ type: 'FOG_TOGGLE', payload: data.enabled }));
+
+    // Doors
+    socket.on('door:add', (data) => dispatch({ type: 'DOOR_ADD', payload: data }));
+    socket.on('door:update', (data) => dispatch({ type: 'DOOR_UPDATE', payload: data }));
+    socket.on('door:remove', (data) => dispatch({ type: 'DOOR_REMOVE', payload: data }));
+    socket.on('door:clear', () => dispatch({ type: 'DOOR_CLEAR' }));
 
     // Chat & Dice
     socket.on('chat:message', (data) => dispatch({ type: 'CHAT_MESSAGE', payload: {
@@ -477,6 +573,19 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // System events
     socket.on('system:parsed', (data) => dispatch({ type: 'SYSTEM_PARSED', payload: data }));
+
+    // Scene events
+    socket.on('scene:list', (data) => dispatch({ type: 'SCENES_LOADED', payload: data }));
+    socket.on('scene:activated', (data) => dispatch({ type: 'SCENE_ACTIVATED', payload: data }));
+
+    // Journal events
+    socket.on('journal:updated', (data) => dispatch({ type: 'JOURNAL_LOADED', payload: data }));
+
+    // Jukebox events
+    socket.on('jukebox:playlists', (data) => dispatch({ type: 'JUKEBOX_PLAYLISTS', payload: data }));
+    socket.on('jukebox:play', (data) => dispatch({ type: 'JUKEBOX_PLAY', payload: data }));
+    socket.on('jukebox:stop', () => dispatch({ type: 'JUKEBOX_STOP' }));
+    socket.on('jukebox:volume', (data) => dispatch({ type: 'JUKEBOX_VOLUME', payload: data }));
 
     return () => {
       socket.removeAllListeners();
@@ -685,7 +794,17 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Fog
     revealFog: (x, y, radius) => emit('fog:reveal', { x, y, radius }),
+    revealFogArea: (area) => emit('fog:reveal', area),
+    hideFogArea: (areaId) => emit('fog:hide', { areaId }),
+    resetFog: () => emit('fog:reset', {}),
     clearFog: () => emit('fog:clear', {}),
+    toggleFog: (enabled) => emit('fog:toggle', { enabled }),
+
+    // Doors
+    addDoor: (doorData) => emit('door:add', doorData),
+    updateDoor: (doorId, updates) => emit('door:update', { doorId, ...updates }),
+    removeDoor: (doorId) => emit('door:remove', { doorId }),
+    clearDoors: () => emit('door:clear', {}),
 
     // Chat
     sendMessage: (message, isWhisper = false, targetPlayer = null) =>
@@ -723,6 +842,26 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       dispatch({ type: 'SET_GRID_CONFIG', payload: config });
       emit('grid:config', config);
     },
+
+    // Scenes
+    listScenes: () => emit('scene:list', {}),
+    saveScene: (scene) => emit('scene:save', scene),
+    deleteScene: (sceneId) => emit('scene:delete', { sceneId }),
+    activateScene: (sceneId) => emit('scene:activate', { sceneId }),
+    saveCurrentScene: () => emit('scene:save-current', {}),
+
+    // Journal
+    listJournal: () => emit('journal:list', {}),
+    saveJournalEntry: (entry) => emit('journal:save', entry),
+    deleteJournalEntry: (entryId) => emit('journal:delete', { entryId }),
+
+    // Jukebox
+    listPlaylists: () => emit('jukebox:list', {}),
+    savePlaylist: (playlist) => emit('jukebox:save-playlist', playlist),
+    deletePlaylist: (playlistId) => emit('jukebox:delete-playlist', { playlistId }),
+    jukeboxPlay: (trackData) => emit('jukebox:play', trackData),
+    jukeboxStop: () => emit('jukebox:stop', {}),
+    jukeboxVolume: (volume) => emit('jukebox:volume', { volume }),
 
     // UI (local only)
     setActiveTool: (tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }),

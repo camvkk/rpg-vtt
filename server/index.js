@@ -21,7 +21,17 @@ const {
   generateCampaignId,
   saveChatMessage,
   saveSystemData,
-  getSystemData
+  getSystemData,
+  getScenes,
+  saveScene,
+  deleteScene,
+  setActiveScene,
+  getJournalEntries,
+  saveJournalEntry,
+  deleteJournalEntry,
+  getPlaylists,
+  savePlaylist,
+  deletePlaylist,
 } = require('./db');
 const roomManager = require('./rooms');
 const { TokenManager, MapManager, FogManager, AmbianceManager, getGameState } = require('./game-state');
@@ -65,6 +75,29 @@ app.post('/api/upload-map', express.raw({ type: 'image/*', limit: '10mb' }), (re
 // Token image upload endpoint
 const tokensDir = path.join(__dirname, 'public', 'tokens');
 if (!fs.existsSync(tokensDir)) fs.mkdirSync(tokensDir, { recursive: true });
+
+// Audio upload endpoint
+const audioDir = path.join(__dirname, 'public', 'audio');
+if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+
+app.post('/api/upload-audio', express.raw({ type: 'audio/*', limit: '20mb' }), (req, res) => {
+    const ct = req.headers['content-type'] || 'audio/mpeg';
+    const ext = ct.includes('ogg') ? 'ogg' : ct.includes('wav') ? 'wav' : 'mp3';
+    const filename = `audio-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(audioDir, filename), req.body);
+    res.json({ success: true, url: `/public/audio/${filename}` });
+});
+
+// Journal image upload endpoint
+const journalDir = path.join(__dirname, 'public', 'journal');
+if (!fs.existsSync(journalDir)) fs.mkdirSync(journalDir, { recursive: true });
+
+app.post('/api/upload-journal-image', express.raw({ type: 'image/*', limit: '5mb' }), (req, res) => {
+    const ext = (req.headers['content-type'] || 'image/png').split('/')[1] || 'png';
+    const filename = `journal-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(journalDir, filename), req.body);
+    res.json({ success: true, url: `/public/journal/${filename}` });
+});
 
 app.post('/api/upload-token', express.raw({ type: 'image/*', limit: '2mb' }), (req, res) => {
     const ext = (req.headers['content-type'] || 'image/png').split('/')[1] || 'png';
@@ -988,6 +1021,7 @@ io.on('connection', (socket) => {
                 conditions: data.conditions || [],
                 hp: data.hp || null,
                 lightRadius: data.lightRadius || 0,
+                visionRadius: data.visionRadius || 0,
                 characterName: data.characterName || null,
                 ownerId: player.id,
                 ownerName: player.name,
@@ -1122,11 +1156,30 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player) throw new Error('Player not authenticated');
             
-            const { x, y, radius } = data;
-            const result = await FogManager.revealArea(player.roomId, player.id, x, y, radius);
+            // Support new area format (rect, polygon, circle) and legacy format
+            const areaData = {
+                id: data.id || uuidv4(),
+                type: data.type || 'circle',
+                x: data.x,
+                y: data.y,
+                radius: data.radius,
+                width: data.width,
+                height: data.height,
+                points: data.points,
+                source: data.source || 'gm', // 'gm' or 'token'
+                tokenId: data.tokenId || null,
+                explored: data.explored || false,
+                timestamp: Date.now()
+            };
+            
+            // Save to room_state persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allFog = persistedState.fog || [];
+            allFog.push(areaData);
+            await saveRoomState(player.roomId, 'fog', allFog);
             
             // Broadcast to room
-            io.to(player.roomId).emit('fog:reveal', result);
+            io.to(player.roomId).emit('fog:reveal', areaData);
             
             if (callback) callback({ success: true });
         } catch (error) {
@@ -1148,6 +1201,144 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: true });
         } catch (error) {
             console.error('Error clearing fog:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Fog hide (re-fog an area)
+    socket.on('fog:hide', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can hide fog areas');
+            
+            const { areaId } = data;
+            
+            // Remove area from persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allFog = (persistedState.fog || []).filter(a => a.id !== areaId);
+            await saveRoomState(player.roomId, 'fog', allFog);
+            
+            io.to(player.roomId).emit('fog:hide', { areaId });
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error hiding fog:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Fog reset (re-fog everything)
+    socket.on('fog:reset', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can reset fog');
+            
+            await saveRoomState(player.roomId, 'fog', []);
+            
+            io.to(player.roomId).emit('fog:reset');
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error resetting fog:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Fog toggle (enable/disable)
+    socket.on('fog:toggle', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can toggle fog');
+            
+            const { enabled } = data;
+            await saveRoomState(player.roomId, 'fogEnabled', enabled);
+            
+            io.to(player.roomId).emit('fog:toggle', { enabled });
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error toggling fog:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Door events
+    socket.on('door:add', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can add doors');
+            
+            const doorData = {
+                id: data.id || uuidv4(),
+                x: data.x,
+                y: data.y,
+                wallId: data.wallId || null,
+                x1: data.x1, y1: data.y1, x2: data.x2, y2: data.y2,
+                state: data.state || 'closed', // open, closed, locked
+                timestamp: Date.now()
+            };
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const allDoors = persistedState.doors || [];
+            allDoors.push(doorData);
+            await saveRoomState(player.roomId, 'doors', allDoors);
+            
+            io.to(player.roomId).emit('door:add', doorData);
+            if (callback) callback({ success: true, doorData });
+        } catch (error) {
+            console.error('Error adding door:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('door:update', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player) throw new Error('Player not authenticated');
+            
+            const { doorId, ...updates } = data;
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const allDoors = persistedState.doors || [];
+            const idx = allDoors.findIndex(d => d.id === doorId);
+            if (idx >= 0) {
+                allDoors[idx] = { ...allDoors[idx], ...updates, id: doorId };
+                await saveRoomState(player.roomId, 'doors', allDoors);
+            }
+            
+            io.to(player.roomId).emit('door:update', { id: doorId, ...updates });
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error updating door:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('door:remove', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can remove doors');
+            
+            const { doorId } = data;
+            const persistedState = await loadRoomState(player.roomId);
+            const allDoors = (persistedState.doors || []).filter(d => d.id !== doorId);
+            await saveRoomState(player.roomId, 'doors', allDoors);
+            
+            io.to(player.roomId).emit('door:remove', { doorId });
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error removing door:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('door:clear', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can clear doors');
+            
+            await saveRoomState(player.roomId, 'doors', []);
+            io.to(player.roomId).emit('door:clear');
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error clearing doors:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });
@@ -1562,6 +1753,212 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: true });
         } catch (error) {
             console.error('Error setting grid config:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // ── Scene Management ──
+    socket.on('scene:list', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.campaignId) throw new Error('Not in a campaign');
+            const scenes = await getScenes(player.campaignId);
+            if (callback) callback({ success: true, scenes });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('scene:save', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can manage scenes');
+            const scene = { ...data, campaignId: player.campaignId };
+            await saveScene(scene);
+            const scenes = await getScenes(player.campaignId);
+            io.to(player.roomId).emit('scene:list', scenes);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('scene:delete', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can delete scenes');
+            await deleteScene(data.sceneId);
+            const scenes = await getScenes(player.campaignId);
+            io.to(player.roomId).emit('scene:list', scenes);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('scene:activate', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can activate scenes');
+            await setActiveScene(player.campaignId, data.sceneId);
+            const scenes = await getScenes(player.campaignId);
+            const activeScene = scenes.find(s => s.isActive);
+            // Update room state with active scene's data
+            if (activeScene) {
+                if (activeScene.mapUrl) await saveRoomState(player.roomId, 'map_url', activeScene.mapUrl);
+                await saveRoomState(player.roomId, 'tokens', activeScene.tokens || []);
+                await saveRoomState(player.roomId, 'fog', activeScene.fog || []);
+                await saveRoomState(player.roomId, 'walls', activeScene.walls || []);
+                await saveRoomState(player.roomId, 'drawings', activeScene.drawings || []);
+                await saveRoomState(player.roomId, 'aoe_effects', activeScene.aoeEffects || []);
+                if (activeScene.gridConfig) await saveRoomState(player.roomId, 'grid_config', activeScene.gridConfig);
+            }
+            io.to(player.roomId).emit('scene:list', scenes);
+            io.to(player.roomId).emit('scene:activated', activeScene);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Save current map state back to the active scene
+    socket.on('scene:save-current', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM');
+            const scenes = await getScenes(player.campaignId);
+            const active = scenes.find(s => s.isActive);
+            if (!active) throw new Error('No active scene');
+            const roomState = await loadRoomState(player.roomId);
+            active.mapUrl = roomState.map_url || active.mapUrl;
+            active.tokens = roomState.tokens || [];
+            active.fog = roomState.fog || [];
+            active.walls = roomState.walls || [];
+            active.drawings = roomState.drawings || [];
+            active.aoeEffects = roomState.aoe_effects || [];
+            active.gridConfig = roomState.grid_config || active.gridConfig;
+            await saveScene(active);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // ── Journal Management ──
+    socket.on('journal:list', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.campaignId) throw new Error('Not in a campaign');
+            let entries = await getJournalEntries(player.campaignId);
+            // Players only see entries shared with them or all
+            if (!player.isDM) {
+                entries = entries.filter(e => 
+                    e.sharedWith.includes('all') || e.sharedWith.includes(player.name)
+                );
+            }
+            if (callback) callback({ success: true, entries });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('journal:save', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can manage journal');
+            const entry = { ...data, campaignId: player.campaignId };
+            await saveJournalEntry(entry);
+            // Broadcast updated list to all
+            const allEntries = await getJournalEntries(player.campaignId);
+            io.to(player.roomId).emit('journal:updated', allEntries);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('journal:delete', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM');
+            await deleteJournalEntry(data.entryId);
+            const allEntries = await getJournalEntries(player.campaignId);
+            io.to(player.roomId).emit('journal:updated', allEntries);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // ── Jukebox / Playlist Management ──
+    socket.on('jukebox:list', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.campaignId) throw new Error('Not in a campaign');
+            const playlists = await getPlaylists(player.campaignId);
+            if (callback) callback({ success: true, playlists });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('jukebox:save-playlist', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM');
+            const playlist = { ...data, campaignId: player.campaignId };
+            await savePlaylist(playlist);
+            const playlists = await getPlaylists(player.campaignId);
+            io.to(player.roomId).emit('jukebox:playlists', playlists);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('jukebox:delete-playlist', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM');
+            await deletePlaylist(data.playlistId);
+            const playlists = await getPlaylists(player.campaignId);
+            io.to(player.roomId).emit('jukebox:playlists', playlists);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('jukebox:play', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM) throw new Error('Only DM can control jukebox');
+            // Broadcast play command to all players
+            io.to(player.roomId).emit('jukebox:play', data);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('jukebox:stop', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM) throw new Error('Only DM');
+            io.to(player.roomId).emit('jukebox:stop');
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('jukebox:volume', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM) throw new Error('Only DM');
+            io.to(player.roomId).emit('jukebox:volume', data);
+            if (callback) callback({ success: true });
+        } catch (error) {
             if (callback) callback({ success: false, error: error.message });
         }
     });

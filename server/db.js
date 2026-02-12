@@ -140,6 +140,42 @@ async function initDatabase() {
       parsed_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
     );
+    CREATE TABLE IF NOT EXISTS campaign_scenes (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      map_url TEXT,
+      grid_config TEXT,
+      tokens TEXT DEFAULT '[]',
+      fog TEXT DEFAULT '[]',
+      walls TEXT DEFAULT '[]',
+      drawings TEXT DEFAULT '[]',
+      aoe_effects TEXT DEFAULT '[]',
+      is_active INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    );
+    CREATE TABLE IF NOT EXISTS campaign_journal (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      image_url TEXT,
+      shared_with TEXT DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    );
+    CREATE TABLE IF NOT EXISTS campaign_playlists (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      tracks TEXT DEFAULT '[]',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    );
   `);
 
   // Migrations — add columns to existing tables (safe to run multiple times)
@@ -487,6 +523,119 @@ async function getSystemData(campaignId) {
   }
 }
 
+// ── Scene helper functions ──
+
+async function getScenes(campaignId) {
+  const rows = await query('SELECT * FROM campaign_scenes WHERE campaign_id = ? ORDER BY sort_order ASC', [campaignId]);
+  return rows.map(r => ({
+    id: r.id,
+    campaignId: r.campaign_id,
+    name: r.name,
+    mapUrl: r.map_url,
+    gridConfig: r.grid_config ? JSON.parse(r.grid_config) : null,
+    tokens: r.tokens ? JSON.parse(r.tokens) : [],
+    fog: r.fog ? JSON.parse(r.fog) : [],
+    walls: r.walls ? JSON.parse(r.walls) : [],
+    drawings: r.drawings ? JSON.parse(r.drawings) : [],
+    aoeEffects: r.aoe_effects ? JSON.parse(r.aoe_effects) : [],
+    isActive: !!r.is_active,
+    sortOrder: r.sort_order,
+  }));
+}
+
+async function saveScene(scene) {
+  await run(`
+    INSERT INTO campaign_scenes (id, campaign_id, name, map_url, grid_config, tokens, fog, walls, drawings, aoe_effects, is_active, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = ?, map_url = ?, grid_config = ?, tokens = ?, fog = ?, walls = ?, drawings = ?, aoe_effects = ?, is_active = ?, sort_order = ?
+  `, [
+    scene.id, scene.campaignId, scene.name, scene.mapUrl || null,
+    scene.gridConfig ? JSON.stringify(scene.gridConfig) : null,
+    JSON.stringify(scene.tokens || []), JSON.stringify(scene.fog || []),
+    JSON.stringify(scene.walls || []), JSON.stringify(scene.drawings || []),
+    JSON.stringify(scene.aoeEffects || []), scene.isActive ? 1 : 0, scene.sortOrder || 0,
+    // UPDATE values
+    scene.name, scene.mapUrl || null,
+    scene.gridConfig ? JSON.stringify(scene.gridConfig) : null,
+    JSON.stringify(scene.tokens || []), JSON.stringify(scene.fog || []),
+    JSON.stringify(scene.walls || []), JSON.stringify(scene.drawings || []),
+    JSON.stringify(scene.aoeEffects || []), scene.isActive ? 1 : 0, scene.sortOrder || 0,
+  ]);
+}
+
+async function deleteScene(sceneId) {
+  await run('DELETE FROM campaign_scenes WHERE id = ?', [sceneId]);
+}
+
+async function setActiveScene(campaignId, sceneId) {
+  await run('UPDATE campaign_scenes SET is_active = 0 WHERE campaign_id = ?', [campaignId]);
+  await run('UPDATE campaign_scenes SET is_active = 1 WHERE id = ? AND campaign_id = ?', [sceneId, campaignId]);
+}
+
+// ── Journal helper functions ──
+
+async function getJournalEntries(campaignId) {
+  const rows = await query('SELECT * FROM campaign_journal WHERE campaign_id = ? ORDER BY updated_at DESC', [campaignId]);
+  return rows.map(r => ({
+    id: r.id,
+    campaignId: r.campaign_id,
+    title: r.title,
+    content: r.content,
+    imageUrl: r.image_url,
+    sharedWith: r.shared_with ? JSON.parse(r.shared_with) : [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+async function saveJournalEntry(entry) {
+  await run(`
+    INSERT INTO campaign_journal (id, campaign_id, title, content, image_url, shared_with, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      title = ?, content = ?, image_url = ?, shared_with = ?, updated_at = datetime('now')
+  `, [
+    entry.id, entry.campaignId, entry.title, entry.content || '',
+    entry.imageUrl || null, JSON.stringify(entry.sharedWith || []),
+    entry.title, entry.content || '', entry.imageUrl || null, JSON.stringify(entry.sharedWith || []),
+  ]);
+}
+
+async function deleteJournalEntry(entryId) {
+  await run('DELETE FROM campaign_journal WHERE id = ?', [entryId]);
+}
+
+// ── Playlist helper functions ──
+
+async function getPlaylists(campaignId) {
+  const rows = await query('SELECT * FROM campaign_playlists WHERE campaign_id = ? ORDER BY sort_order ASC', [campaignId]);
+  return rows.map(r => ({
+    id: r.id,
+    campaignId: r.campaign_id,
+    name: r.name,
+    tracks: r.tracks ? JSON.parse(r.tracks) : [],
+    sortOrder: r.sort_order,
+  }));
+}
+
+async function savePlaylist(playlist) {
+  await run(`
+    INSERT INTO campaign_playlists (id, campaign_id, name, tracks, sort_order)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = ?, tracks = ?, sort_order = ?
+  `, [
+    playlist.id, playlist.campaignId, playlist.name,
+    JSON.stringify(playlist.tracks || []), playlist.sortOrder || 0,
+    playlist.name, JSON.stringify(playlist.tracks || []), playlist.sortOrder || 0,
+  ]);
+}
+
+async function deletePlaylist(playlistId) {
+  await run('DELETE FROM campaign_playlists WHERE id = ?', [playlistId]);
+}
+
 module.exports = { 
   db: null, 
   initDatabase, 
@@ -495,7 +644,6 @@ module.exports = {
   get, 
   saveRoomState, 
   loadRoomState,
-  // Campaign functions
   createCampaign,
   getCampaign,
   updateCampaignLastActive,
@@ -506,7 +654,19 @@ module.exports = {
   getChatHistory,
   updateCampaignDocs,
   generateCampaignId,
-  // Campaign System functions
   saveSystemData,
-  getSystemData
+  getSystemData,
+  // Scenes
+  getScenes,
+  saveScene,
+  deleteScene,
+  setActiveScene,
+  // Journal
+  getJournalEntries,
+  saveJournalEntry,
+  deleteJournalEntry,
+  // Playlists
+  getPlaylists,
+  savePlaylist,
+  deletePlaylist,
 };

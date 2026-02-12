@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import * as PIXI from 'pixi.js';
 const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } = PIXI;
 import { useGame } from '../contexts/GameContext';
@@ -120,6 +120,17 @@ const createAoEGraphics = (shape, config, x, y, targetX = null, targetY = null, 
 };
 
 import Minimap from './Minimap';
+import TokenContextMenu from './TokenContextMenu';
+
+// Token size → cells mapping for D&D
+const TOKEN_SIZE_CELLS = {
+  tiny: 0.5,
+  small: 0.5,
+  medium: 1,
+  large: 2,
+  huge: 3,
+  gargantuan: 4,
+};
 
 export default function MapCanvas({ 
   isDM = false, 
@@ -140,9 +151,14 @@ export default function MapCanvas({
   const aoeMapRef = useRef(new Map());
   const wallPlacementRef = useRef({ isPlacing: false, startPoint: null, graphics: null });
   const wallsMapRef = useRef(new Map());
+  const fogToolRef = useRef({ isDragging: false, startPoint: null, graphics: null, polygonPoints: [], isPolygonMode: false });
+  const doorsMapRef = useRef(new Map());
+  const doorPlacementRef = useRef({ isPlacing: false, graphics: null });
+
+  const [contextMenu, setContextMenu] = useState(null); // { token, x, y }
 
   const { state, actions } = useGame();
-  const { tokens, fogAreas, drawings, walls, map, ui, aoeEffects, player, gridConfig } = state;
+  const { tokens, fogAreas, fogEnabled, drawings, walls, doors, map, ui, aoeEffects, player, gridConfig } = state;
   const GRID_SIZE = gridConfig.gridSize || 40;
   const GRID_TYPE = gridConfig.gridType || 'square';
   const SNAP_ENABLED = gridConfig.snapEnabled !== false;
@@ -208,6 +224,7 @@ export default function MapCanvas({
       const fogLayer = new Container();
       const uiLayer = new Container();
 
+      tokenLayer.sortableChildren = true;
       app.stage.addChild(bgLayer, gridLayer, tokenLayer, wallLayer, lightingLayer, fogLayer, uiLayer);
       layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, wall: wallLayer, lighting: lightingLayer, fog: fogLayer, ui: uiLayer };
 
@@ -321,28 +338,287 @@ export default function MapCanvas({
 
     fogLayer.removeChildren();
 
-    // Create fog overlay (dark covering the entire map)
+    // If fog is disabled, don't draw anything
+    if (!fogEnabled && isDM) return;
+
+    // If no fog areas revealed yet and fog is enabled, show full darkness
+    // For players: always show fog, revealed areas are holes
+    // For DM: show semi-transparent fog overlay
+    const fogAlpha = isDM ? 0.4 : 0.85;
+    
     const fog = new Graphics();
     
     // Cover the entire map area with dark fog
-    fog.rect(0, 0, 4000, 4000).fill({ color: 0x000000, alpha: 0.8 });
+    fog.rect(-2000, -2000, 8000, 8000).fill({ color: 0x0a0a1a, alpha: fogAlpha });
 
-    // Cut out revealed areas using holes
+    // Cut out revealed areas
     fogAreas.forEach(area => {
-      if (area.radius) {
-        // Circular revealed area
+      const isExplored = area.explored && !isDM;
+      
+      if (area.type === 'rect' || (area.width && area.height)) {
+        fog.rect(area.x, area.y, area.width, area.height).cut();
+      } else if (area.type === 'polygon' && area.points && area.points.length >= 3) {
+        fog.moveTo(area.points[0].x, area.points[0].y);
+        for (let i = 1; i < area.points.length; i++) {
+          fog.lineTo(area.points[i].x, area.points[i].y);
+        }
+        fog.closePath().cut();
+      } else if (area.radius) {
+        // Circle (legacy + new)
         fog.circle(area.x, area.y, area.radius).cut();
       }
     });
 
     fogLayer.addChild(fog);
-  }, [fogAreas]);
 
-  // Reveal fog at a position (for DM only)
+    // Draw explored (dimmed) overlay for token-revealed areas that are no longer in active vision
+    if (!isDM) {
+      const exploredOverlay = new Graphics();
+      fogAreas.forEach(area => {
+        if (area.explored) {
+          exploredOverlay.beginPath();
+          if (area.type === 'rect' || (area.width && area.height)) {
+            exploredOverlay.rect(area.x, area.y, area.width, area.height);
+          } else if (area.type === 'polygon' && area.points && area.points.length >= 3) {
+            exploredOverlay.moveTo(area.points[0].x, area.points[0].y);
+            for (let i = 1; i < area.points.length; i++) {
+              exploredOverlay.lineTo(area.points[i].x, area.points[i].y);
+            }
+            exploredOverlay.closePath();
+          } else if (area.radius) {
+            exploredOverlay.circle(area.x, area.y, area.radius);
+          }
+          exploredOverlay.fill({ color: 0x0a0a1a, alpha: 0.35 });
+        }
+      });
+      if (exploredOverlay.geometry) {
+        fogLayer.addChild(exploredOverlay);
+      }
+    }
+  }, [fogAreas, fogEnabled, isDM]);
+
+  // Fog tool: start rectangle drag or polygon point
+  const startFogTool = useCallback((worldX, worldY, isShift) => {
+    if (!isDM) return;
+    
+    fogToolRef.current.isDragging = true;
+    fogToolRef.current.startPoint = { x: worldX, y: worldY };
+    fogToolRef.current.isHiding = isShift;
+    
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer) {
+      const graphics = new Graphics();
+      uiLayer.addChild(graphics);
+      fogToolRef.current.graphics = graphics;
+    }
+  }, [isDM]);
+
+  const updateFogTool = useCallback((worldX, worldY) => {
+    if (!fogToolRef.current.isDragging || !fogToolRef.current.startPoint) return;
+    
+    const g = fogToolRef.current.graphics;
+    if (!g) return;
+    
+    g.clear();
+    const start = fogToolRef.current.startPoint;
+    const w = worldX - start.x;
+    const h = worldY - start.y;
+    
+    const color = fogToolRef.current.isHiding ? 0xff4444 : 0x44ff44;
+    g.rect(start.x, start.y, w, h)
+      .fill({ color, alpha: 0.2 })
+      .stroke({ width: 2, color, alpha: 0.6 });
+  }, []);
+
+  const finishFogTool = useCallback((worldX, worldY) => {
+    if (!fogToolRef.current.isDragging || !fogToolRef.current.startPoint) return;
+    
+    const start = fogToolRef.current.startPoint;
+    const x = Math.min(start.x, worldX);
+    const y = Math.min(start.y, worldY);
+    const w = Math.abs(worldX - start.x);
+    const h = Math.abs(worldY - start.y);
+    
+    // Minimum size check
+    if (w > 5 && h > 5) {
+      if (fogToolRef.current.isHiding) {
+        // Find and remove fog areas that overlap with this rect
+        // For simplicity, we remove areas whose center is inside the hide rect
+        fogAreas.forEach(area => {
+          const cx = area.type === 'rect' ? area.x + (area.width || 0) / 2 : area.x;
+          const cy = area.type === 'rect' ? area.y + (area.height || 0) / 2 : area.y;
+          if (cx >= x && cx <= x + w && cy >= y && cy <= y + h) {
+            actions.hideFogArea(area.id);
+          }
+        });
+      } else {
+        // Reveal rectangle
+        actions.revealFogArea({
+          type: 'rect',
+          x, y, width: w, height: h
+        });
+      }
+    }
+    
+    // Clean up
+    if (fogToolRef.current.graphics) {
+      const uiLayer = layersRef.current.ui;
+      if (uiLayer) uiLayer.removeChild(fogToolRef.current.graphics);
+      fogToolRef.current.graphics = null;
+    }
+    fogToolRef.current.isDragging = false;
+    fogToolRef.current.startPoint = null;
+  }, [actions, fogAreas]);
+
+  // Legacy revealFogAt for backward compat
   const revealFogAt = useCallback((worldX, worldY, radius = GRID_SIZE * 1.5) => {
     if (!isDM) return;
-    actions.revealFog(worldX, worldY, radius);
+    actions.revealFogArea({ type: 'circle', x: worldX, y: worldY, radius });
   }, [isDM, actions]);
+
+  // Token-based fog reveal with raycasting
+  const revealFogForToken = useCallback((token) => {
+    if (!token.visionRadius || token.visionRadius <= 0) return;
+    
+    const gs = gridSizeRef.current;
+    const gt = gridTypeRef.current;
+    let tokenX, tokenY;
+    if (gt === 'hex') {
+      const pos = hexToPixel(token.x, token.y, gs);
+      tokenX = pos.x;
+      tokenY = pos.y;
+    } else {
+      tokenX = (token.x + 0.5) * gs;
+      tokenY = (token.y + 0.5) * gs;
+    }
+    
+    const maxDist = token.visionRadius * gs;
+    
+    // Get walls that block vision (exclude open doors)
+    const blockingWalls = walls.filter(wall => {
+      // Check if any open door is on this wall
+      const hasDoor = doors.some(door => door.wallId === wall.id && door.state === 'open');
+      return !hasDoor;
+    });
+    
+    // Also add closed door segments as blocking walls
+    const closedDoorWalls = doors
+      .filter(d => d.state !== 'open' && d.x1 !== undefined)
+      .map(d => ({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }));
+    
+    const allBlockers = [...blockingWalls, ...closedDoorWalls];
+    
+    if (allBlockers.length === 0) {
+      // No walls — just reveal a circle
+      actions.revealFogArea({
+        type: 'circle',
+        x: tokenX, y: tokenY,
+        radius: maxDist,
+        source: 'token',
+        tokenId: token.id
+      });
+      return;
+    }
+    
+    // Raycast to create visibility polygon
+    const rays = [];
+    const angleStep = Math.PI / 90; // 2 degrees
+    
+    for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+      const endX = tokenX + Math.cos(angle) * maxDist;
+      const endY = tokenY + Math.sin(angle) * maxDist;
+      
+      let nearestDist = maxDist;
+      let hitX = endX, hitY = endY;
+      
+      for (const wall of allBlockers) {
+        const denom = (tokenX - endX) * (wall.y1 - wall.y2) - (tokenY - endY) * (wall.x1 - wall.x2);
+        if (Math.abs(denom) < 1e-10) continue;
+        
+        const t = ((tokenX - wall.x1) * (wall.y1 - wall.y2) - (tokenY - wall.y1) * (wall.x1 - wall.x2)) / denom;
+        const u = -((tokenX - endX) * (tokenY - wall.y1) - (tokenY - endY) * (tokenX - wall.x1)) / denom;
+        
+        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+          const ix = tokenX + t * (endX - tokenX);
+          const iy = tokenY + t * (endY - tokenY);
+          const d = Math.sqrt((ix - tokenX) ** 2 + (iy - tokenY) ** 2);
+          if (d < nearestDist) {
+            nearestDist = d;
+            hitX = ix;
+            hitY = iy;
+          }
+        }
+      }
+      
+      rays.push({ x: hitX, y: hitY });
+    }
+    
+    if (rays.length >= 3) {
+      actions.revealFogArea({
+        type: 'polygon',
+        x: tokenX, y: tokenY,
+        points: rays,
+        source: 'token',
+        tokenId: token.id
+      });
+    }
+  }, [walls, doors, actions]);
+
+  // ── Door Functions ──
+  const drawDoors = useCallback(() => {
+    const wallLayer = layersRef.current.wall;
+    if (!wallLayer) return;
+
+    // Clear existing door graphics
+    doorsMapRef.current.forEach((g) => wallLayer.removeChild(g));
+    doorsMapRef.current.clear();
+
+    doors.forEach((door) => {
+      const g = new Graphics();
+      const midX = door.x || (door.x1 + door.x2) / 2;
+      const midY = door.y || (door.y1 + door.y2) / 2;
+      
+      const size = 12;
+      
+      if (door.state === 'open') {
+        // Open door: green arc
+        g.setStrokeStyle({ width: 3, color: 0x44cc44, alpha: 0.9 });
+        g.arc(midX - size / 2, midY, size, -Math.PI / 2, 0);
+        g.stroke();
+        g.circle(midX, midY, 3).fill({ color: 0x44cc44, alpha: 0.9 });
+      } else if (door.state === 'locked') {
+        // Locked door: red rectangle with lock icon
+        g.rect(midX - size / 2, midY - size / 2, size, size)
+          .fill({ color: 0xcc4444, alpha: 0.8 })
+          .stroke({ width: 2, color: 0xff6666, alpha: 0.9 });
+        // Lock icon (small circle)
+        g.circle(midX, midY - 2, 3).stroke({ width: 1.5, color: 0xffffff, alpha: 0.9 });
+        g.rect(midX - 3, midY, 6, 5).fill({ color: 0xffffff, alpha: 0.9 });
+      } else {
+        // Closed door: brown rectangle
+        g.rect(midX - size / 2, midY - size / 2, size, size)
+          .fill({ color: 0x8B4513, alpha: 0.8 })
+          .stroke({ width: 2, color: 0xDEB887, alpha: 0.9 });
+        // Handle
+        g.circle(midX + 3, midY, 2).fill({ color: 0xFFD700, alpha: 0.9 });
+      }
+      
+      // Make doors interactive for GM to toggle
+      g.eventMode = 'static';
+      g.cursor = 'pointer';
+      g.on('pointerdown', (e) => {
+        e.stopPropagation();
+        if (isDMRef.current) {
+          // Cycle: closed -> open -> locked -> closed
+          const nextState = door.state === 'closed' ? 'open' : door.state === 'open' ? 'locked' : 'closed';
+          actions.updateDoor(door.id, { state: nextState });
+        }
+      });
+      
+      wallLayer.addChild(g);
+      doorsMapRef.current.set(door.id, g);
+    });
+  }, [doors, actions]);
 
   // ── Ruler Functions ──
   const drawRuler = useCallback((startPoint, endPoint) => {
@@ -763,9 +1039,20 @@ export default function MapCanvas({
     let nearestIntersection = null;
     let minDistance = maxDistance;
     
-    // Check intersection with all walls
+    // Get blocking segments: walls (minus walls with open doors) + closed door segments
+    const blockingSegments = [];
     for (const wall of walls) {
-      const intersection = lineIntersection(startX, startY, endX, endY, wall.x1, wall.y1, wall.x2, wall.y2);
+      const hasDoor = doors.some(d => d.wallId === wall.id && d.state === 'open');
+      if (!hasDoor) blockingSegments.push(wall);
+    }
+    for (const door of doors) {
+      if (door.state !== 'open' && door.x1 !== undefined) {
+        blockingSegments.push({ x1: door.x1, y1: door.y1, x2: door.x2, y2: door.y2 });
+      }
+    }
+    
+    for (const seg of blockingSegments) {
+      const intersection = lineIntersection(startX, startY, endX, endY, seg.x1, seg.y1, seg.x2, seg.y2);
       if (intersection && intersection.distance < minDistance) {
         nearestIntersection = intersection;
         minDistance = intersection.distance;
@@ -776,7 +1063,7 @@ export default function MapCanvas({
       return { x: nearestIntersection.x, y: nearestIntersection.y };
     }
     return { x: endX, y: endY };
-  }, [walls, lineIntersection]);
+  }, [walls, doors, lineIntersection]);
 
   const calculateVisibilityPolygon = useCallback((lightX, lightY, lightRadius) => {
     const maxDistance = lightRadius * GRID_SIZE;
@@ -933,7 +1220,7 @@ export default function MapCanvas({
         viewRef.current.lastPan = { x: e.clientX, y: e.clientY };
         canvas.style.cursor = 'grabbing';
       } else if (e.button === 0 && activeToolRef.current === 'fog' && isDMRef.current) {
-        // Fog reveal mode
+        // Fog reveal/hide mode (rect drag)
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
@@ -942,7 +1229,7 @@ export default function MapCanvas({
         const worldX = (canvasX - v.panX) / v.zoom;
         const worldY = (canvasY - v.panY) / v.zoom;
         
-        revealFogAt(worldX, worldY);
+        startFogTool(worldX, worldY, e.shiftKey);
         isRevealingFogRef.current = true;
       } else if (e.button === 0 && activeToolRef.current === 'add-token' && tokenPlacementRef.current && isDMRef.current) {
         // Token placement mode
@@ -1010,6 +1297,48 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         startWallPlacement(worldX, worldY);
+      } else if (e.button === 0 && activeToolRef.current === 'door' && isDMRef.current) {
+        // Door placement mode — place door on nearest wall
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        // Find nearest wall within snap distance
+        let nearestWall = null;
+        let nearestDist = 30; // max snap distance in pixels
+        
+        for (const wall of walls) {
+          // Distance from point to line segment
+          const dx = wall.x2 - wall.x1;
+          const dy = wall.y2 - wall.y1;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq === 0) continue;
+          let t = ((worldX - wall.x1) * dx + (worldY - wall.y1) * dy) / lenSq;
+          t = Math.max(0, Math.min(1, t));
+          const px = wall.x1 + t * dx;
+          const py = wall.y1 + t * dy;
+          const dist = Math.sqrt((worldX - px) ** 2 + (worldY - py) ** 2);
+          
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestWall = { wall, t, px, py };
+          }
+        }
+        
+        if (nearestWall) {
+          const w = nearestWall.wall;
+          actions.addDoor({
+            x: nearestWall.px,
+            y: nearestWall.py,
+            wallId: w.id,
+            x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
+            state: 'closed'
+          });
+        }
       } else if (e.button === 0 && activeToolRef.current === 'aoe' && isDMRef.current) {
         // AoE placement mode
         e.preventDefault();
@@ -1036,14 +1365,14 @@ export default function MapCanvas({
         applyTransform();
         if (layersRef.current.grid) drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
       } else if (isRevealingFogRef.current && activeToolRef.current === 'fog' && isDMRef.current) {
-        // Continue revealing fog while dragging
+        // Update fog tool rect preview
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
         const worldX = (canvasX - v.panX) / v.zoom;
         const worldY = (canvasY - v.panY) / v.zoom;
         
-        revealFogAt(worldX, worldY);
+        updateFogTool(worldX, worldY);
       } else if (rulerRef.current.isActive && activeToolRef.current === 'measure') {
         // Update ruler end point while dragging
         const rect = canvas.getBoundingClientRect();
@@ -1093,6 +1422,14 @@ export default function MapCanvas({
       }
       
       if (isRevealingFogRef.current) {
+        // Finish fog tool drag
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        finishFogTool(worldX, worldY);
         isRevealingFogRef.current = false;
       }
       
@@ -1131,12 +1468,33 @@ export default function MapCanvas({
       document.removeEventListener('keydown', keyDown);
       document.removeEventListener('keyup', keyUp);
     };
-  }, [applyTransform, drawGrid, startDrawing, continueDrawing, finishDrawing]);
+  }, [applyTransform, drawGrid, startDrawing, continueDrawing, finishDrawing, startFogTool, updateFogTool, finishFogTool]);
+
+  // ── Token context menu listener ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      setContextMenu({ token: e.detail.token, x: e.detail.x, y: e.detail.y });
+    };
+    el.addEventListener('token-context-menu', handler);
+    return () => el.removeEventListener('token-context-menu', handler);
+  }, []);
+
+  // ── Token context menu actions ──
+  const handleTokenContextUpdate = useCallback((tokenId, updates) => {
+    actions.updateToken(tokenId, updates);
+  }, [actions]);
+
+  const handleTokenContextDelete = useCallback((tokenId) => {
+    actions.removeToken(tokenId);
+    setContextMenu(null);
+  }, [actions]);
 
   // ── Sync fog of war ──
   useEffect(() => {
     drawFogOfWar();
-  }, [fogAreas, drawFogOfWar]);
+  }, [fogAreas, fogEnabled, drawFogOfWar]);
 
   // ── Clear ruler when tool changes ──
   useEffect(() => {
@@ -1178,6 +1536,11 @@ export default function MapCanvas({
     drawWalls();
   }, [walls, drawWalls]);
 
+  // ── Sync doors ──
+  useEffect(() => {
+    drawDoors();
+  }, [doors, drawDoors]);
+
   // ── Sync dynamic lighting ──
   useEffect(() => {
     drawDynamicLighting();
@@ -1207,8 +1570,10 @@ export default function MapCanvas({
   // ── Create a token sprite with visual effects (Pixi v8) ──
   const createTokenSprite = useCallback((token) => {
     const c = new Container();
-    const sizeMultiplier = token.size === 'small' ? 0.7 : token.size === 'large' ? 1.5 : 1;
-    const baseRadius = 18 * sizeMultiplier;
+    const sizeCells = TOKEN_SIZE_CELLS[token.size] || 1;
+    const gs = gridSizeRef.current;
+    // Token radius in pixels: fills sizeCells grid cells (minus small padding)
+    const baseRadius = (sizeCells * gs / 2) - 2;
     const conditions = token.conditions || [];
     const hp = token.hp || null;
 
@@ -1234,6 +1599,14 @@ export default function MapCanvas({
       lightCircle.circle(0, 0, token.lightRadius * GRID_SIZE)
         .stroke({ width: 2, color: 0xffd700, alpha: 0.3 });
       tokenRefs.effectsContainer.addChild(lightCircle);
+    }
+
+    // Draw vision radius indicator (DM only, for fog of war prep)
+    if (token.visionRadius && token.visionRadius > 0 && isDM) {
+      const visionCircle = new Graphics();
+      visionCircle.circle(0, 0, token.visionRadius * GRID_SIZE)
+        .stroke({ width: 1.5, color: 0x60a5fa, alpha: 0.25 });
+      tokenRefs.effectsContainer.addChild(visionCircle);
     }
 
     // Create main token container
@@ -1527,12 +1900,14 @@ export default function MapCanvas({
 
     c.on('pointerdown', (e) => {
       if (activeToolRef.current !== 'select') return;
+      if (e.button === 2) return; // skip right-click for context menu
       e.stopPropagation();
       actions.selectToken(token.id);
       dragging = true;
       const local = e.getLocalPosition(c.parent);
       dragOffset = { x: local.x - c.x, y: local.y - c.y };
       c.alpha = 0.7;
+      c.zIndex = 999; // bring to front while dragging
     });
     c.on('globalpointermove', (e) => {
       if (!dragging) return;
@@ -1542,21 +1917,22 @@ export default function MapCanvas({
       const snapped = snapToGridUnified(rawX, rawY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
       c.position.set(snapped.x, snapped.y);
     });
-    c.on('pointerup', () => {
+    c.on('pointerup', (e) => {
       if (!dragging) return;
       dragging = false;
       c.alpha = 1;
+      c.zIndex = 0;
       // Convert pixel position back to grid coords
-      const gs = gridSizeRef.current;
+      const _gs = gridSizeRef.current;
       const gt = gridTypeRef.current;
       let gridX, gridY;
       if (gt === 'hex') {
-        const hex = pixelToHex(c.x, c.y, gs);
+        const hex = pixelToHex(c.x, c.y, _gs);
         gridX = hex.col;
         gridY = hex.row;
       } else {
-        gridX = Math.round((c.x - gs / 2) / gs);
-        gridY = Math.round((c.y - gs / 2) / gs);
+        gridX = Math.round((c.x - _gs / 2) / _gs);
+        gridY = Math.round((c.y - _gs / 2) / _gs);
       }
       actions.moveToken(token.id, gridX, gridY);
     });
@@ -1564,6 +1940,23 @@ export default function MapCanvas({
       if (!dragging) return;
       dragging = false;
       c.alpha = 1;
+      c.zIndex = 0;
+    });
+
+    // Right-click → context menu
+    c.on('rightclick', (e) => {
+      e.stopPropagation();
+      // Get screen position from the original DOM event
+      const oe = e.nativeEvent || e.originalEvent || e;
+      const screenX = oe.clientX ?? oe.pageX ?? 400;
+      const screenY = oe.clientY ?? oe.pageY ?? 300;
+      // We store the token data + screen position; the React state will render the menu
+      if (containerRef.current) {
+        const customEvent = new CustomEvent('token-context-menu', {
+          detail: { token, x: screenX, y: screenY }
+        });
+        containerRef.current.dispatchEvent(customEvent);
+      }
     });
 
     return c;
@@ -1591,7 +1984,9 @@ export default function MapCanvas({
       let sprite = existing.get(token.id);
       const needsRecreate = sprite && (
         JSON.stringify(sprite._lastConditions) !== JSON.stringify(token.conditions) ||
-        JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp)
+        JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp) ||
+        sprite._lastSize !== (token.size || 'medium') ||
+        sprite._lastVisionRadius !== (token.visionRadius || 0)
       );
       
       if (!sprite || needsRecreate) {
@@ -1603,6 +1998,8 @@ export default function MapCanvas({
         sprite = createTokenSprite(token);
         sprite._lastConditions = JSON.parse(JSON.stringify(token.conditions || []));
         sprite._lastHP = JSON.parse(JSON.stringify(token.hp || null));
+        sprite._lastSize = token.size || 'medium';
+        sprite._lastVisionRadius = token.visionRadius || 0;
         
         layer.addChild(sprite);
         existing.set(token.id, sprite);
@@ -1652,6 +2049,15 @@ export default function MapCanvas({
         pixiRef={pixiRef}
         onNavigate={handleMinimapNavigate}
       />
+      {contextMenu && (
+        <TokenContextMenu
+          token={contextMenu.token}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={() => setContextMenu(null)}
+          onUpdate={handleTokenContextUpdate}
+          onDelete={handleTokenContextDelete}
+        />
+      )}
     </div>
   );
 }

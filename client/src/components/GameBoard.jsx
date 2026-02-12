@@ -510,13 +510,17 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
   const [tokenImage, setTokenImage] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
   const [lightRadius, setLightRadius] = useState(0);
+  const [visionRadius, setVisionRadius] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
   const sizeOptions = {
-    small: { label: 'Pequeno', value: 'small', multiplier: 0.7 },
-    medium: { label: 'Médio', value: 'medium', multiplier: 1 },
-    large: { label: 'Grande', value: 'large', multiplier: 1.5 }
+    tiny: { label: 'Minúsculo', value: 'tiny', multiplier: 0.5, desc: '½ célula' },
+    small: { label: 'Pequeno', value: 'small', multiplier: 0.5, desc: '½ célula' },
+    medium: { label: 'Médio', value: 'medium', multiplier: 1, desc: '1×1' },
+    large: { label: 'Grande', value: 'large', multiplier: 2, desc: '2×2' },
+    huge: { label: 'Enorme', value: 'huge', multiplier: 3, desc: '3×3' },
+    gargantuan: { label: 'Colossal', value: 'gargantuan', multiplier: 4, desc: '4×4' }
   };
 
   const presetColors = [
@@ -577,6 +581,7 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
       color: tokenColor,
       size: tokenSize,
       lightRadius: lightRadius,
+      visionRadius: visionRadius,
       x: 0, // Will be set when placed
       y: 0,
       ...(imageUrl && { imageUrl }) // Include imageUrl if we have one
@@ -623,8 +628,8 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
           marginBottom: 'var(--spacing-md)'
         }}>
           <div style={{
-            width: `${40 * sizeOptions[tokenSize].multiplier}px`,
-            height: `${40 * sizeOptions[tokenSize].multiplier}px`,
+            width: `${Math.max(30, 40 * Math.min(sizeOptions[tokenSize].multiplier, 2))}px`,
+            height: `${Math.max(30, 40 * Math.min(sizeOptions[tokenSize].multiplier, 2))}px`,
             borderRadius: '50%',
             backgroundColor: tokenImage ? 'transparent' : tokenColor,
             border: '2px solid #ffffff',
@@ -707,15 +712,16 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
         {/* Token Size */}
         <div>
           <label className="form-label">Tamanho</label>
-          <div style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--spacing-xs)' }}>
             {Object.entries(sizeOptions).map(([key, option]) => (
               <button
                 key={key}
                 className={`btn ${tokenSize === key ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setTokenSize(key)}
-                style={{ flex: 1, fontSize: '0.8rem' }}
+                style={{ fontSize: '0.75rem', padding: '4px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}
               >
-                {option.label}
+                <span>{option.label}</span>
+                <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>{option.desc}</span>
               </button>
             ))}
           </div>
@@ -793,6 +799,42 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
               color: 'var(--color-text-dim)'
             }}>
               💡 Este token iluminará {lightRadius} quadrado{lightRadius !== 1 ? 's' : ''} ao redor
+            </div>
+          )}
+        </div>
+
+        {/* Vision Radius */}
+        <div>
+          <label className="form-label">Raio de Visão (quadrados do mapa)</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+            <input
+              type="range"
+              min="0"
+              max="24"
+              step="1"
+              value={visionRadius}
+              onChange={(e) => setVisionRadius(parseInt(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{
+              minWidth: '60px',
+              textAlign: 'center',
+              padding: 'var(--spacing-xs)',
+              background: 'var(--bg-surface-light)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.9rem',
+              fontWeight: 'bold'
+            }}>
+              {visionRadius === 0 ? 'Nenhuma' : `${visionRadius * 5}ft`}
+            </span>
+          </div>
+          {visionRadius > 0 && (
+            <div style={{
+              marginTop: 'var(--spacing-xs)',
+              fontSize: '0.8rem',
+              color: 'var(--color-text-dim)'
+            }}>
+              👁️ Visão de {visionRadius * 5} pés (para névoa de guerra)
             </div>
           )}
         </div>
