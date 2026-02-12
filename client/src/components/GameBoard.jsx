@@ -159,10 +159,10 @@ export default function GameBoard({ onLeaveRoom }) {
           </button>
           <div className="gb-toolbar-divider" />
           <ToolButton id="select" icon="🏹" label="Selecionar" active={ui.activeTool} onClick={actions.setActiveTool} />
+          <ToolButton id="measure" icon="📏" label="Medir" active={ui.activeTool} onClick={actions.setActiveTool} />
           {isDM && (
             <>
               <ToolButton id="fog" icon="🌫️" label="Névoa" active={ui.activeTool} onClick={actions.setActiveTool} />
-              <ToolButton id="measure" icon="📏" label="Medir" active={ui.activeTool} onClick={actions.setActiveTool} />
               <ToolButton id="draw" icon="✏️" label="Desenhar" active={ui.activeTool} onClick={actions.setActiveTool} />
               <ToolButton id="aoe" icon="💥" label="AoE" active={ui.activeTool} onClick={actions.setActiveTool} />
               <ToolButton id="wall" icon="🧱" label="Paredes" active={ui.activeTool} onClick={actions.setActiveTool} />

@@ -371,12 +371,16 @@ async function getGameState(roomId) {
             loadRoomState(roomId)
         ]);
 
+        // Prefer room_state tokens (rich client format) over DB tokens (flat format)
+        const stateTokens = persistedState.tokens || [];
         return {
-            tokens: tokens.length > 0 ? tokens : (persistedState.tokens || []),
+            tokens: stateTokens.length > 0 ? stateTokens : tokens,
             map: currentMap || persistedState.map_url,
             fog: revealedAreas.length > 0 ? revealedAreas : (persistedState.fog || []),
             ambiance: currentTrack || persistedState.ambiance,
             drawings: persistedState.drawings || [],
+            walls: persistedState.walls || [],
+            aoeEffects: persistedState.aoe_effects || [],
             initiative: persistedState.initiative || { players: [], currentTurn: 0, active: false }
         };
     } catch (error) {

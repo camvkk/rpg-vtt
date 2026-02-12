@@ -907,24 +907,30 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player) throw new Error('Player not authenticated');
             
-            // Enhanced token data can include conditions and HP from character sheet
-            const tokenData = {
+            // Build rich token data (client format) — this is what gets broadcast and persisted
+            const token = {
+                id: data.id || uuidv4(),
                 name: data.name,
                 x: data.x || 0,
                 y: data.y || 0,
                 color: data.color || null,
                 size: data.size || 'medium',
                 imageUrl: data.imageUrl || null,
-                conditions: data.conditions || [], // Array of condition objects {name, icon}
-                hp: data.hp || null, // HP data: { current, max, temp }
-                characterName: data.characterName || null, // Link to character
-                playerId: data.playerId || null, // Link to player
-                ...data // Allow other token properties
+                conditions: data.conditions || [],
+                hp: data.hp || null,
+                lightRadius: data.lightRadius || 0,
+                characterName: data.characterName || null,
+                ownerId: player.id,
+                ownerName: player.name,
             };
             
-            const token = await TokenManager.addToken(player.roomId, player.id, tokenData);
+            // Save to room_state persistence (rich format)
+            const persistedState = await loadRoomState(player.roomId);
+            const allTokens = persistedState.tokens || [];
+            allTokens.push(token);
+            await saveRoomState(player.roomId, 'tokens', allTokens);
             
-            console.log(`🎭 Token added: ${token.name} in room ${player.roomId} (conditions: ${(token.conditions || []).length}, HP: ${token.hp ? `${token.hp.current}/${token.hp.max}` : 'N/A'})`);
+            console.log(`🎭 Token added: ${token.name} in room ${player.roomId}`);
             
             // Broadcast to room
             io.to(player.roomId).emit('token:add', token);
@@ -942,9 +948,20 @@ io.on('connection', (socket) => {
             if (!player) throw new Error('Player not authenticated');
             
             const { tokenId, x, y } = data;
-            const result = await TokenManager.moveToken(tokenId, player.id, x, y);
             
-            // Broadcast to others (not self)
+            // Update in room_state persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allTokens = persistedState.tokens || [];
+            const tokenIndex = allTokens.findIndex(t => t.id === tokenId);
+            if (tokenIndex >= 0) {
+                allTokens[tokenIndex].x = x;
+                allTokens[tokenIndex].y = y;
+                await saveRoomState(player.roomId, 'tokens', allTokens);
+            }
+            
+            const result = { tokenId, x, y };
+            
+            // Broadcast to others (not self — client already updated optimistically)
             socket.to(player.roomId).emit('token:move', result);
             
             if (callback) callback({ success: true });
@@ -961,27 +978,26 @@ io.on('connection', (socket) => {
             
             const { tokenId, updates } = data;
             
-            // Enhanced update data can include conditions and HP
-            const allowedUpdates = {
-                name: updates.name,
-                x: updates.x,
-                y: updates.y,
-                color: updates.color,
-                size: updates.size,
-                imageUrl: updates.imageUrl,
-                conditions: updates.conditions || [], // Condition indicators
-                hp: updates.hp || null, // HP data: { current, max, temp }
-                ...updates // Allow any other updates while preserving structure
-            };
+            // Update in room_state persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allTokens = persistedState.tokens || [];
+            const tokenIndex = allTokens.findIndex(t => t.id === tokenId);
             
-            const token = await TokenManager.updateToken(tokenId, player.id, allowedUpdates);
+            let updatedToken;
+            if (tokenIndex >= 0) {
+                allTokens[tokenIndex] = { ...allTokens[tokenIndex], ...updates, id: tokenId };
+                updatedToken = allTokens[tokenIndex];
+                await saveRoomState(player.roomId, 'tokens', allTokens);
+            } else {
+                updatedToken = { id: tokenId, ...updates };
+            }
             
-            console.log(`🎭 Token updated: ${token.name} (conditions: ${(token.conditions || []).length}, HP: ${token.hp ? `${token.hp.current}/${token.hp.max}` : 'N/A'})`);
+            console.log(`🎭 Token updated: ${updatedToken.name}`);
             
             // Broadcast to room
-            io.to(player.roomId).emit('token:update', token);
+            io.to(player.roomId).emit('token:update', updatedToken);
             
-            if (callback) callback({ success: true, token });
+            if (callback) callback({ success: true, token: updatedToken });
         } catch (error) {
             console.error('Error updating token:', error);
             if (callback) callback({ success: false, error: error.message });
@@ -994,10 +1010,14 @@ io.on('connection', (socket) => {
             if (!player) throw new Error('Player not authenticated');
             
             const { tokenId } = data;
-            const result = await TokenManager.removeToken(tokenId, player.id);
+            
+            // Remove from room_state persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allTokens = (persistedState.tokens || []).filter(t => t.id !== tokenId);
+            await saveRoomState(player.roomId, 'tokens', allTokens);
             
             // Broadcast to room
-            io.to(player.roomId).emit('token:remove', result);
+            io.to(player.roomId).emit('token:remove', { tokenId });
             
             if (callback) callback({ success: true });
         } catch (error) {
@@ -1405,6 +1425,59 @@ io.on('connection', (socket) => {
         }
     });
     
+    // AoE events
+    socket.on('aoe:add', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can add AoE');
+            
+            const aoeData = { ...data, id: data.id || uuidv4() };
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const allAoE = persistedState.aoe_effects || [];
+            allAoE.push(aoeData);
+            await saveRoomState(player.roomId, 'aoe_effects', allAoE);
+            
+            io.to(player.roomId).emit('aoe:add', aoeData);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error adding AoE:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('aoe:remove', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can remove AoE');
+            
+            const { aoeId } = data;
+            const persistedState = await loadRoomState(player.roomId);
+            const allAoE = (persistedState.aoe_effects || []).filter(a => a.id !== aoeId);
+            await saveRoomState(player.roomId, 'aoe_effects', allAoE);
+            
+            io.to(player.roomId).emit('aoe:remove', { aoeId });
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error removing AoE:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('aoe:clear', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can clear AoE');
+            
+            await saveRoomState(player.roomId, 'aoe_effects', []);
+            io.to(player.roomId).emit('aoe:clear');
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error clearing AoE:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
     // Handle disconnection
     socket.on('disconnect', async () => {
         console.log(`🔌 Client disconnected: ${socket.id}`);

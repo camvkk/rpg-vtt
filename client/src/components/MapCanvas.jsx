@@ -915,7 +915,7 @@ export default function MapCanvas({
         actions.addToken(newToken);
         onTokenPlaced();
         actions.setActiveTool('select');
-      } else if (e.button === 0 && activeToolRef.current === 'measure' && isDMRef.current) {
+      } else if (e.button === 0 && activeToolRef.current === 'measure') {
         // Ruler/measure mode
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -988,7 +988,7 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         revealFogAt(worldX, worldY);
-      } else if (rulerRef.current.isActive && activeToolRef.current === 'measure' && isDMRef.current) {
+      } else if (rulerRef.current.isActive && activeToolRef.current === 'measure') {
         // Update ruler end point while dragging
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
@@ -1042,7 +1042,7 @@ export default function MapCanvas({
       }
       
       // Finish ruler measurement
-      if (rulerRef.current.isActive && activeToolRef.current === 'measure' && isDMRef.current) {
+      if (rulerRef.current.isActive && activeToolRef.current === 'measure') {
         // Keep the ruler visible for a bit, then clear it
         setTimeout(() => {
           if (ui.activeTool !== 'measure') {
@@ -1462,6 +1462,7 @@ export default function MapCanvas({
     let dragOffset = { x: 0, y: 0 };
 
     c.on('pointerdown', (e) => {
+      if (activeToolRef.current !== 'select') return;
       e.stopPropagation();
       actions.selectToken(token.id);
       dragging = true;
@@ -1472,15 +1473,21 @@ export default function MapCanvas({
     c.on('globalpointermove', (e) => {
       if (!dragging) return;
       const local = e.getLocalPosition(c.parent);
-      const snapped = snapToGrid(local.x - dragOffset.x, local.y - dragOffset.y);
-      c.position.set(snapped.x + GRID_SIZE / 2, snapped.y + GRID_SIZE / 2);
+      // Snap to grid cell center
+      const rawX = local.x - dragOffset.x;
+      const rawY = local.y - dragOffset.y;
+      const gridX = Math.round((rawX - GRID_SIZE / 2) / GRID_SIZE);
+      const gridY = Math.round((rawY - GRID_SIZE / 2) / GRID_SIZE);
+      c.position.set(gridX * GRID_SIZE + GRID_SIZE / 2, gridY * GRID_SIZE + GRID_SIZE / 2);
     });
     c.on('pointerup', () => {
       if (!dragging) return;
       dragging = false;
       c.alpha = 1;
-      const grid = pixelToGrid(c.x, c.y);
-      actions.moveToken(token.id, grid.x, grid.y);
+      // Convert center pixel position back to grid coords
+      const gridX = Math.round((c.x - GRID_SIZE / 2) / GRID_SIZE);
+      const gridY = Math.round((c.y - GRID_SIZE / 2) / GRID_SIZE);
+      actions.moveToken(token.id, gridX, gridY);
     });
     c.on('pointerupoutside', () => {
       if (!dragging) return;
