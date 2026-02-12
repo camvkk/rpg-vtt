@@ -836,11 +836,9 @@ export default function MapCanvas({
     const lightSources = tokens.filter(token => token.lightRadius && token.lightRadius > 0);
 
     if (lightSources.length === 0) {
-      // No light sources - create full darkness overlay
-      const darkness = new Graphics();
-      darkness.rect(0, 0, 4000, 4000).fill({ color: 0x000000, alpha: 0.85 });
-      lightingLayer.addChild(darkness);
-      return;
+      // No light sources and no walls — skip darkness overlay entirely
+      // (only apply dynamic lighting when the system is actually in use)
+      if (walls.length === 0) return;
     }
 
     // Create darkness overlay with holes for lit areas
@@ -886,8 +884,8 @@ export default function MapCanvas({
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
     const v = viewRef.current;
-    const { bg, grid, token, wall, lighting, fog } = layersRef.current;
-    [bg, grid, token, wall, lighting, fog].forEach(c => {
+    const { bg, grid, token, wall, lighting, fog, ui } = layersRef.current;
+    [bg, grid, token, wall, lighting, fog, ui].forEach(c => {
       if (!c) return;
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
@@ -1627,8 +1625,8 @@ export default function MapCanvas({
     const v = viewRef.current;
     v.panX = -worldX * v.zoom + app.screen.width / 2;
     v.panY = -worldY * v.zoom + app.screen.height / 2;
-    const { bg, grid, token, wall, lighting, fog } = layersRef.current;
-    [bg, grid, token, wall, lighting, fog].forEach(c => {
+    const { bg, grid, token, wall, lighting, fog, ui } = layersRef.current;
+    [bg, grid, token, wall, lighting, fog, ui].forEach(c => {
       if (!c) return;
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
