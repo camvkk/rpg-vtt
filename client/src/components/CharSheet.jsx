@@ -45,6 +45,7 @@ const CharSheet = ({
             'Fighting Style: Dueling',
             'Second Wind'
           ],
+          conditions: [],
           notes: 'A brave warrior ready for adventure.'
         };
       
@@ -54,6 +55,7 @@ const CharSheet = ({
           name: 'Novo Personagem',
           hp: { current: 10, max: 10, temp: 0 },
           customStats: {},
+          conditions: [],
           notes: ''
         };
       
@@ -66,6 +68,7 @@ const CharSheet = ({
           race: '',
           class: '',
           level: 1,
+          conditions: [],
           systemRules: '',
           notes: ''
         };
@@ -192,6 +195,7 @@ const CharSheet = ({
       id: 'char_' + Date.now(),
       name: '',
       hp: { current: 8, max: 8, temp: 0 },
+      conditions: [],
       notes: ''
     };
 
@@ -212,19 +216,22 @@ const CharSheet = ({
           skills: {},
           savingThrows: {},
           attacks: [],
-          features: []
+          features: [],
+          conditions: []
         };
       
       case 'generic':
         return {
           ...baseChar,
-          customStats: {}
+          customStats: {},
+          conditions: []
         };
       
       case 'custom':
         return {
           ...baseChar,
           customStats: {},
+          conditions: [],
           systemRules: ''
         };
       

@@ -610,9 +610,74 @@ io.on('connection', (socket) => {
             
             console.log(`💾 Character saved: ${playerName} in campaign ${campaignId}`);
             
+            // Broadcast character update to all players in room
+            io.to(player.roomId).emit('character:updated', { playerName, characterData });
+            
             if (callback) callback({ success: true });
         } catch (error) {
             console.error('Error saving character:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Get all characters in campaign (DM only)
+    socket.on('campaign:get-all-characters', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM || !player.campaignId) {
+                throw new Error('Only DM can get all characters');
+            }
+            
+            const { campaignId } = data;
+            
+            // Verify campaign access
+            if (campaignId !== player.campaignId) {
+                throw new Error('Access denied');
+            }
+            
+            const { getCampaignCharacters } = require('./db');
+            const characters = await getCampaignCharacters(campaignId);
+            
+            console.log(`📋 DM retrieved ${characters.length} characters from campaign ${campaignId}`);
+            
+            if (callback) callback({ 
+                success: true, 
+                characters: characters.map(c => ({
+                    playerName: c.playerName,
+                    character: c.character
+                }))
+            });
+        } catch (error) {
+            console.error('Error getting all characters:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // DM update character (modify any player's character)
+    socket.on('campaign:dm-update-character', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM || !player.campaignId) {
+                throw new Error('Only DM can update other characters');
+            }
+            
+            const { campaignId, playerName, characterData } = data;
+            
+            // Verify campaign access
+            if (campaignId !== player.campaignId) {
+                throw new Error('Access denied');
+            }
+            
+            await saveCharacter(campaignId, playerName, characterData);
+            
+            console.log(`👑 DM updated character: ${playerName} in campaign ${campaignId}`);
+            
+            // Broadcast character update to all players in room
+            io.to(player.roomId).emit('character:updated', { playerName, characterData });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error DM updating character:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });

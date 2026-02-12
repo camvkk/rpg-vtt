@@ -15,6 +15,7 @@ const initialState = {
   // Campaign
   campaign: { id: null, name: null, googleDocsUrl: null, system: 'dnd5e' },
   character: null,
+  allCharacters: new Map(), // Map of playerName -> characterData (for DM dashboard)
   systemData: null,
 
   // Map
@@ -132,6 +133,29 @@ function gameReducer(state, action) {
 
     case 'CHARACTER_UPDATED':
       return { ...state, character: action.payload };
+
+    case 'ALL_CHARACTERS_LOADED': {
+      const allCharacters = new Map();
+      action.payload.forEach(({ playerName, character }) => {
+        allCharacters.set(playerName, character);
+      });
+      return { ...state, allCharacters };
+    }
+
+    case 'CHARACTER_UPDATED_BROADCAST': {
+      const { playerName, characterData } = action.payload;
+      const newAllCharacters = new Map(state.allCharacters);
+      newAllCharacters.set(playerName, characterData);
+      
+      // Also update current character if it's the same player
+      const newCharacter = (state.player.name === playerName) ? characterData : state.character;
+      
+      return { 
+        ...state, 
+        character: newCharacter,
+        allCharacters: newAllCharacters 
+      };
+    }
 
     case 'SYSTEM_PARSED':
       return { ...state, systemData: action.payload.systemData };
@@ -384,6 +408,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Campaign events
     socket.on('campaign:docs-updated', (data) => dispatch({ type: 'CAMPAIGN_DOCS_UPDATED', payload: data }));
+    socket.on('character:updated', (data) => dispatch({ type: 'CHARACTER_UPDATED_BROADCAST', payload: data }));
 
     // System events
     socket.on('system:parsed', (data) => dispatch({ type: 'SYSTEM_PARSED', payload: data }));
@@ -551,6 +576,24 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     saveCharacter: async (campaignId, playerName, characterData) => {
       return emit('campaign:save-character', { campaignId, playerName, characterData });
+    },
+
+    // DM Dashboard actions
+    getAllCharacters: async (campaignId) => {
+      try {
+        const res = await emit('campaign:get-all-characters', { campaignId });
+        if (res.success) {
+          dispatch({ type: 'ALL_CHARACTERS_LOADED', payload: res.characters });
+        }
+        return res;
+      } catch (error) {
+        console.error('Error getting all characters:', error);
+        throw error;
+      }
+    },
+
+    dmUpdateCharacter: async (campaignId, playerName, characterData) => {
+      return emit('campaign:dm-update-character', { campaignId, playerName, characterData });
     },
 
     setGoogleDocs: async (campaignId, url) => {

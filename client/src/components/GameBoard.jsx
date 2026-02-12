@@ -7,6 +7,8 @@ import Initiative from './Initiative';
 import CharSheet from './CharSheet';
 import Ambiance from './Ambiance';
 import SystemImporter from './SystemImporter';
+import DMDashboard from './DMDashboard';
+import CharacterWizard from './CharacterWizard';
 import '../styles/GameBoard.css';
 
 // Error boundary to catch MapCanvas crashes
@@ -31,6 +33,8 @@ export default function GameBoard({ onLeaveRoom }) {
   const [showGoogleDocs, setShowGoogleDocs] = useState(false);
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [showSystemImporter, setShowSystemImporter] = useState(false);
+  const [showDMDashboard, setShowDMDashboard] = useState(false);
+  const [showCharacterWizard, setShowCharacterWizard] = useState(false);
   const [tokenAwaitingPlacement, setTokenAwaitingPlacement] = useState(null);
 
   // ── Keyboard shortcuts ──
@@ -101,6 +105,12 @@ export default function GameBoard({ onLeaveRoom }) {
     actions.setActiveTool('add-token');
   }, [actions]);
 
+  // ── Character creation handler ──
+  const handleCharacterCreate = useCallback((characterData) => {
+    actions.updateCharacter(characterData);
+    setShowCharacterWizard(false);
+  }, [actions]);
+
   if (!connected) {
     return (
       <div className="gb-loading">
@@ -142,6 +152,13 @@ export default function GameBoard({ onLeaveRoom }) {
               </button>
               {campaign.id && (
                 <>
+                  <button 
+                    className="btn btn-ghost gb-toolbar-btn" 
+                    onClick={() => setShowDMDashboard(!showDMDashboard)}
+                    title="Painel de Personagens"
+                  >
+                    👥 Grupo
+                  </button>
                   <button 
                     className="btn btn-ghost gb-toolbar-btn" 
                     onClick={() => setShowDocsModal(true)}
@@ -192,6 +209,15 @@ export default function GameBoard({ onLeaveRoom }) {
           >
             📋 Ficha
           </button>
+          {!isDM && (
+            <button 
+              className="btn btn-ghost gb-toolbar-btn" 
+              onClick={() => setShowCharacterWizard(true)}
+              title="Criar Novo Personagem"
+            >
+              🧙 Criar Personagem
+            </button>
+          )}
           {isDM && (
             <button 
               className="btn btn-ghost gb-toolbar-btn" 
@@ -383,6 +409,27 @@ export default function GameBoard({ onLeaveRoom }) {
           campaignId={campaign.id}
         />
       )}
+
+      {/* DM Dashboard Modal */}
+      {showDMDashboard && isDM && campaign.id && (
+        <div className="gb-charsheet-overlay">
+          <div className="gb-dm-dashboard-container">
+            <DMDashboard
+              isOpen={showDMDashboard}
+              onClose={() => setShowDMDashboard(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Character Wizard Modal */}
+      <CharacterWizard
+        isOpen={showCharacterWizard}
+        onClose={() => setShowCharacterWizard(false)}
+        onCreateCharacter={handleCharacterCreate}
+        system={campaign.system || room.system || 'dnd5e'}
+        systemData={systemData}
+      />
     </div>
   );
 }

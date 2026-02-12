@@ -176,6 +176,17 @@
   box-shadow: var(--shadow-lg);
 }
 
+.gb-dm-dashboard-container {
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+  max-height: 800px;
+  position: relative;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .gb-side-panel { width: 280px; min-width: 280px; }
