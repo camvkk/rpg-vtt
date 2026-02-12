@@ -507,6 +507,9 @@ io.on('connection', (socket) => {
             
             console.log(`🗑️ Initiative cleared in room ${player.roomId}`);
             
+            // Save initiative to persistence
+            await saveRoomState(player.roomId, 'initiative', tracker);
+            
             // Broadcast updated initiative
             io.to(player.roomId).emit('initiative:update', tracker);
             
@@ -556,6 +559,12 @@ io.on('connection', (socket) => {
             
             console.log(`✏️ Draw added in room ${player.roomId}: ${type} with ${points.length} points`);
             
+            // Save drawing to persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allDrawings = persistedState.drawings || [];
+            allDrawings.push(drawData);
+            await saveRoomState(player.roomId, 'drawings', allDrawings);
+            
             // Broadcast to all players in room
             io.to(player.roomId).emit('draw:add', drawData);
             
@@ -572,6 +581,9 @@ io.on('connection', (socket) => {
             if (!player || !player.isDM) throw new Error('Only DM can clear drawings');
             
             console.log(`🧹 Drawings cleared in room ${player.roomId}`);
+            
+            // Clear drawings in persistence
+            await saveRoomState(player.roomId, 'drawings', []);
             
             // Broadcast to all players in room
             io.to(player.roomId).emit('draw:clear');

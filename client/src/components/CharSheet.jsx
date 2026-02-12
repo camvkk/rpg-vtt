@@ -438,7 +438,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Hit Points
+                Pontos de Vida
               </h4>
               <div style={{
                 background: 'var(--surface-light)',
@@ -562,7 +562,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Saving Throws
+                Salvaguardas
               </h4>
               {Object.keys(char.attributes).map((save) => {
                 const mod = modifiers[save];
@@ -623,7 +623,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Skills
+                Perícias
               </h4>
               {Object.keys(skills).map((skill) => {
                 const abilityMod = modifiers[skills[skill]];
@@ -696,7 +696,7 @@ const CharSheet = ({
               color: 'var(--color-primary)',
               fontSize: '0.9rem'
             }}>
-              Attacks
+              Ataques
             </h4>
             {char.attacks.map((attack, index) => (
               <div
@@ -764,7 +764,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Features & Traits
+                Traços e Características
               </h4>
               {char.features.map((feature, index) => (
                 <div
@@ -790,7 +790,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Notes
+                Anotações
               </h4>
               {isEditable ? (
                 <textarea
