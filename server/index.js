@@ -509,6 +509,51 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: false, error: error.message });
         }
     });
+
+    // Draw events
+    socket.on('draw:add', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can draw on map');
+            
+            const { type, points, color, strokeWidth } = data;
+            const drawData = {
+                id: uuidv4(),
+                type, // 'line' or 'circle'
+                points, // Array of {x, y} points
+                color: color || '#ff6b6b',
+                strokeWidth: strokeWidth || 3,
+                timestamp: Date.now()
+            };
+            
+            console.log(`✏️ Draw added in room ${player.roomId}: ${type} with ${points.length} points`);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('draw:add', drawData);
+            
+            if (callback) callback({ success: true, drawData });
+        } catch (error) {
+            console.error('Error adding draw:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('draw:clear', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can clear drawings');
+            
+            console.log(`🧹 Drawings cleared in room ${player.roomId}`);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('draw:clear');
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error clearing drawings:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
     
     // Handle disconnection
     socket.on('disconnect', async () => {

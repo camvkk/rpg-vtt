@@ -5,16 +5,24 @@ import { snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS } from '../u
 
 const GRID_SIZE = GRID_CONSTANTS.SIZE;
 
-export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null, onTokenPlaced = () => {} }) {
+export default function MapCanvas({ 
+  isDM = false, 
+  tokenAwaitingPlacement = null, 
+  onTokenPlaced = () => {},
+  drawColor = '#ff6b6b'
+}) {
   const containerRef = useRef(null);
   const pixiRef = useRef(null);
   const layersRef = useRef({});
   const viewRef = useRef({ zoom: 1, panX: 0, panY: 0, isPanning: false, lastPan: { x: 0, y: 0 } });
   const tokensMapRef = useRef(new Map());
   const isRevealingFogRef = useRef(false);
+  const rulerRef = useRef({ isActive: false, startPoint: null, endPoint: null, graphics: null });
+  const drawingRef = useRef({ isDrawing: false, currentPath: [], graphics: null });
+  const drawingsMapRef = useRef(new Map());
 
   const { state, actions } = useGame();
-  const { tokens, fogAreas, map, ui } = state;
+  const { tokens, fogAreas, drawings, map, ui } = state;
 
   // ── Init Pixi (v8 async API) ──
   useEffect(() => {
@@ -125,6 +133,194 @@ export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null,
     actions.revealFog(worldX, worldY, radius);
   }, [isDM, actions]);
 
+  // ── Ruler Functions ──
+  const drawRuler = useCallback((startPoint, endPoint) => {
+    const uiLayer = layersRef.current.ui;
+    if (!uiLayer) return;
+
+    // Clear previous ruler
+    if (rulerRef.current.graphics) {
+      uiLayer.removeChild(rulerRef.current.graphics);
+      rulerRef.current.graphics = null;
+    }
+
+    if (!startPoint || !endPoint) return;
+
+    const graphics = new Graphics();
+    
+    // Draw line
+    graphics
+      .setStrokeStyle({ width: 3, color: 0xff6b6b, alpha: 0.8 })
+      .moveTo(startPoint.x, startPoint.y)
+      .lineTo(endPoint.x, endPoint.y)
+      .stroke();
+
+    // Draw start point
+    graphics
+      .circle(startPoint.x, startPoint.y, 8)
+      .fill({ color: 0xff6b6b, alpha: 0.6 });
+
+    // Draw end point  
+    graphics
+      .circle(endPoint.x, endPoint.y, 8)
+      .fill({ color: 0xff6b6b, alpha: 0.6 });
+
+    // Calculate distance in grid squares (5ft each)
+    const deltaX = Math.abs(endPoint.x - startPoint.x);
+    const deltaY = Math.abs(endPoint.y - startPoint.y);
+    const distancePixels = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const distanceSquares = distancePixels / GRID_SIZE;
+    const distanceFeet = Math.round(distanceSquares * 5);
+
+    // Draw distance text
+    const midX = (startPoint.x + endPoint.x) / 2;
+    const midY = (startPoint.y + endPoint.y) / 2;
+    
+    const textStyle = new TextStyle({
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 16,
+      fill: 0xffffff,
+      fontWeight: 'bold',
+      stroke: { color: 0x000000, width: 2 },
+      dropShadow: {
+        color: 0x000000,
+        angle: 0,
+        blur: 4,
+        distance: 2
+      }
+    });
+
+    const distanceText = new Text({
+      text: `${distanceFeet}ft`,
+      style: textStyle
+    });
+    
+    distanceText.anchor.set(0.5);
+    distanceText.x = midX;
+    distanceText.y = midY - 20; // Offset above the line
+
+    graphics.addChild(distanceText);
+    uiLayer.addChild(graphics);
+    rulerRef.current.graphics = graphics;
+  }, []);
+
+  const clearRuler = useCallback(() => {
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer && rulerRef.current.graphics) {
+      uiLayer.removeChild(rulerRef.current.graphics);
+      rulerRef.current.graphics = null;
+    }
+    rulerRef.current.isActive = false;
+    rulerRef.current.startPoint = null;
+    rulerRef.current.endPoint = null;
+  }, []);
+
+  // ── Drawing Functions ──
+  const startDrawing = useCallback((x, y) => {
+    drawingRef.current.isDrawing = true;
+    drawingRef.current.currentPath = [{ x, y }];
+    
+    // Create temporary graphics for live preview
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer) {
+      const graphics = new Graphics();
+      uiLayer.addChild(graphics);
+      drawingRef.current.graphics = graphics;
+    }
+  }, []);
+
+  const continueDrawing = useCallback((x, y) => {
+    if (!drawingRef.current.isDrawing) return;
+    
+    drawingRef.current.currentPath.push({ x, y });
+    
+    // Update live preview
+    if (drawingRef.current.graphics) {
+      const graphics = drawingRef.current.graphics;
+      graphics.clear();
+      
+      if (drawingRef.current.currentPath.length > 1) {
+        graphics.setStrokeStyle({ 
+          width: 3, 
+          color: parseInt(drawColor.slice(1), 16), 
+          alpha: 0.8 
+        });
+        
+        const path = drawingRef.current.currentPath;
+        graphics.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) {
+          graphics.lineTo(path[i].x, path[i].y);
+        }
+        graphics.stroke();
+      }
+    }
+  }, [drawColor]);
+
+  const finishDrawing = useCallback(() => {
+    if (!drawingRef.current.isDrawing) return;
+    
+    const path = drawingRef.current.currentPath;
+    if (path.length > 1) {
+      // Send the drawing to the server
+      actions.addDraw('line', path, drawColor, 3);
+    }
+    
+    // Clean up
+    if (drawingRef.current.graphics) {
+      const uiLayer = layersRef.current.ui;
+      if (uiLayer) {
+        uiLayer.removeChild(drawingRef.current.graphics);
+      }
+      drawingRef.current.graphics = null;
+    }
+    
+    drawingRef.current.isDrawing = false;
+    drawingRef.current.currentPath = [];
+  }, [actions, drawColor]);
+
+  const drawSavedDrawings = useCallback(() => {
+    const uiLayer = layersRef.current.ui;
+    if (!uiLayer) return;
+
+    // Clear existing drawings
+    drawingsMapRef.current.forEach((graphics) => {
+      uiLayer.removeChild(graphics);
+    });
+    drawingsMapRef.current.clear();
+
+    // Draw all saved drawings
+    drawings.forEach((drawing) => {
+      const graphics = new Graphics();
+      
+      if (drawing.type === 'line' && drawing.points.length > 1) {
+        graphics.setStrokeStyle({ 
+          width: drawing.strokeWidth || 3, 
+          color: parseInt(drawing.color.slice(1), 16), 
+          alpha: 0.8 
+        });
+        
+        graphics.moveTo(drawing.points[0].x, drawing.points[0].y);
+        for (let i = 1; i < drawing.points.length; i++) {
+          graphics.lineTo(drawing.points[i].x, drawing.points[i].y);
+        }
+        graphics.stroke();
+      }
+      
+      uiLayer.addChild(graphics);
+      drawingsMapRef.current.set(drawing.id, graphics);
+    });
+  }, [drawings]);
+
+  const clearAllDrawings = useCallback(() => {
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer) {
+      drawingsMapRef.current.forEach((graphics) => {
+        uiLayer.removeChild(graphics);
+      });
+      drawingsMapRef.current.clear();
+    }
+  }, []);
+
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
     const v = viewRef.current;
@@ -208,6 +404,33 @@ export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null,
         actions.addToken(newToken);
         onTokenPlaced();
         actions.setActiveTool('select');
+      } else if (e.button === 0 && ui.activeTool === 'measure' && isDM) {
+        // Ruler/measure mode
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        // Start measuring
+        rulerRef.current.isActive = true;
+        rulerRef.current.startPoint = { x: worldX, y: worldY };
+        rulerRef.current.endPoint = { x: worldX, y: worldY };
+        
+        drawRuler(rulerRef.current.startPoint, rulerRef.current.endPoint);
+      } else if (e.button === 0 && ui.activeTool === 'draw' && isDM) {
+        // Drawing mode
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        startDrawing(worldX, worldY);
       }
     });
     canvas.addEventListener('pointermove', (e) => {
@@ -228,6 +451,25 @@ export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null,
         const worldY = (canvasY - v.panY) / v.zoom;
         
         revealFogAt(worldX, worldY);
+      } else if (rulerRef.current.isActive && ui.activeTool === 'measure' && isDM) {
+        // Update ruler end point while dragging
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        rulerRef.current.endPoint = { x: worldX, y: worldY };
+        drawRuler(rulerRef.current.startPoint, rulerRef.current.endPoint);
+      } else if (drawingRef.current.isDrawing && ui.activeTool === 'draw' && isDM) {
+        // Continue drawing while dragging
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        continueDrawing(worldX, worldY);
       }
     });
     canvas.addEventListener('pointerup', (e) => {
@@ -239,6 +481,22 @@ export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null,
       if (isRevealingFogRef.current) {
         isRevealingFogRef.current = false;
       }
+      
+      // Finish ruler measurement
+      if (rulerRef.current.isActive && ui.activeTool === 'measure' && isDM) {
+        // Keep the ruler visible for a bit, then clear it
+        setTimeout(() => {
+          if (ui.activeTool !== 'measure') {
+            clearRuler();
+          }
+        }, 3000); // Auto-clear after 3 seconds
+        rulerRef.current.isActive = false;
+      }
+      
+      // Finish drawing
+      if (drawingRef.current.isDrawing && ui.activeTool === 'draw' && isDM) {
+        finishDrawing();
+      }
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -247,12 +505,31 @@ export default function MapCanvas({ isDM = false, tokenAwaitingPlacement = null,
       document.removeEventListener('keydown', keyDown);
       document.removeEventListener('keyup', keyUp);
     };
-  }, [applyTransform, drawGrid]);
+  }, [applyTransform, drawGrid, startDrawing, continueDrawing, finishDrawing]);
 
   // ── Sync fog of war ──
   useEffect(() => {
     drawFogOfWar();
   }, [fogAreas, drawFogOfWar]);
+
+  // ── Clear ruler when tool changes ──
+  useEffect(() => {
+    if (ui.activeTool !== 'measure') {
+      clearRuler();
+    }
+  }, [ui.activeTool, clearRuler]);
+
+  // ── Sync drawings ──
+  useEffect(() => {
+    drawSavedDrawings();
+  }, [drawings, drawSavedDrawings]);
+
+  // ── Clear drawing when tool changes ──
+  useEffect(() => {
+    if (ui.activeTool !== 'draw' && drawingRef.current.isDrawing) {
+      finishDrawing();
+    }
+  }, [ui.activeTool, finishDrawing]);
 
   // ── Sync tokens to Pixi ──
   useEffect(() => {

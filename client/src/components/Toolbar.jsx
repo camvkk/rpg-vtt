@@ -5,12 +5,15 @@ const Toolbar = ({
   activeTool = 'select',
   gridEnabled = true,
   snapToGrid = true,
+  drawColor = '#ff6b6b',
   onToolSelect = () => {},
   onGridToggle = () => {},
   onSnapToggle = () => {},
   onMapUpload = () => {},
   onFogClear = () => {},
   onFogFill = () => {},
+  onDrawColorChange = () => {},
+  onDrawClear = () => {},
   onSettingsOpen = () => {}
 }) => {
   const [showMapUpload, setShowMapUpload] = useState(false);
@@ -52,6 +55,13 @@ const Toolbar = ({
       icon: '📏',
       description: 'Measure distances',
       hotkey: 'R'
+    },
+    {
+      id: 'draw',
+      name: 'Draw',
+      icon: '✏️',
+      description: 'Draw on the map',
+      hotkey: 'D'
     },
     {
       id: 'pan',
@@ -367,6 +377,71 @@ const Toolbar = ({
         </button>
       </div>
 
+      {/* Drawing Controls Group */}
+      <div style={{
+        display: 'flex',
+        gap: 'var(--spacing-xs)',
+        paddingRight: 'var(--spacing-md)',
+        borderRight: '1px solid var(--border-color)'
+      }}>
+        <div style={{
+          fontSize: '0.7rem',
+          color: 'var(--text-dim)',
+          alignSelf: 'center',
+          marginRight: 'var(--spacing-xs)'
+        }}>
+          Draw:
+        </div>
+        
+        {/* Color Picker */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
+          <input
+            type="color"
+            value={drawColor}
+            onChange={(e) => onDrawColorChange(e.target.value)}
+            style={{
+              width: '32px',
+              height: '32px',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--surface-light)',
+              cursor: 'pointer',
+              padding: '0'
+            }}
+            title="Select drawing color"
+          />
+        </div>
+
+        {/* Clear Drawings */}
+        <button
+          onClick={onDrawClear}
+          style={{
+            padding: 'var(--spacing-sm)',
+            background: 'var(--surface-light)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            fontWeight: '600',
+            transition: 'all var(--transition-fast)'
+          }}
+          title="Clear all drawings"
+          onMouseEnter={(e) => {
+            e.target.style.background = 'var(--color-accent)';
+            e.target.style.color = 'white';
+            e.target.style.borderColor = 'var(--color-accent)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.background = 'var(--surface-light)';
+            e.target.style.color = 'var(--text-primary)';
+            e.target.style.borderColor = 'var(--border-color)';
+          }}
+        >
+          🧹 Clear
+        </button>
+      </div>
+
       {/* Settings Group */}
       <div style={{
         display: 'flex',
@@ -591,7 +666,7 @@ const Toolbar = ({
         color: 'var(--text-dim)',
         display: window.innerWidth > 1024 ? 'block' : 'none'
       }}>
-        💡 Press keys: V, M, T, F, R, Space
+        💡 Press keys: V, M, T, F, R, D, Space
       </div>
     </div>
   );

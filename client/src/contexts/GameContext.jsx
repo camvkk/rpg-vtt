@@ -21,6 +21,9 @@ const initialState = {
   // Fog of war revealed areas
   fogAreas: [],
 
+  // Drawings on the map
+  drawings: [],
+
   // Initiative
   initiative: { active: false, currentTurn: 0, players: [] },
 
@@ -64,6 +67,7 @@ function gameReducer(state, action) {
         players: players || [],
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
+        drawings: gs?.drawings || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
         loading: false,
@@ -119,6 +123,13 @@ function gameReducer(state, action) {
     case 'FOG_CLEAR':
       return { ...state, fogAreas: [{ x: 0, y: 0, radius: 9999 }] };
 
+    // Drawings
+    case 'DRAW_ADD':
+      return { ...state, drawings: [...state.drawings, action.payload] };
+
+    case 'DRAW_CLEAR':
+      return { ...state, drawings: [] };
+
     // Chat
     case 'CHAT_MESSAGE':
       return { ...state, chat: [...state.chat, action.payload] };
@@ -172,6 +183,40 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socketRef = useRef(null);
 
+  // ── Session persistence helpers ──
+  const saveSessionData = useCallback((roomCode, playerName, isDM) => {
+    const sessionData = {
+      roomCode,
+      playerName,
+      isDM,
+      timestamp: Date.now()
+    };
+    sessionStorage.setItem('rpgvtt-session', JSON.stringify(sessionData));
+  }, []);
+
+  const getSessionData = useCallback(() => {
+    try {
+      const stored = sessionStorage.getItem('rpgvtt-session');
+      if (stored) {
+        const data = JSON.parse(stored);
+        // Check if session is less than 24 hours old
+        if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (e) {
+      console.error('Error loading session data:', e);
+    }
+    return null;
+  }, []);
+
+  const clearSessionData = useCallback(() => {
+    sessionStorage.removeItem('rpgvtt-session');
+  }, []);
+
+  // ── Auto-reconnect state ──
+  const [reconnectAttempted, setReconnectAttempted] = useState(false);
+
   // ── Socket lifecycle ──
   useEffect(() => {
     const socket = io(serverUrl, {
@@ -184,6 +229,59 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     socket.on('connect', () => {
       dispatch({ type: 'SET_CONNECTED', payload: { connected: true, socketId: socket.id } });
+      
+      // Try to auto-reconnect to saved session
+      if (!reconnectAttempted) {
+        setReconnectAttempted(true);
+        const sessionData = getSessionData();
+        if (sessionData && sessionData.roomCode) {
+          dispatch({ type: 'SET_LOADING', payload: true });
+          dispatch({ type: 'SET_ERROR', payload: 'Reconectando à sessão anterior...' });
+          
+          // Attempt to rejoin the room
+          setTimeout(async () => {
+            try {
+              if (sessionData.isDM) {
+                // For DMs, we can't auto-rejoin since rooms are created fresh
+                // Just clear the session data and show a message
+                clearSessionData();
+                dispatch({ type: 'SET_ERROR', payload: 'Sessão anterior expirou. Crie uma nova sala.' });
+              } else {
+                // For players, try to rejoin
+                const res = await emit('room:join', { 
+                  code: sessionData.roomCode, 
+                  playerName: sessionData.playerName 
+                });
+                
+                if (res.success) {
+                  dispatch({
+                    type: 'ROOM_JOINED',
+                    payload: {
+                      room: res.room,
+                      player: { id: res.room.playerId, name: sessionData.playerName, isDM: false },
+                      players: res.room.players || [],
+                      gameState: res.room.gameState,
+                    },
+                  });
+                  dispatch({ type: 'SET_ERROR', payload: null });
+                } else {
+                  clearSessionData();
+                  dispatch({ type: 'SET_ERROR', payload: 'Não foi possível reconectar. A sala pode ter expirado.' });
+                }
+              }
+            } catch (error) {
+              clearSessionData();
+              dispatch({ type: 'SET_ERROR', payload: 'Falha na reconexão automática.' });
+            } finally {
+              dispatch({ type: 'SET_LOADING', payload: false });
+              // Clear error after 5 seconds
+              setTimeout(() => {
+                dispatch({ type: 'SET_ERROR', payload: null });
+              }, 5000);
+            }
+          }, 1000);
+        }
+      }
     });
     socket.on('disconnect', () => {
       dispatch({ type: 'SET_CONNECTED', payload: { connected: false } });
@@ -220,6 +318,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     // Ambiance
     socket.on('ambiance:change', (data) => dispatch({ type: 'AMBIANCE_CHANGE', payload: data }));
 
+    // Drawings
+    socket.on('draw:add', (data) => dispatch({ type: 'DRAW_ADD', payload: data }));
+    socket.on('draw:clear', () => dispatch({ type: 'DRAW_CLEAR' }));
+
     return () => {
       socket.removeAllListeners();
       socket.disconnect();
@@ -246,6 +348,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       try {
         const res = await emit('room:create', { dmName });
         if (!res.success) throw new Error(res.error);
+        
+        // Save session data
+        saveSessionData(res.room.code, dmName, true);
+        
         dispatch({
           type: 'ROOM_JOINED',
           payload: {
@@ -267,6 +373,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       try {
         const res = await emit('room:join', { code, playerName });
         if (!res.success) throw new Error(res.error);
+        
+        // Save session data
+        saveSessionData(code, playerName, false);
+        
         dispatch({
           type: 'ROOM_JOINED',
           payload: {
@@ -285,6 +395,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     leaveRoom: () => {
       socketRef.current?.emit('room:leave');
+      clearSessionData();
       dispatch({ type: 'LEAVE_ROOM' });
     },
 
@@ -317,6 +428,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Ambiance
     setAmbiance: (trackUrl) => emit('ambiance:set', { trackUrl }),
+
+    // Drawings
+    addDraw: (type, points, color, strokeWidth) => emit('draw:add', { type, points, color, strokeWidth }),
+    clearDrawings: () => emit('draw:clear', {}),
 
     // UI (local only)
     setActiveTool: (tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }),
