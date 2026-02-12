@@ -264,7 +264,11 @@ const CharacterWizard = ({
     } else {
       Object.entries(wizardData.equipmentChoices).forEach(([choiceKey, selectedOption]) => {
         const choiceOptions = wizardData.classData.startingEquipment[choiceKey];
-        if (choiceOptions && choiceOptions[selectedOption]) {
+        if (!choiceOptions) return;
+        if (Array.isArray(choiceOptions)) {
+          // Flat array — the whole array is the equipment list for this choice
+          equipment.push(...choiceOptions);
+        } else if (choiceOptions[selectedOption]) {
           equipment.push(...choiceOptions[selectedOption]);
         }
       });
@@ -1173,55 +1177,95 @@ const CharacterWizard = ({
 
         {!wizardData.startingGold && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-            {Object.entries(equipment).map(([choiceKey, options]) => (
-              <div key={choiceKey}>
-                <h3 style={{
-                  fontFamily: 'var(--font-fantasy)',
-                  color: 'var(--color-primary)',
-                  marginBottom: 'var(--spacing-md)'
-                }}>
-                  Escolha {choiceKey.replace('choice', '').toUpperCase()}:
-                </h3>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-                  {Object.entries(options).map(([optionKey, items]) => (
+            {Object.entries(equipment).map(([choiceKey, options]) => {
+              // options can be an array of items (flat list) or an object of sub-choices
+              const isFlat = Array.isArray(options);
+
+              return (
+                <div key={choiceKey}>
+                  <h3 style={{
+                    fontFamily: 'var(--font-fantasy)',
+                    color: 'var(--color-primary)',
+                    marginBottom: 'var(--spacing-md)'
+                  }}>
+                    {isFlat ? `Pacote ${choiceKey.replace('choice', '').toUpperCase()}` : `Escolha ${choiceKey.replace('choice', '').toUpperCase()}:`}
+                  </h3>
+
+                  {isFlat ? (
+                    /* Flat array: render as a selectable pack */
                     <label
-                      key={optionKey}
                       style={{
                         display: 'flex',
                         alignItems: 'flex-start',
                         gap: 'var(--spacing-sm)',
                         padding: 'var(--spacing-md)',
-                        background: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--surface-light)',
-                        color: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--bg-primary)' : 'var(--text-primary)',
-                        border: `2px solid ${wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                        background: wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--color-primary)' : 'var(--surface-light)',
+                        color: wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--bg-primary)' : 'var(--text-primary)',
+                        border: `2px solid ${wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--color-primary)' : 'var(--border-color)'}`,
                         borderRadius: 'var(--radius-md)',
                         cursor: 'pointer',
                         transition: 'all var(--transition-fast)'
                       }}
+                      onClick={() => updateWizardData({
+                        equipmentChoices: { ...wizardData.equipmentChoices, [choiceKey]: choiceKey }
+                      })}
                     >
                       <input
                         type="radio"
                         name={choiceKey}
-                        checked={wizardData.equipmentChoices[choiceKey] === optionKey}
-                        onChange={() => updateWizardData({
-                          equipmentChoices: { ...wizardData.equipmentChoices, [choiceKey]: optionKey }
-                        })}
+                        checked={wizardData.equipmentChoices[choiceKey] === choiceKey}
+                        readOnly
                         style={{ accentColor: 'var(--color-primary)', marginTop: '2px' }}
                       />
-                      <div>
-                        <strong>Opção {optionKey.replace('choice', '').toUpperCase()}:</strong>
-                        <ul style={{ marginTop: 'var(--spacing-xs)', paddingLeft: 'var(--spacing-md)' }}>
-                          {items.map((item, idx) => (
-                            <li key={idx} style={{ marginBottom: '2px' }}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
+                      <ul style={{ marginTop: 0, paddingLeft: 'var(--spacing-md)' }}>
+                        {options.map((item, idx) => (
+                          <li key={idx} style={{ marginBottom: '2px' }}>{item}</li>
+                        ))}
+                      </ul>
                     </label>
-                  ))}
+                  ) : (
+                    /* Object with sub-choices: render as radio options */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                      {Object.entries(options).map(([optionKey, items]) => (
+                        <label
+                          key={optionKey}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 'var(--spacing-sm)',
+                            padding: 'var(--spacing-md)',
+                            background: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--surface-light)',
+                            color: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--bg-primary)' : 'var(--text-primary)',
+                            border: `2px solid ${wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                            borderRadius: 'var(--radius-md)',
+                            cursor: 'pointer',
+                            transition: 'all var(--transition-fast)'
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name={choiceKey}
+                            checked={wizardData.equipmentChoices[choiceKey] === optionKey}
+                            onChange={() => updateWizardData({
+                              equipmentChoices: { ...wizardData.equipmentChoices, [choiceKey]: optionKey }
+                            })}
+                            style={{ accentColor: 'var(--color-primary)', marginTop: '2px' }}
+                          />
+                          <div>
+                            <strong>Opção {optionKey.replace('choice', '').toUpperCase()}:</strong>
+                            <ul style={{ marginTop: 'var(--spacing-xs)', paddingLeft: 'var(--spacing-md)' }}>
+                              {(Array.isArray(items) ? items : [items]).map((item, idx) => (
+                                <li key={idx} style={{ marginBottom: '2px' }}>{item}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
