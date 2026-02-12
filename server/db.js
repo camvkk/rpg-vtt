@@ -93,6 +93,17 @@ async function initDatabase() {
       revealed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (room_id) REFERENCES rooms (id)
     );
+    CREATE TABLE IF NOT EXISTS room_state (
+      room_id TEXT PRIMARY KEY,
+      tokens TEXT,
+      fog TEXT,
+      drawings TEXT,
+      map_url TEXT,
+      initiative TEXT,
+      ambiance TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (room_id) REFERENCES rooms (id)
+    );
   `);
 
   // Auto-save every 30s
@@ -156,8 +167,58 @@ function get(sql, params = []) {
   }
 }
 
+// Room state persistence helpers
+async function saveRoomState(roomId, field, value) {
+  try {
+    const jsonValue = typeof value === 'object' ? JSON.stringify(value) : value;
+    
+    // Insert or update room_state
+    await run(`
+      INSERT INTO room_state (room_id, ${field}, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(room_id) DO UPDATE SET 
+        ${field} = ?,
+        updated_at = CURRENT_TIMESTAMP
+    `, [roomId, jsonValue, jsonValue]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving room state:', error);
+    throw error;
+  }
+}
+
+async function loadRoomState(roomId) {
+  try {
+    const row = await get('SELECT * FROM room_state WHERE room_id = ?', [roomId]);
+    if (!row) {
+      return {
+        tokens: null,
+        fog: null,
+        drawings: null,
+        map_url: null,
+        initiative: null,
+        ambiance: null
+      };
+    }
+
+    // Parse JSON fields
+    return {
+      tokens: row.tokens ? JSON.parse(row.tokens) : null,
+      fog: row.fog ? JSON.parse(row.fog) : null,
+      drawings: row.drawings ? JSON.parse(row.drawings) : null,
+      map_url: row.map_url,
+      initiative: row.initiative ? JSON.parse(row.initiative) : null,
+      ambiance: row.ambiance
+    };
+  } catch (error) {
+    console.error('Error loading room state:', error);
+    throw error;
+  }
+}
+
 // Save on process exit
 process.on('exit', () => saveDb());
 process.on('SIGINT', () => { saveDb(); process.exit(0); });
 
-module.exports = { db: null, initDatabase, query, run, get };
+module.exports = { db: null, initDatabase, query, run, get, saveRoomState, loadRoomState };

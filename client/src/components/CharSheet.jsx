@@ -13,7 +13,7 @@ const CharSheet = ({
   // Default character template
   const defaultCharacter = {
     id: 'char1',
-    name: 'New Character',
+    name: 'Novo Personagem',
     class: 'Fighter',
     level: 1,
     race: 'Human',
@@ -325,10 +325,10 @@ const CharSheet = ({
         borderBottom: '1px solid var(--border-color)'
       }}>
         {[
-          { id: 'stats', label: 'Stats', icon: '⚡' },
-          { id: 'skills', label: 'Skills', icon: '🎯' },
-          { id: 'combat', label: 'Combat', icon: '⚔️' },
-          { id: 'features', label: 'Features', icon: '✨' }
+          { id: 'stats', label: 'Atributos', icon: '⚡' },
+          { id: 'skills', label: 'Perícias', icon: '🎯' },
+          { id: 'combat', label: 'Combate', icon: '⚔️' },
+          { id: 'features', label: 'Traços', icon: '✨' }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -366,7 +366,7 @@ const CharSheet = ({
                 color: 'var(--color-primary)',
                 fontSize: '0.9rem'
               }}>
-                Ability Scores
+                Atributos
               </h4>
               <div style={{
                 display: 'grid',

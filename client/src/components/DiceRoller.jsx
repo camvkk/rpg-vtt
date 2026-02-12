@@ -14,7 +14,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
 
     const parsed = parseDiceNotation(notation);
     if (!parsed) {
-      alert('Invalid dice notation! Use format like "2d20+5" or "4d6kh3"');
+      alert('Notação de dados inválida! Use formato como "2d20+5" ou "4d6kh3"');
       return;
     }
 
@@ -77,7 +77,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
           color: 'var(--color-primary)',
           fontSize: '1.1rem'
         }}>
-          🎲 Dice Roller
+          🎲 Dados
         </h3>
         {isRolling && (
           <div style={{
@@ -85,7 +85,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
             fontSize: '0.8rem',
             animation: 'pulse 1s infinite'
           }}>
-            Rolling...
+            Rolando...
           </div>
         )}
       </div>
@@ -126,7 +126,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
               transition: 'all var(--transition-fast)'
             }}
           >
-            Roll
+            Rolar
           </button>
         </div>
         {!isValidInput && diceInput.trim() && (
@@ -135,7 +135,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
             color: 'var(--color-accent)',
             fontSize: '0.75rem'
           }}>
-            Invalid dice notation. Try: 2d20+5, 4d6kh3, or advantage
+            Notação inválida. Tente: 2d20+5, 4d6kh3, ou advantage
           </div>
         )}
       </form>
@@ -147,7 +147,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
           color: 'var(--text-dim)',
           marginBottom: 'var(--spacing-sm)'
         }}>
-          Quick Dice:
+          Dados Rápidos:
         </div>
         <div style={{
           display: 'grid',
@@ -284,7 +284,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
               color: 'var(--color-success)',
               textAlign: 'center'
             }}>
-              ⚡ Advantage
+              ⚡ Vantagem
             </div>
           )}
           {lastResult.disadvantage && (
@@ -294,7 +294,7 @@ const DiceRoller = ({ onRoll = () => {}, disabled = false }) => {
               color: 'var(--color-accent)',
               textAlign: 'center'
             }}>
-              💀 Disadvantage
+              💀 Desvantagem
             </div>
           )}
         </div>

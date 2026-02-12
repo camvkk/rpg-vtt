@@ -653,7 +653,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
           fontSize: '0.9rem',
           fontStyle: 'italic'
         }}>
-          🎵 Ambiance controlled by DM
+          🎵 Ambiente controlado pelo Mestre
         </div>
         {currentPreset && (
           <div style={{
@@ -661,7 +661,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
             color: 'var(--color-primary)',
             fontSize: '0.8rem'
           }}>
-            Now Playing: {currentPreset.icon} {currentPreset.name}
+            Tocando: {currentPreset.icon} {currentPreset.name}
           </div>
         )}
       </div>
@@ -688,7 +688,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
           color: 'var(--color-primary)',
           fontSize: '1.1rem'
         }}>
-          🎵 Ambiance Control
+          🎵 Controle de Ambiente
         </h3>
       </div>
 
@@ -796,7 +796,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
               fontSize: '0.9rem',
               fontStyle: 'italic'
             }}>
-              No music playing. Select a preset below.
+              Nenhuma música tocando. Selecione um preset abaixo.
             </div>
           )}
         </div>
@@ -809,7 +809,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
             color: 'var(--color-primary)',
             fontSize: '0.9rem'
           }}>
-            Music Presets
+            Presets de Música
           </h4>
           <div style={{
             display: 'grid',
@@ -858,7 +858,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
             color: 'var(--color-primary)',
             fontSize: '0.9rem'
           }}>
-            Sound Effects
+            Efeitos Sonoros
           </h4>
           <div style={{
             display: 'grid',
@@ -919,7 +919,7 @@ const Ambiance = ({ isDM = false, onAmbianceChange = () => {} }) => {
           color: 'var(--text-dim)',
           textAlign: 'center'
         }}>
-          ✨ All sounds are procedurally generated using Web Audio API - no external dependencies!
+          ✨ Todos os sons são gerados proceduralmente via Web Audio API!
         </div>
       </div>
     </div>

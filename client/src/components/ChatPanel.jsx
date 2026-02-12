@@ -263,7 +263,7 @@ const ChatPanel = ({
               fontSize: '0.8rem'
             }}
           >
-            ➕ {message.author} joined the game
+            ➕ {message.author} entrou na mesa
           </div>
         );
 
@@ -279,7 +279,7 @@ const ChatPanel = ({
               fontSize: '0.8rem'
             }}
           >
-            ➖ {message.author} left the game
+            ➖ {message.author} saiu da mesa
           </div>
         );
 
@@ -359,7 +359,7 @@ const ChatPanel = ({
             borderRadius: '50%',
             background: isConnected ? 'var(--color-success)' : 'var(--color-accent)'
           }} />
-          {isConnected ? 'Connected' : 'Disconnected'}
+          {isConnected ? 'Conectado' : 'Desconectado'}
         </div>
       </div>
 
@@ -378,7 +378,7 @@ const ChatPanel = ({
             padding: 'var(--spacing-lg)',
             fontSize: '0.9rem'
           }}>
-            Welcome to the adventure! Type a message or use dice commands like /roll 1d20
+            Bem-vindo à aventura! Digite uma mensagem ou use comandos de dados como /roll 1d20
           </div>
         ) : (
           messages.map(renderMessage)
@@ -398,7 +398,7 @@ const ChatPanel = ({
             type="text"
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
-            placeholder={isConnected ? "Type a message or /roll 1d20..." : "Connecting..."}
+            placeholder={isConnected ? "Digite uma mensagem ou /roll 1d20..." : "Conectando..."}
             disabled={!isConnected}
             style={{
               flex: 1,
@@ -426,7 +426,7 @@ const ChatPanel = ({
               transition: 'all var(--transition-fast)'
             }}
           >
-            Send
+            Enviar
           </button>
         </form>
         
@@ -437,7 +437,7 @@ const ChatPanel = ({
           marginTop: 'var(--spacing-sm)',
           textAlign: 'center'
         }}>
-          Commands: /roll 1d20+5, /w PlayerName message, /gmroll 1d20 (DM only)
+          Comandos: /roll 1d20+5, /w NomeJogador mensagem, /gmroll 1d20 (apenas Mestre)
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 // Import our modules
-const { initDatabase } = require('./db');
+const { initDatabase, saveRoomState, loadRoomState } = require('./db');
 const roomManager = require('./rooms');
 const { TokenManager, MapManager, FogManager, AmbianceManager, getGameState } = require('./game-state');
 const { rollDice, formatRollResult, getRollType } = require('./dice');
@@ -40,6 +40,17 @@ app.post('/api/upload-map', express.raw({ type: 'image/*', limit: '10mb' }), (re
     const filename = `map-${Date.now()}.${ext}`;
     fs.writeFileSync(path.join(mapsDir, filename), req.body);
     res.json({ success: true, url: `/public/maps/${filename}` });
+});
+
+// Token image upload endpoint
+const tokensDir = path.join(__dirname, 'public', 'tokens');
+if (!fs.existsSync(tokensDir)) fs.mkdirSync(tokensDir, { recursive: true });
+
+app.post('/api/upload-token', express.raw({ type: 'image/*', limit: '2mb' }), (req, res) => {
+    const ext = (req.headers['content-type'] || 'image/png').split('/')[1] || 'png';
+    const filename = `token-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(tokensDir, filename), req.body);
+    res.json({ success: true, url: `/public/tokens/${filename}` });
 });
 
 // Health check endpoints
@@ -100,8 +111,9 @@ io.on('connection', (socket) => {
                 isDM: true
             });
             
-            // Initialize initiative tracker
-            initiativeTrackers.set(room.id, {
+            // Initialize initiative tracker (load from persistence if exists)
+            const persistedState = await loadRoomState(room.id);
+            initiativeTrackers.set(room.id, persistedState.initiative || {
                 players: [],
                 currentTurn: 0,
                 active: false
@@ -155,6 +167,16 @@ io.on('connection', (socket) => {
             });
             
             console.log(`👤 ${playerName} joined room ${code}`);
+            
+            // Load initiative tracker if not already in memory
+            if (!initiativeTrackers.has(joinResult.room_id)) {
+                const persistedState = await loadRoomState(joinResult.room_id);
+                initiativeTrackers.set(joinResult.room_id, persistedState.initiative || {
+                    players: [],
+                    currentTurn: 0,
+                    active: false
+                });
+            }
             
             // Get room state
             const roomDetails = await roomManager.getRoomDetails(joinResult.room_id);
@@ -434,6 +456,9 @@ io.on('connection', (socket) => {
             
             console.log(`⚡ Initiative: ${initiativeEntry.playerName} rolled ${rollResult.total}`);
             
+            // Save initiative to persistence
+            await saveRoomState(player.roomId, 'initiative', tracker);
+            
             // Broadcast updated initiative
             io.to(player.roomId).emit('initiative:update', tracker);
             
@@ -458,6 +483,9 @@ io.on('connection', (socket) => {
             tracker.active = true;
             
             console.log(`⏭️ Initiative advanced to: ${tracker.players[tracker.currentTurn]?.playerName}`);
+            
+            // Save initiative to persistence
+            await saveRoomState(player.roomId, 'initiative', tracker);
             
             // Broadcast updated initiative
             io.to(player.roomId).emit('initiative:update', tracker);

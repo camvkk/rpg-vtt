@@ -281,6 +281,10 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
   const [tokenName, setTokenName] = useState('');
   const [tokenColor, setTokenColor] = useState('#3b82f6');
   const [tokenSize, setTokenSize] = useState('medium');
+  const [tokenImage, setTokenImage] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const sizeOptions = {
     small: { label: 'Pequeno', value: 'small', multiplier: 0.7 },
@@ -294,6 +298,49 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
     '#6b7280', '#1f2937', '#dc2626', '#059669'
   ];
 
+  // Handle file selection for token image
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione apenas arquivos de imagem.');
+      return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      alert('Arquivo muito grande. Máximo 2MB.');
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      const h = window.location.hostname;
+      const serverUrl = import.meta.env.VITE_SERVER_URL || 
+        (h === 'localhost' || h === '127.0.0.1' ? 'http://localhost:3001' : window.location.origin);
+      
+      const response = await fetch(`${serverUrl}/api/upload-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setImageUrl(data.url);
+        setTokenImage(URL.createObjectURL(file)); // For preview
+      } else {
+        alert('Erro no upload da imagem.');
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+      alert('Erro no upload da imagem.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleCreate = () => {
     if (!tokenName.trim()) return;
     
@@ -303,7 +350,8 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
       color: tokenColor,
       size: tokenSize,
       x: 0, // Will be set when placed
-      y: 0
+      y: 0,
+      ...(imageUrl && { imageUrl }) // Include imageUrl if we have one
     };
     
     onCreateToken(token);
@@ -350,7 +398,7 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
             width: `${40 * sizeOptions[tokenSize].multiplier}px`,
             height: `${40 * sizeOptions[tokenSize].multiplier}px`,
             borderRadius: '50%',
-            backgroundColor: tokenColor,
+            backgroundColor: tokenImage ? 'transparent' : tokenColor,
             border: '2px solid #ffffff',
             display: 'flex',
             alignItems: 'center',
@@ -358,9 +406,13 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
             color: 'white',
             fontWeight: 'bold',
             fontSize: '14px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            backgroundImage: tokenImage ? `url(${tokenImage})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            overflow: 'hidden'
           }}>
-            {tokenName?.[0]?.toUpperCase() || '?'}
+            {!tokenImage && (tokenName?.[0]?.toUpperCase() || '?')}
           </div>
         </div>
 
@@ -376,6 +428,52 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             autoFocus
           />
+        </div>
+
+        {/* Token Image Upload */}
+        <div>
+          <label className="form-label">Imagem do Token (opcional)</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            style={{ display: 'none' }}
+          />
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              style={{ flex: 1 }}
+            >
+              {isUploading ? '⏳ Enviando...' : '📁 Escolher Imagem'}
+            </button>
+            {imageUrl && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setImageUrl('');
+                  setTokenImage(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                style={{ color: 'var(--color-danger)' }}
+              >
+                🗑️ Remover
+              </button>
+            )}
+          </div>
+          {imageUrl && (
+            <div style={{
+              marginTop: 'var(--spacing-xs)',
+              fontSize: '0.8rem',
+              color: 'var(--color-text-dim)'
+            }}>
+              ✅ Imagem carregada com sucesso
+            </div>
+          )}
         </div>
 
         {/* Token Size */}
@@ -395,43 +493,45 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
           </div>
         </div>
 
-        {/* Token Color */}
-        <div>
-          <label className="form-label">Cor</label>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, 1fr)',
-            gap: 'var(--spacing-sm)',
-            marginBottom: 'var(--spacing-sm)'
-          }}>
-            {presetColors.map(color => (
-              <button
-                key={color}
-                onClick={() => setTokenColor(color)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  backgroundColor: color,
-                  border: tokenColor === color ? '3px solid var(--color-primary)' : '2px solid var(--color-border)',
-                  cursor: 'pointer'
-                }}
-              />
-            ))}
+        {/* Token Color (fallback when no image) */}
+        {!imageUrl && (
+          <div>
+            <label className="form-label">Cor</label>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(6, 1fr)',
+              gap: 'var(--spacing-sm)',
+              marginBottom: 'var(--spacing-sm)'
+            }}>
+              {presetColors.map(color => (
+                <button
+                  key={color}
+                  onClick={() => setTokenColor(color)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: color,
+                    border: tokenColor === color ? '3px solid var(--color-primary)' : '2px solid var(--color-border)',
+                    cursor: 'pointer'
+                  }}
+                />
+              ))}
+            </div>
+            <input
+              type="color"
+              value={tokenColor}
+              onChange={(e) => setTokenColor(e.target.value)}
+              style={{
+                width: '100%',
+                height: '40px',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer'
+              }}
+            />
           </div>
-          <input
-            type="color"
-            value={tokenColor}
-            onChange={(e) => setTokenColor(e.target.value)}
-            style={{
-              width: '100%',
-              height: '40px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer'
-            }}
-          />
-        </div>
+        )}
 
         {/* Create Button */}
         <button

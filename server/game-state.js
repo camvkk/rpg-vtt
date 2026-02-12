@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { query, run, get } = require('./db');
+const { query, run, get, saveRoomState, loadRoomState } = require('./db');
 
 // Token management
 const TokenManager = {
@@ -29,6 +29,10 @@ const TokenManager = {
                 WHERE t.id = ?
             `, [tokenId]);
 
+            // Save updated tokens to room state
+            const allTokens = await this.getRoomTokens(roomId);
+            await saveRoomState(roomId, 'tokens', allTokens);
+
             return token;
         } catch (error) {
             console.error('Error adding token:', error);
@@ -56,6 +60,10 @@ const TokenManager = {
                 SET x = ?, y = ?
                 WHERE id = ?
             `, [x, y, tokenId]);
+
+            // Save updated tokens to room state
+            const allTokens = await this.getRoomTokens(token.room_id);
+            await saveRoomState(token.room_id, 'tokens', allTokens);
 
             return { tokenId, x, y };
         } catch (error) {
@@ -110,6 +118,10 @@ const TokenManager = {
                 WHERE t.id = ?
             `, [tokenId]);
 
+            // Save updated tokens to room state
+            const allTokens = await this.getRoomTokens(token.room_id);
+            await saveRoomState(token.room_id, 'tokens', allTokens);
+
             return updatedToken;
         } catch (error) {
             console.error('Error updating token:', error);
@@ -133,6 +145,11 @@ const TokenManager = {
             }
 
             await run('DELETE FROM tokens WHERE id = ?', [tokenId]);
+
+            // Save updated tokens to room state
+            const allTokens = await this.getRoomTokens(token.room_id);
+            await saveRoomState(token.room_id, 'tokens', allTokens);
+
             return { tokenId };
         } catch (error) {
             console.error('Error removing token:', error);
@@ -184,6 +201,9 @@ const MapManager = {
                 WHERE id = ?
             `, [mapUrl, roomId]);
 
+            // Save updated map to room state
+            await saveRoomState(roomId, 'map_url', mapUrl);
+
             return { mapUrl };
         } catch (error) {
             console.error('Error setting active map:', error);
@@ -228,6 +248,10 @@ const FogManager = {
                 INSERT INTO fog_of_war (id, room_id, x, y, radius)
                 VALUES (?, ?, ?, ?, ?)
             `, [revealId, roomId, x, y, radius]);
+
+            // Save updated fog to room state
+            const allFog = await this.getRevealedAreas(roomId);
+            await saveRoomState(roomId, 'fog', allFog);
 
             return { revealId, x, y, radius };
         } catch (error) {
@@ -275,6 +299,10 @@ const FogManager = {
                 VALUES (?, ?, 0, 0, 9999)
             `, [revealId, roomId]);
 
+            // Save updated fog to room state
+            const allFog = await this.getRevealedAreas(roomId);
+            await saveRoomState(roomId, 'fog', allFog);
+
             return { cleared: true };
         } catch (error) {
             console.error('Error clearing fog:', error);
@@ -304,6 +332,9 @@ const AmbianceManager = {
                 WHERE id = ?
             `, [trackUrl, roomId]);
 
+            // Save updated ambiance to room state
+            await saveRoomState(roomId, 'ambiance', trackUrl);
+
             return { trackUrl };
         } catch (error) {
             console.error('Error setting ambiance track:', error);
@@ -331,18 +362,22 @@ const AmbianceManager = {
 // Get complete game state
 async function getGameState(roomId) {
     try {
-        const [tokens, currentMap, revealedAreas, currentTrack] = await Promise.all([
+        // Load from both existing tables and room_state persistence
+        const [tokens, currentMap, revealedAreas, currentTrack, persistedState] = await Promise.all([
             TokenManager.getRoomTokens(roomId),
             MapManager.getCurrentMap(roomId),
             FogManager.getRevealedAreas(roomId),
-            AmbianceManager.getCurrentTrack(roomId)
+            AmbianceManager.getCurrentTrack(roomId),
+            loadRoomState(roomId)
         ]);
 
         return {
-            tokens,
-            map: currentMap,
-            fog: revealedAreas,
-            ambiance: currentTrack
+            tokens: tokens.length > 0 ? tokens : (persistedState.tokens || []),
+            map: currentMap || persistedState.map_url,
+            fog: revealedAreas.length > 0 ? revealedAreas : (persistedState.fog || []),
+            ambiance: currentTrack || persistedState.ambiance,
+            drawings: persistedState.drawings || [],
+            initiative: persistedState.initiative || { players: [], currentTurn: 0, active: false }
         };
     } catch (error) {
         console.error('Error getting game state:', error);

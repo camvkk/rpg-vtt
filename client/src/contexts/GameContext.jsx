@@ -135,7 +135,7 @@ function gameReducer(state, action) {
       return { ...state, chat: [...state.chat, action.payload] };
 
     case 'DICE_RESULT':
-      return { ...state, chat: [...state.chat, { ...action.payload, type: 'dice' }] };
+      return { ...state, chat: [...state.chat, action.payload] };
 
     // Initiative
     case 'INITIATIVE_UPDATE':
@@ -311,8 +311,25 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     socket.on('fog:clear', () => dispatch({ type: 'FOG_CLEAR' }));
 
     // Chat & Dice
-    socket.on('chat:message', (data) => dispatch({ type: 'CHAT_MESSAGE', payload: data }));
-    socket.on('dice:result', (data) => dispatch({ type: 'DICE_RESULT', payload: data }));
+    socket.on('chat:message', (data) => dispatch({ type: 'CHAT_MESSAGE', payload: {
+      id: data.id,
+      author: data.playerName,
+      authorId: data.playerId,
+      content: data.message,
+      type: data.isWhisper ? 'whisper' : 'message',
+      target: data.targetPlayer,
+      timestamp: data.timestamp,
+    } }));
+    socket.on('dice:result', (data) => dispatch({ type: 'DICE_RESULT', payload: {
+      id: data.id || Date.now().toString(),
+      author: data.playerName,
+      authorId: data.playerId,
+      type: 'dice_result',
+      formula: data.notation || data.formula,
+      total: data.total,
+      breakdown: data.breakdown || { individual: (data.rolls || []).map(r => ({ roll: r, kept: true, dropped: false })) },
+      timestamp: data.timestamp || new Date().toISOString(),
+    } }));
 
     // Initiative
     socket.on('initiative:update', (data) => dispatch({ type: 'INITIATIVE_UPDATE', payload: data }));

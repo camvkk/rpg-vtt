@@ -91,6 +91,31 @@ export default function MapCanvas({
     };
   }, []);
 
+  // ── Load map background image ──
+  useEffect(() => {
+    const app = pixiRef.current;
+    const bgLayer = layersRef.current.bg;
+    if (!app || !bgLayer || !map.url) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { Assets, Sprite } = await import('pixi.js');
+        // Resolve URL (could be relative like /public/maps/...)
+        const fullUrl = map.url.startsWith('http') ? map.url : 
+          (import.meta.env.VITE_SERVER_URL || window.location.origin) + map.url;
+        const texture = await Assets.load(fullUrl);
+        if (cancelled) return;
+        bgLayer.removeChildren();
+        const sprite = new Sprite(texture);
+        bgLayer.addChild(sprite);
+      } catch (err) {
+        console.error('Failed to load map:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [map.url]);
+
   // ── Draw Grid ──
   const drawGrid = useCallback((layer, w, h) => {
     layer.removeChildren();
@@ -573,10 +598,13 @@ export default function MapCanvas({
   // ── Create a simple token sprite (Pixi v8) ──
   const createTokenSprite = useCallback((token) => {
     const c = new Container();
+    const sizeMultiplier = token.size === 'small' ? 0.7 : token.size === 'large' ? 1.5 : 1;
+    const baseRadius = 18 * sizeMultiplier;
 
+    // Create fallback colored circle first
     const circle = new Graphics();
     const color = token.color || 0x3b82f6;
-    circle.circle(0, 0, 18).fill({ color, alpha: 0.85 }).stroke({ width: 2, color: 0xffffff });
+    circle.circle(0, 0, baseRadius).fill({ color, alpha: 0.85 }).stroke({ width: 2, color: 0xffffff });
     c.addChild(circle);
 
     const label = new Text({
@@ -591,6 +619,44 @@ export default function MapCanvas({
     label.anchor.set(0.5);
     c.addChild(label);
 
+    // If token has an image, load it asynchronously
+    if (token.imageUrl) {
+      (async () => {
+        try {
+          const { Assets, Sprite, Graphics: GraphicsMask } = await import('pixi.js');
+          // Resolve URL (could be relative like /public/tokens/...)
+          const fullUrl = token.imageUrl.startsWith('http') ? token.imageUrl : 
+            (import.meta.env.VITE_SERVER_URL || window.location.origin) + token.imageUrl;
+          
+          const texture = await Assets.load(fullUrl);
+          
+          // Create image sprite
+          const sprite = new Sprite(texture);
+          sprite.anchor.set(0.5);
+          
+          // Scale to fit the token size
+          const diameter = baseRadius * 2;
+          const scale = Math.min(diameter / texture.width, diameter / texture.height);
+          sprite.scale.set(scale);
+          
+          // Create circular mask
+          const mask = new GraphicsMask();
+          mask.circle(0, 0, baseRadius).fill({ color: 0xffffff });
+          sprite.mask = mask;
+          c.addChild(mask); // Add mask to container
+          
+          // Replace circle and label with image
+          c.removeChild(circle);
+          c.removeChild(label);
+          c.addChildAt(sprite, 0); // Add image at bottom layer
+          
+        } catch (err) {
+          console.warn('Failed to load token image, using fallback:', err);
+          // Keep the colored circle as fallback
+        }
+      })();
+    }
+
     const nameTag = new Text({
       text: token.name || '',
       style: new TextStyle({
@@ -601,7 +667,7 @@ export default function MapCanvas({
       }),
     });
     nameTag.anchor.set(0.5, 0);
-    nameTag.position.set(0, 24);
+    nameTag.position.set(0, baseRadius + 6);
     c.addChild(nameTag);
 
     c.eventMode = 'static';

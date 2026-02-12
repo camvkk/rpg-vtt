@@ -18,20 +18,20 @@ const Initiative = ({
 
   // Available conditions with icons
   const conditions = [
-    { id: 'blinded', name: 'Blinded', icon: '👁️', color: '#666' },
-    { id: 'charmed', name: 'Charmed', icon: '💝', color: '#ff69b4' },
-    { id: 'deafened', name: 'Deafened', icon: '🔇', color: '#8b4513' },
-    { id: 'frightened', name: 'Frightened', icon: '😨', color: '#800080' },
-    { id: 'grappled', name: 'Grappled', icon: '🤝', color: '#cd853f' },
-    { id: 'incapacitated', name: 'Incapacitated', icon: '💤', color: '#708090' },
-    { id: 'invisible', name: 'Invisible', icon: '👻', color: '#d3d3d3' },
-    { id: 'paralyzed', name: 'Paralyzed', icon: '⚡', color: '#ffd700' },
-    { id: 'petrified', name: 'Petrified', icon: '🗿', color: '#696969' },
-    { id: 'poisoned', name: 'Poisoned', icon: '🟢', color: '#32cd32' },
-    { id: 'prone', name: 'Prone', icon: '🔽', color: '#ff4500' },
-    { id: 'restrained', name: 'Restrained', icon: '⛓️', color: '#2f4f4f' },
-    { id: 'stunned', name: 'Stunned', icon: '💫', color: '#ffa500' },
-    { id: 'unconscious', name: 'Unconscious', icon: '💀', color: '#8b0000' }
+    { id: 'blinded', name: 'Cego', icon: '👁️', color: '#666' },
+    { id: 'charmed', name: 'Encantado', icon: '💝', color: '#ff69b4' },
+    { id: 'deafened', name: 'Surdo', icon: '🔇', color: '#8b4513' },
+    { id: 'frightened', name: 'Amedrontado', icon: '😨', color: '#800080' },
+    { id: 'grappled', name: 'Agarrado', icon: '🤝', color: '#cd853f' },
+    { id: 'incapacitated', name: 'Incapacitado', icon: '💤', color: '#708090' },
+    { id: 'invisible', name: 'Invisível', icon: '👻', color: '#d3d3d3' },
+    { id: 'paralyzed', name: 'Paralisado', icon: '⚡', color: '#ffd700' },
+    { id: 'petrified', name: 'Petrificado', icon: '🗿', color: '#696969' },
+    { id: 'poisoned', name: 'Envenenado', icon: '🟢', color: '#32cd32' },
+    { id: 'prone', name: 'Caído', icon: '🔽', color: '#ff4500' },
+    { id: 'restrained', name: 'Contido', icon: '⛓️', color: '#2f4f4f' },
+    { id: 'stunned', name: 'Atordoado', icon: '💫', color: '#ffa500' },
+    { id: 'unconscious', name: 'Inconsciente', icon: '💀', color: '#8b0000' }
   ];
 
   const handleAddCombatant = () => {
@@ -53,7 +53,7 @@ const Initiative = ({
   };
 
   const handleRemoveCombatant = (combatantId) => {
-    if (confirm('Remove this combatant from initiative?')) {
+    if (confirm('Remover este combatente da iniciativa?')) {
       onRemoveCombatant(combatantId);
     }
   };
@@ -126,7 +126,7 @@ const Initiative = ({
           color: 'var(--color-primary)',
           fontSize: '1.1rem'
         }}>
-          ⚔️ Initiative
+          ⚔️ Iniciativa
         </h3>
         {isInCombat && (
           <div style={{
@@ -134,7 +134,7 @@ const Initiative = ({
             color: 'var(--color-accent)',
             fontWeight: '600'
           }}>
-            Round {Math.floor(currentTurn / combatants.length) + 1}
+            Rodada {Math.floor(currentTurn / combatants.length) + 1}
           </div>
         )}
       </div>
@@ -164,7 +164,7 @@ const Initiative = ({
                     fontSize: '0.8rem'
                   }}
                 >
-                  🎲 Roll Initiative
+                  🎲 Rolar Iniciativa
                 </button>
                 <button
                   onClick={onStartCombat}
@@ -181,7 +181,7 @@ const Initiative = ({
                     fontSize: '0.8rem'
                   }}
                 >
-                  ⚔️ Start Combat
+                  ⚔️ Iniciar Combate
                 </button>
               </>
             ) : (
@@ -199,7 +199,7 @@ const Initiative = ({
                     fontSize: '0.8rem'
                   }}
                 >
-                  ➡️ Next Turn
+                  ➡️ Próximo Turno
                 </button>
                 <button
                   onClick={onEndCombat}
@@ -214,7 +214,7 @@ const Initiative = ({
                     fontSize: '0.8rem'
                   }}
                 >
-                  🏆 End Combat
+                  🏆 Encerrar Combate
                 </button>
               </>
             )}
@@ -234,7 +234,7 @@ const Initiative = ({
             color: 'var(--text-dim)',
             fontStyle: 'italic'
           }}>
-            No combatants yet. Add characters to start initiative tracking.
+            Nenhum combatante ainda. Adicione personagens para rastrear iniciativa.
           </div>
         ) : (
           sortedCombatants.map((combatant, index) => {
@@ -325,7 +325,7 @@ const Initiative = ({
                         fontSize: '1rem',
                         padding: 'var(--spacing-xs)'
                       }}
-                      title="Remove combatant"
+                      title="Remover combatente"
                     >
                       ❌
                     </button>
@@ -412,7 +412,7 @@ const Initiative = ({
                       color: 'var(--text-dim)',
                       marginBottom: 'var(--spacing-xs)'
                     }}>
-                      Conditions:
+                      Condições:
                     </div>
                     <div style={{
                       display: 'flex',
@@ -477,7 +477,7 @@ const Initiative = ({
                 transition: 'all var(--transition-fast)'
               }}
             >
-              ➕ Add Combatant
+              ➕ Adicionar Combatente
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
@@ -485,7 +485,7 @@ const Initiative = ({
                 type="text"
                 value={newCombatantName}
                 onChange={(e) => setNewCombatantName(e.target.value)}
-                placeholder="Combatant name"
+                placeholder="Nome do combatente"
                 autoFocus
                 style={{
                   flex: 1,
@@ -515,7 +515,7 @@ const Initiative = ({
                   fontSize: '0.8rem'
                 }}
               >
-                Add
+                Adicionar
               </button>
               <button
                 onClick={() => setShowAddForm(false)}
@@ -529,7 +529,7 @@ const Initiative = ({
                   fontSize: '0.8rem'
                 }}
               >
-                Cancel
+                Cancelar
               </button>
             </div>
           )}

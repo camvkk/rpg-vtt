@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { GameProvider, useGame } from './contexts/GameContext';
 import Lobby from './components/Lobby';
-import GameBoard from './components/GameBoard';
+
+const GameBoard = lazy(() => import('./components/GameBoard'));
 
 function AppInner() {
   const { state, actions } = useGame();
@@ -52,7 +53,18 @@ function AppInner() {
           error={error || state.error}
         />
       ) : (
-        <GameBoard onLeaveRoom={handleLeaveRoom} />
+        <Suspense fallback={
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '100vh' 
+          }}>
+            Carregando...
+          </div>
+        }>
+          <GameBoard onLeaveRoom={handleLeaveRoom} />
+        </Suspense>
       )}
 
       {/* Reconnecting overlay */}
