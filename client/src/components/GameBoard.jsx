@@ -209,15 +209,13 @@ export default function GameBoard({ onLeaveRoom }) {
           >
             📋 Ficha
           </button>
-          {!isDM && (
-            <button 
-              className="btn btn-ghost gb-toolbar-btn" 
-              onClick={() => setShowCharacterWizard(true)}
-              title="Criar Novo Personagem"
-            >
-              🧙 Criar Personagem
-            </button>
-          )}
+          <button 
+            className="btn btn-ghost gb-toolbar-btn" 
+            onClick={() => setShowCharacterWizard(true)}
+            title="Criar Novo Personagem"
+          >
+            🧙 Criar Personagem
+          </button>
           {isDM && (
             <button 
               className="btn btn-ghost gb-toolbar-btn" 
