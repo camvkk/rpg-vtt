@@ -1850,6 +1850,28 @@ export default function MapCanvas({
       tokenRefs.effectsContainer.addChild(indicatorsContainer);
     }
 
+    // ── Current Turn Glow Ring ──
+    const initiativeState = state.initiative;
+    if (initiativeState && initiativeState.active && initiativeState.combatants) {
+      const currentCombatant = initiativeState.combatants[initiativeState.currentTurn || 0];
+      if (currentCombatant && (currentCombatant.tokenId === token.id || currentCombatant.name === token.name)) {
+        const glowRing = new Graphics();
+        glowRing.circle(0, 0, baseRadius + 8).stroke({ width: 3, color: 0xe2b714, alpha: 0.9 });
+        glowRing.circle(0, 0, baseRadius + 12).stroke({ width: 2, color: 0xe2b714, alpha: 0.4 });
+        tokenRefs.effectsContainer.addChild(glowRing);
+
+        if (pixiRef.current) {
+          let glowTime = 0;
+          const animateGlow = (delta) => {
+            glowTime += 0.04 * delta;
+            glowRing.alpha = 0.6 + 0.4 * Math.sin(glowTime);
+          };
+          pixiRef.current.ticker.add(animateGlow);
+          tokenRefs.animations.push(() => pixiRef.current?.ticker.remove(animateGlow));
+        }
+      }
+    }
+
     // ── HP Bar ──
     if (hp && hp.max > 0) {
       const hpBarContainer = new Container();

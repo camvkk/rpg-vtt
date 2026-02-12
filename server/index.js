@@ -1635,103 +1635,439 @@ io.on('connection', (socket) => {
     });
     
     // Initiative tracking
+    // ── Advanced Initiative Tracker ──
+    
+    // Helper: get or create tracker
+    function getTracker(roomId) {
+        let t = initiativeTrackers.get(roomId);
+        if (!t) {
+            t = { combatants: [], currentTurn: 0, round: 1, active: false };
+            initiativeTrackers.set(roomId, t);
+        }
+        // Migrate old format
+        if (t.players && !t.combatants) {
+            t.combatants = t.players.map(p => ({
+                id: p.playerId || uuidv4(),
+                name: p.playerName || p.name || 'Unknown',
+                initiative: p.initiative || 0,
+                hp: p.hp || { current: 20, max: 20 },
+                ac: p.ac || 10,
+                conditions: (p.conditions || []).map(c => typeof c === 'string' ? { id: c, duration: 0 } : c),
+                deathSaves: p.deathSaves || { successes: 0, failures: 0 },
+                initiativeMod: p.initiativeMod || 0,
+                tokenId: p.tokenId || null,
+                isNPC: p.isNPC || false,
+            }));
+            delete t.players;
+            if (!t.round) t.round = 1;
+        }
+        if (!t.combatants) t.combatants = [];
+        if (!t.round) t.round = 1;
+        return t;
+    }
+    
+    async function broadcastTracker(roomId, tracker, notifications = []) {
+        const payload = { ...tracker };
+        if (notifications.length > 0) payload._notifications = notifications;
+        await saveRoomState(roomId, 'initiative', tracker);
+        io.to(roomId).emit('initiative:update', payload);
+    }
+
+    // Legacy roll (backwards compat)
     socket.on('initiative:roll', async (data, callback) => {
         try {
             const player = connectedPlayers.get(socket.id);
             if (!player) throw new Error('Player not authenticated');
-            
             const { playerId: targetPlayerId, modifier = 0 } = data;
             const rollResult = rollDice(`1d20+${modifier}`, player.name);
+            const tracker = getTracker(player.roomId);
             
-            // Get or create initiative tracker
-            let tracker = initiativeTrackers.get(player.roomId);
-            if (!tracker) {
-                tracker = { players: [], currentTurn: 0, active: false };
-                initiativeTrackers.set(player.roomId, tracker);
-            }
+            const id = targetPlayerId || player.id;
+            const name = targetPlayerId ?
+                ([...connectedPlayers.values()].find(p => p.id === targetPlayerId)?.name || 'Unknown') :
+                player.name;
             
-            // Add/update player initiative
-            const existingIndex = tracker.players.findIndex(p => p.playerId === (targetPlayerId || player.id));
-            const initiativeEntry = {
-                playerId: targetPlayerId || player.id,
-                playerName: targetPlayerId ? 
-                    [...connectedPlayers.values()].find(p => p.id === targetPlayerId)?.name || 'Unknown' :
-                    player.name,
-                initiative: rollResult.total,
-                conditions: []
+            const existing = tracker.combatants.findIndex(c => c.id === id);
+            const entry = {
+                id, name, initiative: rollResult.total,
+                hp: { current: 20, max: 20 }, ac: 10,
+                conditions: [], deathSaves: { successes: 0, failures: 0 },
+                initiativeMod: modifier, tokenId: null, isNPC: false,
             };
-            
-            if (existingIndex >= 0) {
-                tracker.players[existingIndex] = initiativeEntry;
+            if (existing >= 0) {
+                tracker.combatants[existing] = { ...tracker.combatants[existing], initiative: rollResult.total };
             } else {
-                tracker.players.push(initiativeEntry);
+                tracker.combatants.push(entry);
             }
+            tracker.combatants.sort((a, b) => b.initiative - a.initiative);
             
-            // Sort by initiative (highest first)
-            tracker.players.sort((a, b) => b.initiative - a.initiative);
-            
-            console.log(`⚡ Initiative: ${initiativeEntry.playerName} rolled ${rollResult.total}`);
-            
-            // Save initiative to persistence
-            await saveRoomState(player.roomId, 'initiative', tracker);
-            
-            // Broadcast updated initiative
-            io.to(player.roomId).emit('initiative:update', tracker);
-            
+            await broadcastTracker(player.roomId, tracker);
             if (callback) callback({ success: true, rollResult, tracker });
         } catch (error) {
             console.error('Error rolling initiative:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });
+
+    // Roll all initiative (DM)
+    socket.on('initiative:roll-all', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            
+            for (const c of tracker.combatants) {
+                const mod = c.initiativeMod || 0;
+                const roll = rollDice(`1d20+${mod}`, c.name);
+                c.initiative = roll.total;
+            }
+            tracker.combatants.sort((a, b) => b.initiative - a.initiative);
+            
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error roll-all:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Roll own initiative (player)
+    socket.on('initiative:roll-own', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player) throw new Error('Not authenticated');
+            const tracker = getTracker(player.roomId);
+            
+            let c = tracker.combatants.find(x => x.name === player.name || x.id === player.id);
+            if (!c) {
+                c = {
+                    id: player.id, name: player.name, initiative: 0,
+                    hp: { current: 20, max: 20 }, ac: 10,
+                    conditions: [], deathSaves: { successes: 0, failures: 0 },
+                    initiativeMod: 0, tokenId: null, isNPC: false,
+                };
+                tracker.combatants.push(c);
+            }
+            const roll = rollDice(`1d20+${c.initiativeMod || 0}`, c.name);
+            c.initiative = roll.total;
+            tracker.combatants.sort((a, b) => b.initiative - a.initiative);
+            
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error roll-own:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Start combat
+    socket.on('initiative:start-combat', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            tracker.active = true;
+            tracker.currentTurn = 0;
+            tracker.round = 1;
+            
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
     
+    // Next turn
     socket.on('initiative:next', async (data, callback) => {
         try {
             const player = connectedPlayers.get(socket.id);
             if (!player || !player.isDM) throw new Error('Only DM can advance initiative');
+            const tracker = getTracker(player.roomId);
+            if (tracker.combatants.length === 0) throw new Error('No combatants');
             
-            const tracker = initiativeTrackers.get(player.roomId);
-            if (!tracker || tracker.players.length === 0) {
-                throw new Error('No initiative tracker active');
+            tracker.active = true;
+            const prevTurn = tracker.currentTurn;
+            tracker.currentTurn = (tracker.currentTurn + 1) % tracker.combatants.length;
+            
+            // New round?
+            if (tracker.currentTurn === 0 && prevTurn !== 0) {
+                tracker.round = (tracker.round || 1) + 1;
             }
             
-            tracker.currentTurn = (tracker.currentTurn + 1) % tracker.players.length;
-            tracker.active = true;
+            // Decrement conditions on the NEW current combatant's turn start
+            const current = tracker.combatants[tracker.currentTurn];
+            const notifications = [];
+            if (current && current.conditions) {
+                current.conditions = current.conditions.filter(cond => {
+                    if (cond.duration > 0) {
+                        cond.duration -= 1;
+                        if (cond.duration <= 0) {
+                            const condName = cond.name || cond.id;
+                            notifications.push(`${condName} expirou em ${current.name}!`);
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
             
-            console.log(`⏭️ Initiative advanced to: ${tracker.players[tracker.currentTurn]?.playerName}`);
-            
-            // Save initiative to persistence
-            await saveRoomState(player.roomId, 'initiative', tracker);
-            
-            // Broadcast updated initiative
-            io.to(player.roomId).emit('initiative:update', tracker);
-            
-            if (callback) callback({ success: true, tracker });
+            await broadcastTracker(player.roomId, tracker, notifications);
+            if (callback) callback({ success: true });
         } catch (error) {
             console.error('Error advancing initiative:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });
     
+    // Clear initiative
     socket.on('initiative:clear', async (data, callback) => {
         try {
             const player = connectedPlayers.get(socket.id);
-            if (!player || !player.isDM) throw new Error('Only DM can clear initiative');
-            
-            const tracker = { players: [], currentTurn: 0, active: false };
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = { combatants: [], currentTurn: 0, round: 1, active: false };
             initiativeTrackers.set(player.roomId, tracker);
-            
-            console.log(`🗑️ Initiative cleared in room ${player.roomId}`);
-            
-            // Save initiative to persistence
-            await saveRoomState(player.roomId, 'initiative', tracker);
-            
-            // Broadcast updated initiative
-            io.to(player.roomId).emit('initiative:update', tracker);
-            
+            await broadcastTracker(player.roomId, tracker);
             if (callback) callback({ success: true });
         } catch (error) {
-            console.error('Error clearing initiative:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Add combatant
+    socket.on('initiative:add-combatant', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player) throw new Error('Not authenticated');
+            const tracker = getTracker(player.roomId);
+            
+            const combatant = {
+                id: data.id || uuidv4(),
+                name: data.name,
+                initiative: data.initiative || 0,
+                hp: data.hp || { current: 20, max: 20 },
+                ac: data.ac || 10,
+                conditions: [],
+                deathSaves: { successes: 0, failures: 0 },
+                initiativeMod: data.initiativeMod || 0,
+                tokenId: data.tokenId || null,
+                isNPC: data.isNPC || false,
+                color: data.color || null,
+            };
+            tracker.combatants.push(combatant);
+            tracker.combatants.sort((a, b) => b.initiative - a.initiative);
+            
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Remove combatant
+    socket.on('initiative:remove-combatant', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const idx = tracker.combatants.findIndex(c => c.id === data.combatantId);
+            if (idx >= 0) {
+                tracker.combatants.splice(idx, 1);
+                if (tracker.currentTurn >= tracker.combatants.length) {
+                    tracker.currentTurn = 0;
+                }
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Update combatant (initiative value, etc)
+    socket.on('initiative:update-combatant', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player) throw new Error('Not authenticated');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            if (c) {
+                Object.assign(c, data.updates);
+                if (data.updates.initiative !== undefined && !tracker.active) {
+                    tracker.combatants.sort((a, b) => b.initiative - a.initiative);
+                }
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Deal damage
+    socket.on('initiative:deal-damage', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            const notifications = [];
+            if (c && c.hp) {
+                const oldHP = c.hp.current;
+                c.hp.current = Math.max(0, c.hp.current - data.amount);
+                if (c.hp.current <= 0 && oldHP > 0) {
+                    // Auto-add unconscious
+                    if (!c.conditions.some(x => x.id === 'unconscious')) {
+                        c.conditions.push({ id: 'unconscious', name: 'Inconsciente', duration: 0 });
+                    }
+                    c.deathSaves = { successes: 0, failures: 0 };
+                    notifications.push(`${c.name} caiu inconsciente!`);
+                }
+            }
+            await broadcastTracker(player.roomId, tracker, notifications);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Heal
+    socket.on('initiative:heal', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            if (c && c.hp) {
+                const wasDown = c.hp.current <= 0;
+                c.hp.current = Math.min(c.hp.max, c.hp.current + data.amount);
+                if (wasDown && c.hp.current > 0) {
+                    c.conditions = c.conditions.filter(x => x.id !== 'unconscious');
+                    c.deathSaves = { successes: 0, failures: 0 };
+                }
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Add condition
+    socket.on('initiative:add-condition', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            if (c) {
+                if (!c.conditions.some(x => x.id === data.conditionId)) {
+                    c.conditions.push({ id: data.conditionId, duration: data.duration || 0 });
+                }
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Remove condition
+    socket.on('initiative:remove-condition', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            if (c) {
+                c.conditions = c.conditions.filter(x => x.id !== data.conditionId);
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Death save
+    socket.on('initiative:death-save', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const c = tracker.combatants.find(x => x.id === data.combatantId);
+            const notifications = [];
+            if (c) {
+                if (!c.deathSaves) c.deathSaves = { successes: 0, failures: 0 };
+                if (data.success) {
+                    c.deathSaves.successes = Math.min(3, c.deathSaves.successes + 1);
+                    if (c.deathSaves.successes >= 3) {
+                        notifications.push(`${c.name} estabilizou!`);
+                        c.hp.current = 1;
+                        c.conditions = c.conditions.filter(x => x.id !== 'unconscious');
+                        c.deathSaves = { successes: 0, failures: 0 };
+                    }
+                } else {
+                    c.deathSaves.failures = Math.min(3, c.deathSaves.failures + 1);
+                    if (c.deathSaves.failures >= 3) {
+                        notifications.push(`${c.name} morreu! 💀`);
+                    }
+                }
+            }
+            await broadcastTracker(player.roomId, tracker, notifications);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Reorder (drag)
+    socket.on('initiative:reorder', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            const { fromIdx, toIdx } = data;
+            if (fromIdx >= 0 && fromIdx < tracker.combatants.length && toIdx >= 0 && toIdx < tracker.combatants.length) {
+                const [moved] = tracker.combatants.splice(fromIdx, 1);
+                tracker.combatants.splice(toIdx, 0, moved);
+            }
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Add all tokens from map as combatants
+    socket.on('initiative:add-from-tokens', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM');
+            const tracker = getTracker(player.roomId);
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const mapTokens = persistedState.tokens || [];
+            
+            for (const token of mapTokens) {
+                if (tracker.combatants.some(c => c.tokenId === token.id || c.name === token.name)) continue;
+                tracker.combatants.push({
+                    id: uuidv4(),
+                    name: token.name,
+                    initiative: 0,
+                    hp: token.hp || { current: 20, max: 20 },
+                    ac: 10,
+                    conditions: [],
+                    deathSaves: { successes: 0, failures: 0 },
+                    initiativeMod: 0,
+                    tokenId: token.id,
+                    isNPC: true,
+                    color: token.color || null,
+                });
+            }
+            
+            await broadcastTracker(player.roomId, tracker);
+            if (callback) callback({ success: true });
+        } catch (error) {
             if (callback) callback({ success: false, error: error.message });
         }
     });

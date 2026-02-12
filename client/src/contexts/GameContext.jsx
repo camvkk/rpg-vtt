@@ -40,8 +40,8 @@ const initialState = {
   // Walls for dynamic lighting
   walls: [],
 
-  // Initiative
-  initiative: { active: false, currentTurn: 0, players: [] },
+  // Initiative (advanced tracker)
+  initiative: { active: false, currentTurn: 0, round: 1, combatants: [], _notifications: [] },
 
   // Chat messages
   chat: [],
@@ -300,7 +300,7 @@ function gameReducer(state, action) {
 
     // Initiative
     case 'INITIATIVE_UPDATE':
-      return { ...state, initiative: action.payload };
+      return { ...state, initiative: { ...action.payload, _notifications: action.payload._notifications || [] } };
 
     // Ambiance
     case 'AMBIANCE_CHANGE':
@@ -814,11 +814,28 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     rollDice: (notation, isSecret = false) =>
       emit('dice:roll', { notation, isSecret }),
 
-    // Initiative
+    // Initiative (legacy)
     rollInitiative: (playerId, modifier = 0) =>
       emit('initiative:roll', { playerId, modifier }),
     nextTurn: () => emit('initiative:next', {}),
     clearInitiative: () => emit('initiative:clear', {}),
+
+    // Initiative (advanced tracker)
+    initiativeRollAll: () => emit('initiative:roll-all', {}),
+    initiativeRollOwn: () => emit('initiative:roll-own', {}),
+    initiativeNextTurn: () => emit('initiative:next', {}),
+    initiativeStartCombat: () => emit('initiative:start-combat', {}),
+    initiativeClearAll: () => emit('initiative:clear', {}),
+    initiativeAddCombatant: (data) => emit('initiative:add-combatant', data),
+    initiativeRemoveCombatant: (id) => emit('initiative:remove-combatant', { combatantId: id }),
+    initiativeUpdateCombatant: (id, updates) => emit('initiative:update-combatant', { combatantId: id, updates }),
+    initiativeDealDamage: (id, amount) => emit('initiative:deal-damage', { combatantId: id, amount }),
+    initiativeHeal: (id, amount) => emit('initiative:heal', { combatantId: id, amount }),
+    initiativeAddCondition: (id, conditionId, duration) => emit('initiative:add-condition', { combatantId: id, conditionId, duration }),
+    initiativeRemoveCondition: (id, conditionId) => emit('initiative:remove-condition', { combatantId: id, conditionId }),
+    initiativeDeathSave: (id, success) => emit('initiative:death-save', { combatantId: id, success }),
+    initiativeReorder: (fromIdx, toIdx) => emit('initiative:reorder', { fromIdx, toIdx }),
+    initiativeAddFromTokens: () => emit('initiative:add-from-tokens', {}),
 
     // Ambiance
     setAmbiance: (trackUrl) => emit('ambiance:set', { trackUrl }),
