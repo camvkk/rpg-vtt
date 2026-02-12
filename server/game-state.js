@@ -381,7 +381,7 @@ async function getGameState(roomId) {
             drawings: persistedState.drawings || [],
             walls: persistedState.walls || [],
             doors: persistedState.doors || [],
-            fogEnabled: persistedState.fogEnabled !== undefined ? persistedState.fogEnabled : true,
+            fogEnabled: persistedState.fogEnabled !== undefined ? persistedState.fogEnabled : false,
             aoeEffects: persistedState.aoe_effects || [],
             gridConfig: persistedState.grid_config || null,
             initiative: persistedState.initiative || { players: [], currentTurn: 0, active: false }

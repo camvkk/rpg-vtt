@@ -29,7 +29,7 @@ const initialState = {
 
   // Fog of war revealed areas (rects, polygons, circles)
   fogAreas: [],
-  fogEnabled: true,
+  fogEnabled: false,
 
   // Doors on walls
   doors: [],
@@ -109,7 +109,7 @@ function gameReducer(state, action) {
         players: players || [],
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
-        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : true,
+        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : false,
         drawings: gs?.drawings || [],
         walls: gs?.walls || [],
         doors: gs?.doors || [],
@@ -139,7 +139,7 @@ function gameReducer(state, action) {
         character: character,
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
-        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : true,
+        fogEnabled: gs?.fogEnabled !== undefined ? gs.fogEnabled : false,
         drawings: gs?.drawings || [],
         walls: gs?.walls || [],
         doors: gs?.doors || [],
