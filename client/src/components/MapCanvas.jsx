@@ -1110,7 +1110,7 @@ export default function MapCanvas({
     });
     
     return rays;
-  }, [walls, castRay]);
+  }, [walls, doors, castRay]);
 
   const drawDynamicLighting = useCallback(() => {
     const lightingLayer = layersRef.current.lighting;
@@ -1166,7 +1166,7 @@ export default function MapCanvas({
     }
 
     lightingLayer.addChild(darkness);
-  }, [tokens, walls, calculateVisibilityPolygon]);
+  }, [tokens, walls, doors, calculateVisibilityPolygon]);
 
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
@@ -1496,6 +1496,27 @@ export default function MapCanvas({
     drawFogOfWar();
   }, [fogAreas, fogEnabled, drawFogOfWar]);
 
+  // ── Token-based fog exploration ──
+  const prevTokenPositionsRef = useRef(new Map());
+  useEffect(() => {
+    if (!fogEnabled) return;
+    
+    tokens.forEach(token => {
+      if (!token.visionRadius || token.visionRadius <= 0) return;
+      
+      const prevPos = prevTokenPositionsRef.current.get(token.id);
+      const curPos = `${token.x},${token.y}`;
+      
+      if (prevPos !== curPos) {
+        prevTokenPositionsRef.current.set(token.id, curPos);
+        // Only auto-reveal if it's a player-owned token or DM moved it
+        if (prevPos !== undefined) { // Skip initial load
+          revealFogForToken(token);
+        }
+      }
+    });
+  }, [tokens, fogEnabled, revealFogForToken]);
+
   // ── Clear ruler when tool changes ──
   useEffect(() => {
     if (ui.activeTool !== 'measure') {
@@ -1544,7 +1565,7 @@ export default function MapCanvas({
   // ── Sync dynamic lighting ──
   useEffect(() => {
     drawDynamicLighting();
-  }, [tokens, walls, drawDynamicLighting]);
+  }, [tokens, walls, doors, drawDynamicLighting]);
 
   // ── Sync AoE effects ──
   useEffect(() => {

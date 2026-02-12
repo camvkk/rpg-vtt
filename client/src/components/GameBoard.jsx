@@ -10,6 +10,9 @@ import SystemImporter from './SystemImporter';
 import DMDashboard from './DMDashboard';
 import GridConfigPanel from './GridConfigPanel';
 import CharacterWizard from './CharacterWizard';
+import ScenesPanel from './ScenesPanel';
+import JournalPanel from './JournalPanel';
+import JukeboxPanel from './JukeboxPanel';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
 
@@ -27,7 +30,7 @@ class CanvasErrorBoundary extends Component {
 
 export default function GameBoard({ onLeaveRoom }) {
   const { state, actions } = useGame();
-  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects } = state;
+  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled } = state;
   const isDM = player.isDM;
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
@@ -39,6 +42,7 @@ export default function GameBoard({ onLeaveRoom }) {
   const [showCharacterWizard, setShowCharacterWizard] = useState(false);
   const [tokenAwaitingPlacement, setTokenAwaitingPlacement] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
+  const [sidebarTab, setSidebarTab] = useState('tokens');
   const menuRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -60,6 +64,7 @@ export default function GameBoard({ onLeaveRoom }) {
         case 's': actions.setActiveTool('select'); e.preventDefault(); break;
         case 'f': if (isDM) { actions.setActiveTool('fog'); e.preventDefault(); } break;
         case 'w': if (isDM) { actions.setActiveTool('wall'); e.preventDefault(); } break;
+        case 'r': if (isDM) { actions.setActiveTool('door'); e.preventDefault(); } break;
         case 't': if (isDM) { actions.setActiveTool('add-token'); e.preventDefault(); } break;
         case 'a': if (isDM) { actions.setActiveTool('aoe'); e.preventDefault(); } break;
         case 'm': if (isDM) { actions.setActiveTool('measure'); e.preventDefault(); } break;
@@ -189,14 +194,18 @@ export default function GameBoard({ onLeaveRoom }) {
                 { id: 'draw', icon: '✏️', label: 'Desenhar (D)', type: 'tool', active: ui.activeTool === 'draw', onClick: () => { actions.setActiveTool('draw'); setOpenMenu(null); } },
                 { id: 'fog', icon: '🌫️', label: 'Névoa (F)', type: 'tool', active: ui.activeTool === 'fog', onClick: () => { actions.setActiveTool('fog'); setOpenMenu(null); } },
                 { id: 'wall', icon: '🧱', label: 'Paredes (W)', type: 'tool', active: ui.activeTool === 'wall', onClick: () => { actions.setActiveTool('wall'); setOpenMenu(null); } },
+                { id: 'door', icon: '🚪', label: 'Porta (R)', type: 'tool', active: ui.activeTool === 'door', onClick: () => { actions.setActiveTool('door'); setOpenMenu(null); } },
                 { id: 'aoe', icon: '💥', label: 'AoE Magias (A)', type: 'tool', active: ui.activeTool === 'aoe', onClick: () => { actions.setActiveTool('aoe'); setOpenMenu(null); } },
                 { id: 'add-token', icon: '🎭', label: 'Criar Token (T)', type: 'tool', active: ui.activeTool === 'add-token' || !!tokenAwaitingPlacement, onClick: () => { setShowTokenCreator(true); setOpenMenu(null); } },
                 { type: 'divider' },
-                { id: 'clear-fog', icon: '🌫️', label: 'Limpar Névoa', type: 'action', onClick: () => { actions.clearFog(); setOpenMenu(null); } },
+                { id: 'toggle-fog', icon: fogEnabled ? '👁️' : '👁️‍🗨️', label: fogEnabled ? 'Desativar Névoa' : 'Ativar Névoa', type: 'action', onClick: () => { actions.toggleFog(!fogEnabled); setOpenMenu(null); } },
+                { id: 'reset-fog', icon: '🌑', label: 'Resetar Névoa', type: 'action', onClick: () => { if (confirm('Resetar toda a névoa? Tudo será coberto novamente.')) { actions.resetFog(); setOpenMenu(null); } } },
+                { id: 'clear-fog', icon: '🌫️', label: 'Revelar Tudo', type: 'action', onClick: () => { actions.clearFog(); setOpenMenu(null); } },
                 { id: 'clear-walls', icon: '🧱', label: 'Limpar Paredes', type: 'action', onClick: () => { actions.clearWalls(); setOpenMenu(null); } },
+                { id: 'clear-doors', icon: '🚪', label: 'Limpar Portas', type: 'action', onClick: () => { actions.clearDoors(); setOpenMenu(null); } },
               ] : []),
             ]}
-            hasActive={['select', 'measure', 'draw', 'fog', 'wall', 'aoe', 'add-token'].includes(ui.activeTool)}
+            hasActive={['select', 'measure', 'draw', 'fog', 'wall', 'door', 'aoe', 'add-token'].includes(ui.activeTool)}
           />
 
           {/* 📋 Personagem */}
@@ -269,6 +278,27 @@ export default function GameBoard({ onLeaveRoom }) {
         </div>
       </div>
 
+      {/* ── Fog Tool Info Panel ── */}
+      {ui.activeTool === 'fog' && isDM && (
+        <div className="gb-aoe-config" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--color-border)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.85rem' }}>
+          <span>🌫️ <strong>Névoa:</strong></span>
+          <span style={{ color: 'var(--color-text-dim)' }}>Arraste para revelar retângulos</span>
+          <span style={{ color: '#ff6b6b' }}>Shift + arraste para esconder</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => { if (confirm('Resetar névoa?')) actions.resetFog(); }} style={{ marginLeft: 'auto' }}>
+            🌑 Resetar
+          </button>
+        </div>
+      )}
+
+      {/* ── Door Tool Info Panel ── */}
+      {ui.activeTool === 'door' && isDM && (
+        <div className="gb-aoe-config" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--color-border)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.85rem' }}>
+          <span>🚪 <strong>Porta:</strong></span>
+          <span style={{ color: 'var(--color-text-dim)' }}>Clique numa parede para colocar porta</span>
+          <span style={{ color: '#DEB887' }}>Clique na porta para alternar: Fechada → Aberta → Trancada</span>
+        </div>
+      )}
+
       {/* ── AoE Configuration Panel (only shown when AoE tool is active) ── */}
       {ui.activeTool === 'aoe' && isDM && (
         <AoEConfigPanel 
@@ -283,53 +313,94 @@ export default function GameBoard({ onLeaveRoom }) {
         {/* Left panel */}
         {ui.leftPanel && (
           <div className="gb-side-panel gb-left-panel">
-            {/* Players */}
-            <div className="gb-panel-section">
-              <div className="panel-header">
-                <h3 className="heading-sm">Jogadores</h3>
-                <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
-              </div>
-              <div className="gb-player-list">
-                {players.map((p) => (
-                  <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
-                    <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
-                    <div className="gb-player-info">
-                      <div className="gb-player-name">{p.name}</div>
-                      <div className="gb-player-role text-dim">
-                        {p.is_dm ? 'Mestre' : 'Jogador'}
-                        {p.id === player.id && ' (Você)'}
-                      </div>
-                    </div>
-                    <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
-                  </div>
-                ))}
-              </div>
+            {/* Sidebar Tabs */}
+            <div style={{
+              display: 'flex', gap: 2, background: 'var(--bg-surface-light)',
+              borderRadius: 'var(--radius-md)', padding: 2, marginBottom: 'var(--spacing-sm)',
+            }}>
+              {[
+                { id: 'tokens', icon: '🎭', label: 'Tokens' },
+                { id: 'scenes', icon: '🗺️', label: 'Cenas' },
+                { id: 'journal', icon: '📋', label: 'Diário' },
+                { id: 'jukebox', icon: '🎵', label: 'Jukebox' },
+                { id: 'settings', icon: '⚙️', label: 'Config' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSidebarTab(tab.id)}
+                  title={tab.label}
+                  style={{
+                    flex: 1, padding: '6px 4px', border: 'none', borderRadius: 'var(--radius-sm)',
+                    background: sidebarTab === tab.id ? 'var(--color-primary)' : 'transparent',
+                    color: sidebarTab === tab.id ? 'white' : 'var(--color-text-dim)',
+                    cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.15s',
+                  }}
+                >
+                  {tab.icon}
+                </button>
+              ))}
             </div>
 
-            {/* Initiative */}
-            <Initiative
-              combatants={initiative.players?.map((p, i) => ({
-                id: p.playerId,
-                name: p.playerName,
-                initiative: p.initiative,
-                hp: { current: 100, max: 100 },
-                ac: 15,
-                conditions: p.conditions || [],
-              })) || []}
-              currentTurn={initiative.currentTurn}
-              isInCombat={initiative.active}
-              isDM={isDM}
-              onNextTurn={() => actions.nextTurn()}
-              onRollInitiative={() => actions.rollInitiative(player.id)}
-              onStartCombat={() => actions.rollInitiative(player.id)}
-              onEndCombat={() => actions.clearInitiative()}
-            />
+            {/* Tab Content */}
+            {sidebarTab === 'tokens' && (
+              <>
+                {/* Players */}
+                <div className="gb-panel-section">
+                  <div className="panel-header">
+                    <h3 className="heading-sm">Jogadores</h3>
+                    <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
+                  </div>
+                  <div className="gb-player-list">
+                    {players.map((p) => (
+                      <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
+                        <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
+                        <div className="gb-player-info">
+                          <div className="gb-player-name">{p.name}</div>
+                          <div className="gb-player-role text-dim">
+                            {p.is_dm ? 'Mestre' : 'Jogador'}
+                            {p.id === player.id && ' (Você)'}
+                          </div>
+                        </div>
+                        <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Ambiance (DM) */}
-            {isDM && <Ambiance isDM={isDM} />}
+                {/* Initiative */}
+                <Initiative
+                  combatants={initiative.players?.map((p, i) => ({
+                    id: p.playerId,
+                    name: p.playerName,
+                    initiative: p.initiative,
+                    hp: { current: 100, max: 100 },
+                    ac: 15,
+                    conditions: p.conditions || [],
+                  })) || []}
+                  currentTurn={initiative.currentTurn}
+                  isInCombat={initiative.active}
+                  isDM={isDM}
+                  onNextTurn={() => actions.nextTurn()}
+                  onRollInitiative={() => actions.rollInitiative(player.id)}
+                  onStartCombat={() => actions.rollInitiative(player.id)}
+                  onEndCombat={() => actions.clearInitiative()}
+                />
+              </>
+            )}
 
-            {/* Grid Config (DM) */}
-            {isDM && <GridConfigPanel />}
+            {sidebarTab === 'scenes' && <ScenesPanel />}
+            {sidebarTab === 'journal' && <JournalPanel />}
+            {sidebarTab === 'jukebox' && <JukeboxPanel />}
+
+            {sidebarTab === 'settings' && (
+              <>
+                {/* Ambiance (DM) */}
+                {isDM && <Ambiance isDM={isDM} />}
+
+                {/* Grid Config (DM) */}
+                {isDM && <GridConfigPanel />}
+              </>
+            )}
           </div>
         )}
 
