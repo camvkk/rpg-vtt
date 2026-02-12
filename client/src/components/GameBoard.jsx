@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '../contexts/GameContext';
 import MapCanvas from './MapCanvas';
 import DiceRoller from './DiceRoller';
@@ -20,6 +20,23 @@ import '../styles/dropdown-menu.css';
 
 // Error boundary to catch MapCanvas crashes
 import { Component } from 'react';
+class GameBoardErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null, info: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('GAMEBOARD CRASH:', error, info.componentStack); this.setState({ info }); }
+  render() {
+    if (this.state.error) return (
+      <div style={{color:'#ff6b6b',padding:40,background:'#1a1a2e',minHeight:'100vh',fontFamily:'monospace'}}>
+        <h2>⚠️ GameBoard Error</h2>
+        <pre style={{whiteSpace:'pre-wrap',marginTop:16}}>{this.state.error.message}</pre>
+        <pre style={{whiteSpace:'pre-wrap',marginTop:8,fontSize:'0.8rem',color:'#888'}}>{this.state.info?.componentStack}</pre>
+        <button onClick={() => this.setState({error:null,info:null})} style={{marginTop:16,padding:'8px 16px',cursor:'pointer'}}>Retry</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 class CanvasErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
@@ -30,7 +47,11 @@ class CanvasErrorBoundary extends Component {
   }
 }
 
-export default function GameBoard({ onLeaveRoom }) {
+export default function GameBoardWithErrorBoundary(props) {
+  return <GameBoardErrorBoundary><GameBoardInner {...props} /></GameBoardErrorBoundary>;
+}
+
+function GameBoardInner({ onLeaveRoom }) {
   const { state, actions } = useGame();
   const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled } = state;
   const isDM = player.isDM;
