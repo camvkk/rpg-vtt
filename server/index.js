@@ -243,21 +243,21 @@ async function fetchGdriveFile(fileId, isGoogleDoc = false, isSpreadsheet = fals
     return await response.text();
 }
 
-// Helper: scrape a public Google Drive folder page for items (files + subfolders)
+// Helper: list items in a public Google Drive folder using embeddedfolderview
 async function scrapeGdriveFolder(folderId) {
-    const folderPageUrl = `https://drive.google.com/drive/folders/${folderId}`;
-    const pageResp = await fetch(folderPageUrl, { 
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    const embedUrl = `https://drive.google.com/embeddedfolderview?id=${folderId}`;
+    const resp = await fetch(embedUrl, { 
+        headers: { 'User-Agent': 'Mozilla/5.0' },
         redirect: 'follow' 
     });
-    const html = await pageResp.text();
+    const html = await resp.text();
     
     const items = [];
     const seenIds = new Set();
     let m;
     
     // Find subfolders
-    const folderRegex = /drive\/folders\/([a-zA-Z0-9_-]{20,})/g;
+    const folderRegex = /folders\/([a-zA-Z0-9_-]{10,})/g;
     while ((m = folderRegex.exec(html)) !== null) {
         if (m[1] !== folderId && !seenIds.has(m[1])) {
             seenIds.add(m[1]);
@@ -266,21 +266,31 @@ async function scrapeGdriveFolder(folderId) {
     }
     
     // Find Google Docs
-    const docRegex = /document\/d\/([a-zA-Z0-9_-]{20,})/g;
+    const docRegex = /document\/d\/([a-zA-Z0-9_-]{10,})/g;
     while ((m = docRegex.exec(html)) !== null) {
         if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/vnd.google-apps.document', name: `doc-${m[1].slice(0,8)}` }); }
     }
     
     // Find Sheets
-    const sheetRegex = /spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/g;
+    const sheetRegex = /spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/g;
     while ((m = sheetRegex.exec(html)) !== null) {
         if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/vnd.google-apps.spreadsheet', name: `sheet-${m[1].slice(0,8)}` }); }
     }
     
-    // Find regular files
-    const fileRegex = /file\/d\/([a-zA-Z0-9_-]{20,})/g;
+    // Find regular files  
+    const fileRegex = /file\/d\/([a-zA-Z0-9_-]{10,})/g;
     while ((m = fileRegex.exec(html)) !== null) {
         if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/octet-stream', name: `file-${m[1].slice(0,8)}` }); }
+    }
+    
+    // Also check entry-ID pattern for items not caught above (e.g. docs with only entry refs)
+    const entryRegex = /entry-([a-zA-Z0-9_-]{20,})/g;
+    while ((m = entryRegex.exec(html)) !== null) {
+        if (!seenIds.has(m[1])) {
+            seenIds.add(m[1]);
+            // Try as Google Doc first (most common in RPG folders)
+            items.push({ id: m[1], mimeType: 'application/vnd.google-apps.document', name: `entry-${m[1].slice(0,8)}` });
+        }
     }
     
     return items;
