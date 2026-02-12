@@ -204,7 +204,7 @@ const MapManager = {
             // Save updated map to room state
             await saveRoomState(roomId, 'map_url', mapUrl);
 
-            return { mapUrl };
+            return { url: mapUrl };
         } catch (error) {
             console.error('Error setting active map:', error);
             throw error;
