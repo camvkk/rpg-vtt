@@ -448,7 +448,6 @@ export default function GameBoard({ onLeaveRoom }) {
               isConnected={connected}
               onSpellDetected={handleSpellDetected}
             />
-            <DiceRoller onRoll={handleDiceRoll} />
           </div>
         )}
       </div>
@@ -535,6 +534,9 @@ export default function GameBoard({ onLeaveRoom }) {
           </div>
         </div>
       )}
+
+      {/* Floating Dice Tray */}
+      <DiceRoller />
 
       {/* Character Wizard Modal */}
       <CharacterWizard
