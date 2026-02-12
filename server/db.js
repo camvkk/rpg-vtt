@@ -142,6 +142,14 @@ async function initDatabase() {
     );
   `);
 
+  // Migrations — add columns to existing tables (safe to run multiple times)
+  const migrations = [
+    "ALTER TABLE rooms ADD COLUMN system TEXT DEFAULT 'dnd5e'",
+  ];
+  for (const sql of migrations) {
+    try { db.run(sql); } catch (e) { /* column already exists — ignore */ }
+  }
+
   // Auto-save every 30s
   setInterval(() => saveDb(), 30000);
 

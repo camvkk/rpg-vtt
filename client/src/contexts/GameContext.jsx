@@ -400,7 +400,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     return new Promise((resolve, reject) => {
       const socket = socketRef.current;
       if (!socket?.connected) return reject(new Error('Not connected'));
-      socket.timeout(8000).emit(event, data, (err, response) => {
+      socket.timeout(15000).emit(event, data, (err, response) => {
         if (err) reject(err);
         else resolve(response);
       });
