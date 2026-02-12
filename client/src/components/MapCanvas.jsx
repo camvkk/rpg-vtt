@@ -1140,56 +1140,6 @@ export default function MapCanvas({
     }
   }, [ui.activeTool, clearAoEPreview]);
 
-  // ── Sync tokens to Pixi ──
-  useEffect(() => {
-    const layer = layersRef.current.token;
-    if (!layer) return;
-
-    const existing = tokensMapRef.current;
-    const currentIds = new Set(tokens.map(t => t.id));
-
-    // Remove old
-    existing.forEach((sprite, id) => {
-      if (!currentIds.has(id)) {
-        // Cleanup animations before removing
-        if (sprite._vttCleanup) sprite._vttCleanup();
-        layer.removeChild(sprite);
-        existing.delete(id);
-      }
-    });
-
-    // Add / update
-    tokens.forEach((token) => {
-      let sprite = existing.get(token.id);
-      const needsRecreate = sprite && (
-        // Check if conditions or HP changed (requires visual update)
-        JSON.stringify(sprite._lastConditions) !== JSON.stringify(token.conditions) ||
-        JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp)
-      );
-      
-      if (!sprite || needsRecreate) {
-        if (sprite) {
-          // Cleanup old sprite animations
-          if (sprite._vttCleanup) sprite._vttCleanup();
-          layer.removeChild(sprite);
-        }
-        
-        // Create new sprite with current token data
-        sprite = createTokenSprite(token);
-        // Cache token data for comparison
-        sprite._lastConditions = JSON.parse(JSON.stringify(token.conditions || []));
-        sprite._lastHP = JSON.parse(JSON.stringify(token.hp || null));
-        
-        layer.addChild(sprite);
-        existing.set(token.id, sprite);
-      }
-      
-      // Update position
-      const pos = gridCenterToPixel(token.x || 0, token.y || 0);
-      sprite.position.set(pos.x, pos.y);
-    });
-  }, [tokens, createTokenSprite]);
-
   // ── Create a token sprite with visual effects (Pixi v8) ──
   const createTokenSprite = useCallback((token) => {
     const c = new Container();
@@ -1540,6 +1490,50 @@ export default function MapCanvas({
 
     return c;
   }, [actions, isDM, state.player.isDM]);
+
+  // ── Sync tokens to Pixi ──
+  useEffect(() => {
+    const layer = layersRef.current.token;
+    if (!layer) return;
+
+    const existing = tokensMapRef.current;
+    const currentIds = new Set(tokens.map(t => t.id));
+
+    // Remove old
+    existing.forEach((sprite, id) => {
+      if (!currentIds.has(id)) {
+        if (sprite._vttCleanup) sprite._vttCleanup();
+        layer.removeChild(sprite);
+        existing.delete(id);
+      }
+    });
+
+    // Add / update
+    tokens.forEach((token) => {
+      let sprite = existing.get(token.id);
+      const needsRecreate = sprite && (
+        JSON.stringify(sprite._lastConditions) !== JSON.stringify(token.conditions) ||
+        JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp)
+      );
+      
+      if (!sprite || needsRecreate) {
+        if (sprite) {
+          if (sprite._vttCleanup) sprite._vttCleanup();
+          layer.removeChild(sprite);
+        }
+        
+        sprite = createTokenSprite(token);
+        sprite._lastConditions = JSON.parse(JSON.stringify(token.conditions || []));
+        sprite._lastHP = JSON.parse(JSON.stringify(token.hp || null));
+        
+        layer.addChild(sprite);
+        existing.set(token.id, sprite);
+      }
+      
+      const pos = gridCenterToPixel(token.x || 0, token.y || 0);
+      sprite.position.set(pos.x, pos.y);
+    });
+  }, [tokens, createTokenSprite]);
 
   return (
     <div
