@@ -18,6 +18,8 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
   const [isParsing, setIsParsing] = useState(false);
   const [parsedSystem, setParsedSystem] = useState(null);
   const [parseError, setParseError] = useState(null);
+  const [gdriveUrl, setGdriveUrl] = useState('');
+  const [isFetchingGdrive, setIsFetchingGdrive] = useState(false);
   const fileInputRef = useRef(null);
 
   // Get server URL
@@ -78,6 +80,33 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
     addDocument('Texto Colado.txt', textInput.trim());
   };
 
+  // Handle Google Drive import
+  const handleGdriveImport = async () => {
+    if (!gdriveUrl.trim()) return;
+    setIsFetchingGdrive(true);
+    setParseError(null);
+    try {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/fetch-gdrive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: gdriveUrl.trim() })
+      });
+      const result = await response.json();
+      if (result.success) {
+        addDocument(result.filename, result.text);
+        setGdriveUrl('');
+      } else {
+        setParseError(result.error || 'Erro ao importar do Google Drive');
+      }
+    } catch (err) {
+      console.error('Google Drive import error:', err);
+      setParseError('Erro ao importar do Google Drive');
+    } finally {
+      setIsFetchingGdrive(false);
+    }
+  };
+
   // Handle drag and drop
   const handleDrop = (e) => {
     e.preventDefault();
@@ -132,6 +161,7 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
   const resetCustomSystem = () => {
     setDocuments([]);
     setTextInput('');
+    setGdriveUrl('');
     setParsedSystem(null);
     setParseError(null);
   };
@@ -295,6 +325,35 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
                               />
                             </div>
                             {isUploading && <div className="upload-status">📤 Fazendo upload...</div>}
+                          </div>
+
+                          {/* Google Drive Import */}
+                          <div className="gdrive-section">
+                            <h4>Importar do Google Drive</h4>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                className="text-paste-area"
+                                style={{ flex: 1, minHeight: 'auto', padding: '0.6rem 0.8rem', resize: 'none' }}
+                                placeholder="Cole o link do Google Drive aqui..."
+                                value={gdriveUrl}
+                                onChange={(e) => setGdriveUrl(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleGdriveImport())}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={handleGdriveImport}
+                                disabled={!gdriveUrl.trim() || isFetchingGdrive}
+                                style={{ whiteSpace: 'nowrap' }}
+                              >
+                                {isFetchingGdrive ? '⏳ Importando...' : '📥 Importar'}
+                              </button>
+                            </div>
+                            <p style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.3rem' }}>
+                              O documento deve estar compartilhado publicamente (Google Docs, Sheets, etc.)
+                            </p>
+                            {isFetchingGdrive && <div className="upload-status">📡 Buscando documento do Google Drive...</div>}
                           </div>
 
                           {/* Text Paste Area */}

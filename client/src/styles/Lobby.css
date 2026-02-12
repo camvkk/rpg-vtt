@@ -28,8 +28,10 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 480px;
+  max-width: 560px;
   padding: 2rem;
+  max-height: 100vh;
+  overflow-y: auto;
 }
 
 .lobby-header {
@@ -401,6 +403,11 @@
   font-size: 0.85rem;
   text-align: center;
   margin-top: 0.5rem;
+}
+
+/* Google Drive Section */
+.gdrive-section {
+  margin: 1rem 0;
 }
 
 /* Paste Section */
