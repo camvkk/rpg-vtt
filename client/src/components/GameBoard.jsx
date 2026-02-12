@@ -167,7 +167,7 @@ export default function GameBoard({ onLeaveRoom }) {
             <div className="gb-panel-section">
               <div className="panel-header">
                 <h3 className="heading-sm">Jogadores</h3>
-                <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} online</span>
+                <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
               </div>
               <div className="gb-player-list">
                 {players.map((p) => (
