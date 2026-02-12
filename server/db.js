@@ -147,6 +147,7 @@ async function initDatabase() {
     "ALTER TABLE rooms ADD COLUMN system TEXT DEFAULT 'dnd5e'",
     "ALTER TABLE room_state ADD COLUMN walls TEXT",
     "ALTER TABLE room_state ADD COLUMN aoe_effects TEXT",
+    "ALTER TABLE room_state ADD COLUMN grid_config TEXT",
   ];
   for (const sql of migrations) {
     try { db.run(sql); } catch (e) { /* column already exists — ignore */ }
@@ -244,6 +245,7 @@ async function loadRoomState(roomId) {
         drawings: null,
         walls: null,
         aoe_effects: null,
+        grid_config: null,
         map_url: null,
         initiative: null,
         ambiance: null
@@ -257,6 +259,7 @@ async function loadRoomState(roomId) {
       drawings: row.drawings ? JSON.parse(row.drawings) : null,
       walls: row.walls ? JSON.parse(row.walls) : null,
       aoe_effects: row.aoe_effects ? JSON.parse(row.aoe_effects) : null,
+      grid_config: row.grid_config ? JSON.parse(row.grid_config) : null,
       map_url: row.map_url,
       initiative: row.initiative ? JSON.parse(row.initiative) : null,
       ambiance: row.ambiance

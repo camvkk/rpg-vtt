@@ -2,9 +2,11 @@ import { useRef, useEffect, useCallback } from 'react';
 import * as PIXI from 'pixi.js';
 const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } = PIXI;
 import { useGame } from '../contexts/GameContext';
-import { snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS } from '../utils/gridUtils';
-
-const GRID_SIZE = GRID_CONSTANTS.SIZE;
+import { 
+  snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS,
+  getHexDimensions, getHexCorners, hexToPixel, pixelToHex, snapToHex,
+  snapToGridUnified, measureDistanceFeet
+} from '../utils/gridUtils';
 
 // ── AoE Utility Functions ──
 const getAoEColor = (colorType, alpha = 0.3) => {
@@ -18,10 +20,10 @@ const getAoEColor = (colorType, alpha = 0.3) => {
   return colors[colorType] || colors.damage;
 };
 
-const createAoEGraphics = (shape, config, x, y, targetX = null, targetY = null, isPreview = false) => {
+const createAoEGraphics = (shape, config, x, y, targetX = null, targetY = null, isPreview = false, gridSize = 40) => {
   const graphics = new Graphics();
   const colors = getAoEColor(config.color, isPreview ? 0.15 : 0.3);
-  const feetToPixels = (feet) => (feet / 5) * GRID_SIZE;
+  const feetToPixels = (feet) => (feet / 5) * gridSize;
   
   // Set fill and stroke
   graphics.fill({ color: colors.fill, alpha: colors.alpha });
@@ -117,6 +119,8 @@ const createAoEGraphics = (shape, config, x, y, targetX = null, targetY = null, 
   return graphics;
 };
 
+import Minimap from './Minimap';
+
 export default function MapCanvas({ 
   isDM = false, 
   tokenAwaitingPlacement = null, 
@@ -138,15 +142,27 @@ export default function MapCanvas({
   const wallsMapRef = useRef(new Map());
 
   const { state, actions } = useGame();
-  const { tokens, fogAreas, drawings, walls, map, ui, aoeEffects, player } = state;
+  const { tokens, fogAreas, drawings, walls, map, ui, aoeEffects, player, gridConfig } = state;
+  const GRID_SIZE = gridConfig.gridSize || 40;
+  const GRID_TYPE = gridConfig.gridType || 'square';
+  const SNAP_ENABLED = gridConfig.snapEnabled !== false;
+  const GRID_VISIBLE = gridConfig.gridVisible !== false;
   
   // Refs for values accessed in event handlers (avoid stale closures)
   const activeToolRef = useRef(ui.activeTool);
   const isDMRef = useRef(isDM);
   const tokenPlacementRef = useRef(tokenAwaitingPlacement);
+  const gridSizeRef = useRef(GRID_SIZE);
+  const gridTypeRef = useRef(GRID_TYPE);
+  const snapEnabledRef = useRef(SNAP_ENABLED);
+  const gridVisibleRef = useRef(GRID_VISIBLE);
   activeToolRef.current = ui.activeTool;
   isDMRef.current = isDM;
   tokenPlacementRef.current = tokenAwaitingPlacement;
+  gridSizeRef.current = GRID_SIZE;
+  gridTypeRef.current = GRID_TYPE;
+  snapEnabledRef.current = SNAP_ENABLED;
+  gridVisibleRef.current = GRID_VISIBLE;
 
   // ── Init Pixi (v8 async API) ──
   useEffect(() => {
@@ -251,21 +267,50 @@ export default function MapCanvas({
   // ── Draw Grid ──
   const drawGrid = useCallback((layer, w, h) => {
     layer.removeChildren();
+    if (!gridVisibleRef.current) return;
+    
     const g = new Graphics();
     const v = viewRef.current;
-    const startX = Math.floor(-v.panX / v.zoom / GRID_SIZE) * GRID_SIZE;
-    const startY = Math.floor(-v.panY / v.zoom / GRID_SIZE) * GRID_SIZE;
-    const endX = startX + w / v.zoom + GRID_SIZE * 2;
-    const endY = startY + h / v.zoom + GRID_SIZE * 2;
+    const gs = gridSizeRef.current;
+    const gt = gridTypeRef.current;
 
-    g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.2 });
-    for (let x = startX; x < endX; x += GRID_SIZE) {
-      g.moveTo(x, startY).lineTo(x, endY);
+    if (gt === 'hex') {
+      // Pointy-top hex grid
+      const { horizSpacing, vertSpacing, size } = getHexDimensions(gs);
+      const startCol = Math.floor((-v.panX / v.zoom - horizSpacing) / horizSpacing) - 1;
+      const startRow = Math.floor((-v.panY / v.zoom - vertSpacing) / vertSpacing) - 1;
+      const endCol = startCol + Math.ceil(w / v.zoom / horizSpacing) + 3;
+      const endRow = startRow + Math.ceil(h / v.zoom / vertSpacing) + 3;
+
+      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.2 });
+      for (let row = startRow; row < endRow; row++) {
+        for (let col = startCol; col < endCol; col++) {
+          const center = hexToPixel(col, row, gs);
+          const corners = getHexCorners(center.x, center.y, gs);
+          g.moveTo(corners[0].x, corners[0].y);
+          for (let i = 1; i < 6; i++) {
+            g.lineTo(corners[i].x, corners[i].y);
+          }
+          g.lineTo(corners[0].x, corners[0].y);
+        }
+      }
+      g.stroke();
+    } else {
+      // Square grid
+      const startX = Math.floor(-v.panX / v.zoom / gs) * gs;
+      const startY = Math.floor(-v.panY / v.zoom / gs) * gs;
+      const endX = startX + w / v.zoom + gs * 2;
+      const endY = startY + h / v.zoom + gs * 2;
+
+      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.2 });
+      for (let x = startX; x < endX; x += gs) {
+        g.moveTo(x, startY).lineTo(x, endY);
+      }
+      for (let y = startY; y < endY; y += gs) {
+        g.moveTo(startX, y).lineTo(endX, y);
+      }
+      g.stroke();
     }
-    for (let y = startY; y < endY; y += GRID_SIZE) {
-      g.moveTo(startX, y).lineTo(endX, y);
-    }
-    g.stroke();
     layer.addChild(g);
   }, []);
 
@@ -331,12 +376,11 @@ export default function MapCanvas({
       .circle(endPoint.x, endPoint.y, 8)
       .fill({ color: 0xff6b6b, alpha: 0.6 });
 
-    // Calculate distance in grid squares (5ft each)
-    const deltaX = Math.abs(endPoint.x - startPoint.x);
-    const deltaY = Math.abs(endPoint.y - startPoint.y);
-    const distancePixels = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const distanceSquares = distancePixels / GRID_SIZE;
-    const distanceFeet = Math.round(distanceSquares * 5);
+    // Calculate distance using unified grid API
+    const distanceFeet = measureDistanceFeet(
+      startPoint.x, startPoint.y, endPoint.x, endPoint.y,
+      gridTypeRef.current, gridSizeRef.current
+    );
 
     // Draw distance text
     const midX = (startPoint.x + endPoint.x) / 2;
@@ -807,8 +851,15 @@ export default function MapCanvas({
     for (const token of lightSources) {
       try {
         // Calculate token center position in world coordinates
-        const tokenWorldX = (token.x + 0.5) * GRID_SIZE;
-        const tokenWorldY = (token.y + 0.5) * GRID_SIZE;
+        let tokenWorldX, tokenWorldY;
+        if (GRID_TYPE === 'hex') {
+          const hpos = hexToPixel(token.x, token.y, GRID_SIZE);
+          tokenWorldX = hpos.x;
+          tokenWorldY = hpos.y;
+        } else {
+          tokenWorldX = (token.x + 0.5) * GRID_SIZE;
+          tokenWorldY = (token.y + 0.5) * GRID_SIZE;
+        }
         
         // Calculate visibility polygon
         const visibilityPoints = calculateVisibilityPolygon(tokenWorldX, tokenWorldY, token.lightRadius);
@@ -904,7 +955,15 @@ export default function MapCanvas({
         const v = viewRef.current;
         const worldX = (canvasX - v.panX) / v.zoom;
         const worldY = (canvasY - v.panY) / v.zoom;
-        const grid = pixelToGrid(worldX, worldY);
+        const gs = gridSizeRef.current;
+        const gt = gridTypeRef.current;
+        let grid;
+        if (gt === 'hex') {
+          const hex = pixelToHex(worldX, worldY, gs);
+          grid = { x: hex.col, y: hex.row };
+        } else {
+          grid = pixelToGrid(worldX, worldY, gs);
+        }
         
         // Place token at grid position
         const newToken = {
@@ -964,8 +1023,7 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         // Snap to grid center for placement
-        const gridPos = pixelToGrid(worldX, worldY);
-        const snappedPos = gridCenterToPixel(gridPos.x, gridPos.y);
+        const snappedPos = snapToGridUnified(worldX, worldY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
         
         placeAoE(snappedPos.x, snappedPos.y, worldX, worldY);
       }
@@ -1025,8 +1083,7 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         // Snap to grid center for preview
-        const gridPos = pixelToGrid(worldX, worldY);
-        const snappedPos = gridCenterToPixel(gridPos.x, gridPos.y);
+        const snappedPos = snapToGridUnified(worldX, worldY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
         
         showAoEPreview(snappedPos.x, snappedPos.y, worldX, worldY);
       }
@@ -1139,6 +1196,15 @@ export default function MapCanvas({
       clearAoEPreview();
     }
   }, [ui.activeTool, clearAoEPreview]);
+
+  // ── Redraw grid when config changes ──
+  useEffect(() => {
+    const app = pixiRef.current;
+    const gridLayer = layersRef.current.grid;
+    if (app && gridLayer) {
+      drawGrid(gridLayer, app.screen.width, app.screen.height);
+    }
+  }, [GRID_SIZE, GRID_TYPE, GRID_VISIBLE, drawGrid]);
 
   // ── Create a token sprite with visual effects (Pixi v8) ──
   const createTokenSprite = useCallback((token) => {
@@ -1473,20 +1539,27 @@ export default function MapCanvas({
     c.on('globalpointermove', (e) => {
       if (!dragging) return;
       const local = e.getLocalPosition(c.parent);
-      // Snap to grid cell center
       const rawX = local.x - dragOffset.x;
       const rawY = local.y - dragOffset.y;
-      const gridX = Math.round((rawX - GRID_SIZE / 2) / GRID_SIZE);
-      const gridY = Math.round((rawY - GRID_SIZE / 2) / GRID_SIZE);
-      c.position.set(gridX * GRID_SIZE + GRID_SIZE / 2, gridY * GRID_SIZE + GRID_SIZE / 2);
+      const snapped = snapToGridUnified(rawX, rawY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
+      c.position.set(snapped.x, snapped.y);
     });
     c.on('pointerup', () => {
       if (!dragging) return;
       dragging = false;
       c.alpha = 1;
-      // Convert center pixel position back to grid coords
-      const gridX = Math.round((c.x - GRID_SIZE / 2) / GRID_SIZE);
-      const gridY = Math.round((c.y - GRID_SIZE / 2) / GRID_SIZE);
+      // Convert pixel position back to grid coords
+      const gs = gridSizeRef.current;
+      const gt = gridTypeRef.current;
+      let gridX, gridY;
+      if (gt === 'hex') {
+        const hex = pixelToHex(c.x, c.y, gs);
+        gridX = hex.col;
+        gridY = hex.row;
+      } else {
+        gridX = Math.round((c.x - gs / 2) / gs);
+        gridY = Math.round((c.y - gs / 2) / gs);
+      }
       actions.moveToken(token.id, gridX, gridY);
     });
     c.on('pointerupoutside', () => {
@@ -1537,10 +1610,31 @@ export default function MapCanvas({
         existing.set(token.id, sprite);
       }
       
-      const pos = gridCenterToPixel(token.x || 0, token.y || 0);
+      let pos;
+      if (GRID_TYPE === 'hex') {
+        pos = hexToPixel(token.x || 0, token.y || 0, GRID_SIZE);
+      } else {
+        pos = gridCenterToPixel(token.x || 0, token.y || 0, GRID_SIZE);
+      }
       sprite.position.set(pos.x, pos.y);
     });
-  }, [tokens, createTokenSprite]);
+  }, [tokens, createTokenSprite, GRID_SIZE, GRID_TYPE]);
+
+  // Minimap navigation
+  const handleMinimapNavigate = useCallback((worldX, worldY) => {
+    const app = pixiRef.current;
+    if (!app) return;
+    const v = viewRef.current;
+    v.panX = -worldX * v.zoom + app.screen.width / 2;
+    v.panY = -worldY * v.zoom + app.screen.height / 2;
+    const { bg, grid, token, wall, lighting, fog } = layersRef.current;
+    [bg, grid, token, wall, lighting, fog].forEach(c => {
+      if (!c) return;
+      c.scale.set(v.zoom);
+      c.position.set(v.panX, v.panY);
+    });
+    if (layersRef.current.grid) drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
+  }, [drawGrid]);
 
   return (
     <div
@@ -1552,7 +1646,14 @@ export default function MapCanvas({
         borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
         background: 'var(--bg-primary)',
+        position: 'relative',
       }}
-    />
+    >
+      <Minimap
+        viewRef={viewRef}
+        pixiRef={pixiRef}
+        onNavigate={handleMinimapNavigate}
+      />
+    </div>
   );
 }

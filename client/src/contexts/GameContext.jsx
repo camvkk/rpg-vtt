@@ -19,7 +19,10 @@ const initialState = {
   systemData: null,
 
   // Map
-  map: { url: null, width: 2000, height: 2000, gridSize: 40, gridVisible: true },
+  map: { url: null, width: 2000, height: 2000 },
+
+  // Grid config
+  gridConfig: { gridType: 'square', gridSize: 40, snapEnabled: true, gridVisible: true },
 
   // Tokens (array for simplicity — Map doesn't serialize in reducer)
   tokens: [],
@@ -93,6 +96,7 @@ function gameReducer(state, action) {
         aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
+        gridConfig: gs?.gridConfig || state.gridConfig,
         loading: false,
         error: null,
       };
@@ -120,6 +124,7 @@ function gameReducer(state, action) {
         aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
+        gridConfig: gs?.gridConfig || state.gridConfig,
         chat: chatHistory || [],
         loading: false,
         error: null,
@@ -252,6 +257,9 @@ function gameReducer(state, action) {
       return { ...state, ambiance: { ...state.ambiance, ...action.payload } };
 
     // UI
+    case 'SET_GRID_CONFIG':
+      return { ...state, gridConfig: { ...state.gridConfig, ...action.payload } };
+
     case 'SET_ACTIVE_TOOL':
       return { ...state, ui: { ...state.ui, activeTool: action.payload } };
 
@@ -459,6 +467,9 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     socket.on('aoe:add', (data) => dispatch({ type: 'AOE_ADD', payload: data }));
     socket.on('aoe:remove', (data) => dispatch({ type: 'AOE_REMOVE', payload: data }));
     socket.on('aoe:clear', () => dispatch({ type: 'AOE_CLEAR' }));
+
+    // Grid config
+    socket.on('grid:config', (data) => dispatch({ type: 'SET_GRID_CONFIG', payload: data }));
 
     // Campaign events
     socket.on('campaign:docs-updated', (data) => dispatch({ type: 'CAMPAIGN_DOCS_UPDATED', payload: data }));
@@ -706,6 +717,12 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     addAoE: (aoeData) => emit('aoe:add', aoeData),
     removeAoE: (aoeId) => emit('aoe:remove', { aoeId }),
     clearAoE: () => emit('aoe:clear', {}),
+
+    // Grid config
+    setGridConfig: (config) => {
+      dispatch({ type: 'SET_GRID_CONFIG', payload: config });
+      emit('grid:config', config);
+    },
 
     // UI (local only)
     setActiveTool: (tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }),

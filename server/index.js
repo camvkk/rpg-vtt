@@ -1478,6 +1478,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Grid config
+    socket.on('grid:config', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player) throw new Error('Player not authenticated');
+            
+            // Save grid config to room_state persistence
+            await saveRoomState(player.roomId, 'grid_config', data);
+            
+            // Broadcast to all other players in room
+            socket.to(player.roomId).emit('grid:config', data);
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error setting grid config:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
     // Handle disconnection
     socket.on('disconnect', async () => {
         console.log(`🔌 Client disconnected: ${socket.id}`);

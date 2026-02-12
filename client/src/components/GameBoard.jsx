@@ -8,6 +8,7 @@ import CharSheet from './CharSheet';
 import Ambiance from './Ambiance';
 import SystemImporter from './SystemImporter';
 import DMDashboard from './DMDashboard';
+import GridConfigPanel from './GridConfigPanel';
 import CharacterWizard from './CharacterWizard';
 import '../styles/GameBoard.css';
 
@@ -36,6 +37,19 @@ export default function GameBoard({ onLeaveRoom }) {
   const [showDMDashboard, setShowDMDashboard] = useState(false);
   const [showCharacterWizard, setShowCharacterWizard] = useState(false);
   const [tokenAwaitingPlacement, setTokenAwaitingPlacement] = useState(null);
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpenMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -152,60 +166,84 @@ export default function GameBoard({ onLeaveRoom }) {
   return (
     <div className="game-board">
       {/* ── Toolbar ── */}
-      <div className="gb-toolbar">
+      <div className="gb-toolbar" ref={menuRef}>
         <div className="gb-toolbar-left">
           <button className="btn btn-ghost gb-toolbar-btn" onClick={onLeaveRoom}>
             ← Sair
           </button>
           <div className="gb-toolbar-divider" />
-          <ToolButton id="select" icon="🏹" label="Selecionar" active={ui.activeTool} onClick={actions.setActiveTool} />
-          <ToolButton id="measure" icon="📏" label="Medir" active={ui.activeTool} onClick={actions.setActiveTool} />
+
+          {/* ⚔️ Ferramentas */}
+          <ToolbarMenu
+            id="tools"
+            icon="⚔️"
+            label="Ferramentas"
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            items={[
+              { id: 'select', icon: '🏹', label: 'Selecionar (S)', type: 'tool', active: ui.activeTool === 'select', onClick: () => { actions.setActiveTool('select'); setOpenMenu(null); } },
+              { id: 'measure', icon: '📏', label: 'Medir (M)', type: 'tool', active: ui.activeTool === 'measure', onClick: () => { actions.setActiveTool('measure'); setOpenMenu(null); } },
+              ...(isDM ? [
+                { type: 'divider' },
+                { id: 'draw', icon: '✏️', label: 'Desenhar (D)', type: 'tool', active: ui.activeTool === 'draw', onClick: () => { actions.setActiveTool('draw'); setOpenMenu(null); } },
+                { id: 'fog', icon: '🌫️', label: 'Névoa (F)', type: 'tool', active: ui.activeTool === 'fog', onClick: () => { actions.setActiveTool('fog'); setOpenMenu(null); } },
+                { id: 'wall', icon: '🧱', label: 'Paredes (W)', type: 'tool', active: ui.activeTool === 'wall', onClick: () => { actions.setActiveTool('wall'); setOpenMenu(null); } },
+                { id: 'aoe', icon: '💥', label: 'AoE Magias (A)', type: 'tool', active: ui.activeTool === 'aoe', onClick: () => { actions.setActiveTool('aoe'); setOpenMenu(null); } },
+                { id: 'add-token', icon: '🎭', label: 'Criar Token (T)', type: 'tool', active: ui.activeTool === 'add-token' || !!tokenAwaitingPlacement, onClick: () => { setShowTokenCreator(true); setOpenMenu(null); } },
+                { type: 'divider' },
+                { id: 'clear-fog', icon: '🌫️', label: 'Limpar Névoa', type: 'action', onClick: () => { actions.clearFog(); setOpenMenu(null); } },
+                { id: 'clear-walls', icon: '🧱', label: 'Limpar Paredes', type: 'action', onClick: () => { actions.clearWalls(); setOpenMenu(null); } },
+              ] : []),
+            ]}
+            hasActive={['select', 'measure', 'draw', 'fog', 'wall', 'aoe', 'add-token'].includes(ui.activeTool)}
+          />
+
+          {/* 📋 Personagem */}
+          <ToolbarMenu
+            id="character"
+            icon="📋"
+            label="Personagem"
+            openMenu={openMenu}
+            setOpenMenu={setOpenMenu}
+            items={[
+              { id: 'char-sheet', icon: '📋', label: 'Ficha de Personagem', onClick: () => { setShowCharSheet(!showCharSheet); setOpenMenu(null); }, active: showCharSheet },
+              { id: 'char-wizard', icon: '🧙', label: 'Criar Personagem', onClick: () => { setShowCharacterWizard(true); setOpenMenu(null); } },
+            ]}
+          />
+
+          {/* 🗺️ Mapa */}
           {isDM && (
-            <>
-              <ToolButton id="fog" icon="🌫️" label="Névoa" active={ui.activeTool} onClick={actions.setActiveTool} />
-              <ToolButton id="draw" icon="✏️" label="Desenhar" active={ui.activeTool} onClick={actions.setActiveTool} />
-              <ToolButton id="aoe" icon="💥" label="AoE" active={ui.activeTool} onClick={actions.setActiveTool} />
-              <ToolButton id="wall" icon="🧱" label="Paredes" active={ui.activeTool} onClick={actions.setActiveTool} />
-              <button 
-                className={`btn ${tokenAwaitingPlacement ? 'btn-primary' : 'btn-ghost'} gb-toolbar-btn`}
-                onClick={() => setShowTokenCreator(true)}
-                title="Criar Token"
-              >
-                🎭 Token
-              </button>
-              <button 
-                className="btn btn-ghost gb-toolbar-btn" 
-                onClick={() => setShowMapUpload(true)}
-                title="Upload de Mapa"
-              >
-                🗺️ Mapa
-              </button>
-              {campaign.id && (
-                <>
-                  <button 
-                    className="btn btn-ghost gb-toolbar-btn" 
-                    onClick={() => setShowDMDashboard(!showDMDashboard)}
-                    title="Painel de Personagens"
-                  >
-                    👥 Grupo
-                  </button>
-                  <button 
-                    className="btn btn-ghost gb-toolbar-btn" 
-                    onClick={() => setShowDocsModal(true)}
-                    title="Google Docs"
-                  >
-                    📄 Documento
-                  </button>
-                  <button 
-                    className="btn btn-ghost gb-toolbar-btn" 
-                    onClick={() => setShowSystemImporter(true)}
-                    title="Importar Regras do Sistema"
-                  >
-                    📚 Importar Regras
-                  </button>
-                </>
-              )}
-            </>
+            <ToolbarMenu
+              id="map"
+              icon="🗺️"
+              label="Mapa"
+              openMenu={openMenu}
+              setOpenMenu={setOpenMenu}
+              items={[
+                { id: 'map-upload', icon: '🗺️', label: 'Importar Mapa', onClick: () => { setShowMapUpload(true); setOpenMenu(null); } },
+                ...(campaign.id ? [
+                  { id: 'docs-config', icon: '📄', label: 'Configurar Documento', onClick: () => { setShowDocsModal(true); setOpenMenu(null); } },
+                ] : []),
+                ...(campaign.googleDocsUrl ? [
+                  { id: 'docs-toggle', icon: '📄', label: showGoogleDocs ? 'Ocultar Docs' : 'Mostrar Docs', onClick: () => { setShowGoogleDocs(!showGoogleDocs); setOpenMenu(null); }, active: showGoogleDocs },
+                ] : []),
+              ]}
+            />
+          )}
+
+          {/* 👑 Mestre (DM only) */}
+          {isDM && campaign.id && (
+            <ToolbarMenu
+              id="dm"
+              icon="👑"
+              label="Mestre"
+              openMenu={openMenu}
+              setOpenMenu={setOpenMenu}
+              items={[
+                { id: 'dm-dashboard', icon: '👥', label: 'Painel do Grupo', onClick: () => { setShowDMDashboard(!showDMDashboard); setOpenMenu(null); }, active: showDMDashboard },
+                { id: 'system-import', icon: '📚', label: 'Importar Regras', onClick: () => { setShowSystemImporter(true); setOpenMenu(null); } },
+              ]}
+            />
           )}
         </div>
 
@@ -221,47 +259,6 @@ export default function GameBoard({ onLeaveRoom }) {
         </div>
 
         <div className="gb-toolbar-right">
-          {campaign.googleDocsUrl && (
-            <button 
-              className={`btn btn-ghost gb-toolbar-btn ${showGoogleDocs ? 'active' : ''}`} 
-              onClick={() => setShowGoogleDocs(!showGoogleDocs)}
-              title="Mostrar/Ocultar Google Docs"
-            >
-              📄 Docs
-            </button>
-          )}
-          <button 
-            className="btn btn-ghost gb-toolbar-btn" 
-            onClick={() => setShowCharSheet(!showCharSheet)}
-            title="Ficha de Personagem"
-          >
-            📋 Ficha
-          </button>
-          <button 
-            className="btn btn-ghost gb-toolbar-btn" 
-            onClick={() => setShowCharacterWizard(true)}
-            title="Criar Novo Personagem"
-          >
-            🧙 Criar Personagem
-          </button>
-          {isDM && (
-            <>
-              <button 
-                className="btn btn-ghost gb-toolbar-btn" 
-                onClick={actions.clearFog}
-                title="Limpar Névoa"
-              >
-                🌫️ Limpar
-              </button>
-              <button 
-                className="btn btn-ghost gb-toolbar-btn" 
-                onClick={actions.clearWalls}
-                title="Limpar Paredes"
-              >
-                🧱 Limpar
-              </button>
-            </>
-          )}
           <button className="btn btn-ghost gb-toolbar-btn" onClick={actions.toggleLeftPanel}>
             {ui.leftPanel ? '◄' : '►'}
           </button>
@@ -329,6 +326,9 @@ export default function GameBoard({ onLeaveRoom }) {
 
             {/* Ambiance (DM) */}
             {isDM && <Ambiance isDM={isDM} />}
+
+            {/* Grid Config (DM) */}
+            {isDM && <GridConfigPanel />}
           </div>
         )}
 
@@ -1189,6 +1189,41 @@ function isValidGoogleUrl(url) {
   ];
   
   return googleDomains.some(domain => url.includes(domain));
+}
+
+// ── Toolbar Dropdown Menu ──
+function ToolbarMenu({ id, icon, label, items, openMenu, setOpenMenu, hasActive }) {
+  const isOpen = openMenu === id;
+  const toggle = () => setOpenMenu(isOpen ? null : id);
+
+  return (
+    <div className="gb-menu-container">
+      <button
+        className={`btn btn-ghost gb-toolbar-btn gb-menu-trigger ${isOpen ? 'gb-menu-open' : ''} ${hasActive ? 'gb-menu-has-active' : ''}`}
+        onClick={toggle}
+      >
+        {icon} {label} <span className="gb-menu-arrow">{isOpen ? '▴' : '▾'}</span>
+      </button>
+      {isOpen && (
+        <div className="gb-dropdown">
+          {items.map((item, i) => {
+            if (item.type === 'divider') return <div key={i} className="gb-dropdown-divider" />;
+            return (
+              <button
+                key={item.id}
+                className={`gb-dropdown-item ${item.active ? 'gb-dropdown-item-active' : ''}`}
+                onClick={item.onClick}
+              >
+                <span className="gb-dropdown-icon">{item.icon}</span>
+                <span className="gb-dropdown-label">{item.label}</span>
+                {item.active && <span className="gb-dropdown-check">●</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Small tool button ──

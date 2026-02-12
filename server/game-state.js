@@ -381,6 +381,7 @@ async function getGameState(roomId) {
             drawings: persistedState.drawings || [],
             walls: persistedState.walls || [],
             aoeEffects: persistedState.aoe_effects || [],
+            gridConfig: persistedState.grid_config || null,
             initiative: persistedState.initiative || { players: [], currentTurn: 0, active: false }
         };
     } catch (error) {
