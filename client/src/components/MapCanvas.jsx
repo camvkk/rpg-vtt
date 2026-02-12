@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } from 'pixi.js';
+import * as PIXI from 'pixi.js';
+const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } = PIXI;
 import { useGame } from '../contexts/GameContext';
 import { snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS } from '../utils/gridUtils';
 
