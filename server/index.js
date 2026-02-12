@@ -30,7 +30,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
-const OpenAI = require('openai');
+// OpenAI replaced by Kimi K2.5 via OpenRouter (using fetch)
 
 // Initialize Express app
 const app = express();
@@ -77,8 +77,8 @@ app.post('/api/upload-token', express.raw({ type: 'image/*', limit: '2mb' }), (r
 const upload = multer({ 
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
-        const allowedTypes = ['text/plain', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        const allowedExts = ['.txt', '.md', '.pdf', '.docx'];
+        const allowedTypes = ['text/plain', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/csv', 'application/json'];
+        const allowedExts = ['.txt', '.md', '.pdf', '.docx', '.csv', '.json'];
         const ext = path.extname(file.originalname).toLowerCase();
         
         if (allowedTypes.includes(file.mimetype) || allowedExts.includes(ext)) {
@@ -89,13 +89,42 @@ const upload = multer({
     }
 });
 
-// Initialize OpenAI (lazy — only when API key is available)
-let openai = null;
-function getOpenAI() {
-    if (!openai && process.env.OPENAI_API_KEY) {
-        openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// OpenRouter API helper for Kimi K2.5
+async function callKimiK2(systemPrompt, userPrompt) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY não configurada no servidor');
+    
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://rpg-vtt.vercel.app',
+            'X-Title': 'RPG VTT System Importer'
+        },
+        body: JSON.stringify({
+            model: 'moonshotai/kimi-k2.5',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 8000,
+            temperature: 0.2
+        })
+    });
+    
+    if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} - ${err}`);
     }
-    return openai;
+    
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Resposta vazia da IA');
+    
+    // Extract JSON from response (handle markdown code blocks)
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
+    return JSON.parse(jsonMatch[1].trim());
 }
 
 // Document upload endpoint
@@ -111,6 +140,8 @@ app.post('/api/upload-system-doc', upload.single('document'), async (req, res) =
             switch (ext) {
                 case '.txt':
                 case '.md':
+                case '.csv':
+                case '.json':
                     extractedText = file.buffer.toString('utf-8');
                     break;
                     
@@ -154,78 +185,93 @@ app.post('/api/parse-system', async (req, res) => {
     try {
         const { campaignId, documents } = req.body;
         
-        if (!campaignId || !documents || !Array.isArray(documents) || documents.length === 0) {
-            throw new Error('campaignId e documentos são obrigatórios');
-        }
-        
-        if (!process.env.OPENAI_API_KEY) {
-            throw new Error('Chave da OpenAI não configurada no servidor');
+        if (!documents || !Array.isArray(documents) || documents.length === 0) {
+            throw new Error('Documentos são obrigatórios');
         }
         
         // Combine all documents into a single text
         const combinedText = documents.map(doc => `=== ${doc.name} ===\n${doc.text}`).join('\n\n');
         
-        // Create prompt for OpenAI
-        const prompt = `Você é um parser de sistemas de RPG. Dados estes documentos descrevendo um sistema de RPG customizado, extraia e estruture TODAS as mecânicas do jogo em JSON.
+        // System prompt with full schema based on dnd5e.js format
+        const systemPrompt = `Você é um parser especializado em sistemas de RPG de mesa. Extraia regras de texto livre e converta em JSON estruturado.
 
-Formato de saída:
+O JSON DEVE seguir este esquema (baseado no formato D&D 5e do nosso VTT):
+
 {
-  "systemName": "Nome do sistema",
+  "systemName": "Nome do Sistema",
   "description": "Breve descrição",
   "races": [
-    { "name": "...", "description": "...", "traits": ["..."], "statModifiers": { "str": 1, ... } }
+    {
+      "name": "Humano",
+      "icon": "👤",
+      "description": "Adaptáveis e ambiciosos...",
+      "statBonuses": { "str": 1, "dex": 1, "con": 1, "int": 1, "wis": 1, "cha": 1 },
+      "traits": ["Versatilidade: +1 em todos os atributos", "Perícia Adicional"]
+    }
   ],
   "classes": [
-    { "name": "...", "description": "...", "hitDie": "d8", "primaryStats": ["str"], "features": [{ "name": "...", "level": 1, "description": "..." }], "proficiencies": ["..."] }
+    {
+      "name": "Guerreiro",
+      "icon": "⚔️",
+      "hitDie": "d10",
+      "description": "Mestre das armas e táticas de combate.",
+      "primaryStats": ["Força", "Destreza"],
+      "savingThrows": ["str", "con"],
+      "skillsAvailable": 2,
+      "classSkills": ["athletics", "intimidation", "perception", "survival"],
+      "level1Features": ["Estilo de Luta", "Retomar Fôlego: 1d10 + nível"],
+      "startingEquipment": {
+        "choiceA": ["Cota de Malha", "Escudo", "Espada Longa"],
+        "choiceB": ["Armadura de Couro", "Arco Longo"]
+      }
+    }
+  ],
+  "skills": {
+    "athletics": { "name": "Atletismo", "ability": "str", "description": "Escalar, nadar, saltar" },
+    "stealth": { "name": "Furtividade", "ability": "dex", "description": "Mover-se sem ser detectado" }
+  },
+  "backgrounds": [
+    {
+      "name": "Soldado",
+      "skillProficiencies": ["athletics", "intimidation"],
+      "description": "Você serviu em uma força militar.",
+      "feature": "Posição Militar: autoridade sobre soldados."
+    }
   ],
   "stats": [
-    { "key": "str", "name": "Força", "description": "..." }
-  ],
-  "skills": [
-    { "name": "...", "linkedStat": "str", "description": "..." }
+    { "key": "str", "name": "Força", "short": "FOR" },
+    { "key": "dex", "name": "Destreza", "short": "DEX" }
   ],
   "equipment": [
-    { "name": "...", "type": "weapon|armor|item", "description": "...", "damage": "1d8", "properties": ["..."] }
+    { "name": "Espada Longa", "type": "weapon", "damage": "1d8", "properties": ["versátil"] }
   ],
   "spells": [
-    { "name": "...", "level": 0, "school": "...", "description": "...", "damage": "...", "range": "..." }
+    { "name": "Bola de Fogo", "level": 3, "school": "Evocação", "description": "...", "damage": "8d6", "range": "150 pés" }
   ],
   "rules": [
-    { "name": "...", "description": "..." }
+    { "name": "Combate", "description": "Como funciona o combate neste sistema" }
   ],
   "customMechanics": [
-    { "name": "...", "description": "...", "diceFormula": "..." }
+    { "name": "Mecânica Especial", "description": "Como funciona", "diceFormula": "2d6+mod" }
   ]
 }
 
-Inclua apenas seções que estão presentes nos documentos. Se uma seção não for descrita, omita-a.
-Parse no mesmo idioma dos documentos.
+REGRAS IMPORTANTES:
+- Chaves em inglês camelCase, valores no idioma dos documentos
+- "skills" é OBJETO (não array) com chaves camelCase
+- Stat keys: str, dex, con, int, wis, cha (ou equivalentes)
+- Inclua APENAS seções presentes nos documentos — omita o resto
+- Retorne APENAS JSON válido, sem markdown, sem texto extra`;
 
-Documentos:
-${combinedText}`;
-
-        // Call OpenAI API
-        const ai = getOpenAI();
-        if (!ai) throw new Error('Chave da OpenAI não configurada no servidor');
-        const response = await ai.chat.completions.create({
-            model: 'gpt-4-turbo-preview',
-            messages: [
-                {
-                    role: 'user',
-                    content: prompt
-                }
-            ],
-            response_format: { type: 'json_object' },
-            max_tokens: 4000,
-            temperature: 0.3
-        });
+        const parsedSystem = await callKimiK2(systemPrompt, `Analise estes documentos de RPG e extraia as regras:\n\n${combinedText}`);
         
-        const parsedSystem = JSON.parse(response.choices[0].message.content);
-        
-        // Save to database
-        await saveSystemData(campaignId, parsedSystem, documents);
-        
-        console.log(`🤖 System parsed for campaign ${campaignId}: ${parsedSystem.systemName || 'Sistema Customizado'}`);
+        // Save to database only if not a preview
+        if (campaignId !== 'preview') {
+            await saveSystemData(campaignId, parsedSystem, documents);
+            console.log(`🤖 System parsed for campaign ${campaignId}: ${parsedSystem.systemName || 'Sistema Customizado'}`);
+        } else {
+            console.log(`🤖 System parsed (preview): ${parsedSystem.systemName || 'Sistema Customizado'}`);
+        }
         
         res.json({
             success: true,
@@ -234,6 +280,70 @@ ${combinedText}`;
         
     } catch (error) {
         console.error('Error parsing system:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Campaign rules endpoints
+app.post('/api/campaigns/:id/rules', async (req, res) => {
+    try {
+        const { id: campaignId } = req.params;
+        const { systemData, rawDocuments = [] } = req.body;
+        
+        if (!systemData) {
+            throw new Error('systemData é obrigatório');
+        }
+        
+        // Verify campaign exists
+        const campaign = await getCampaign(campaignId);
+        if (!campaign) {
+            throw new Error('Campanha não encontrada');
+        }
+        
+        // Save system data
+        await saveSystemData(campaignId, systemData, rawDocuments);
+        
+        console.log(`💾 System rules saved for campaign ${campaignId}`);
+        
+        res.json({
+            success: true,
+            message: 'Regras salvas com sucesso'
+        });
+        
+    } catch (error) {
+        console.error('Error saving campaign rules:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+app.get('/api/campaigns/:id/rules', async (req, res) => {
+    try {
+        const { id: campaignId } = req.params;
+        
+        // Verify campaign exists
+        const campaign = await getCampaign(campaignId);
+        if (!campaign) {
+            throw new Error('Campanha não encontrada');
+        }
+        
+        // Get system data
+        const systemData = await getSystemData(campaignId);
+        
+        res.json({
+            success: true,
+            systemData: systemData?.systemData || null,
+            rawDocuments: systemData?.rawDocuments || [],
+            parsedAt: systemData?.parsedAt || null
+        });
+        
+    } catch (error) {
+        console.error('Error getting campaign rules:', error);
         res.status(400).json({
             success: false,
             error: error.message
@@ -406,7 +516,7 @@ io.on('connection', (socket) => {
     // Create campaign
     socket.on('campaign:create', async (data, callback) => {
         try {
-            const { name, dmPassword, system = 'dnd5e', customRules } = data;
+            const { name, dmPassword, system = 'dnd5e', customRules, systemData } = data;
             
             // Generate unique 8-char campaign ID
             let campaignId;
@@ -423,8 +533,21 @@ io.on('connection', (socket) => {
                 throw new Error('Failed to generate unique campaign ID');
             }
             
+            // Handle system data for custom systems
+            let finalCustomRules = customRules;
+            if (system === 'custom' && systemData) {
+                if (typeof systemData === 'object' && systemData.systemName) {
+                    // Parsed system data from lobby
+                    await saveSystemData(campaignId, systemData, systemData.documents || []);
+                    finalCustomRules = `Custom system: ${systemData.systemName || 'Sistema Customizado'}`;
+                } else if (typeof systemData === 'object' && systemData.documents) {
+                    // Documents to be parsed
+                    finalCustomRules = `Documents uploaded: ${systemData.documents.length} files`;
+                }
+            }
+            
             // Create campaign in database
-            await createCampaign(campaignId, name, dmPassword, system, customRules);
+            await createCampaign(campaignId, name, dmPassword, system, finalCustomRules);
             
             // Create a room for the campaign with the campaign ID as the code
             const dmName = data.dmName || 'Mestre';

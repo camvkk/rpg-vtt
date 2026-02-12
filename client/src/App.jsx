@@ -28,10 +28,10 @@ function AppInner() {
     }
   };
 
-  const handleCreateCampaign = async (name, dmPassword, system, customRules) => {
+  const handleCreateCampaign = async (name, dmPassword, system, systemData) => {
     try {
       setError(null);
-      await actions.createCampaign(name, dmPassword, system, customRules);
+      await actions.createCampaign(name, dmPassword, system, systemData);
     } catch (err) {
       setError(err.message || 'Erro ao criar a campanha');
     }

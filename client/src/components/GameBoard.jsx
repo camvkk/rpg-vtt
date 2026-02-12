@@ -196,15 +196,13 @@ export default function GameBoard({ onLeaveRoom }) {
                   >
                     📄 Documento
                   </button>
-                  {campaign.system === 'custom' && (
-                    <button 
-                      className="btn btn-ghost gb-toolbar-btn" 
-                      onClick={() => setShowSystemImporter(true)}
-                      title="Sistema Customizado"
-                    >
-                      📖 Sistema
-                    </button>
-                  )}
+                  <button 
+                    className="btn btn-ghost gb-toolbar-btn" 
+                    onClick={() => setShowSystemImporter(true)}
+                    title="Importar Regras do Sistema"
+                  >
+                    📚 Importar Regras
+                  </button>
                 </>
               )}
             </>

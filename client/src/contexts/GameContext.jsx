@@ -562,10 +562,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     },
 
     // Campaigns
-    createCampaign: async (name, dmPassword, system = 'dnd5e', customRules = null) => {
+    createCampaign: async (name, dmPassword, system = 'dnd5e', systemData = null) => {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        const res = await emit('campaign:create', { name, dmPassword, system, customRules });
+        const res = await emit('campaign:create', { name, dmPassword, system, systemData });
         if (!res.success) throw new Error(res.error);
         
         // Server auto-joins DM, dispatch full state

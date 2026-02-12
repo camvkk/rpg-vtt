@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import '../styles/Lobby.css';
 
 export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJoinCampaign, isLoading, error }) {
@@ -10,6 +10,131 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
   const [dmPassword, setDmPassword] = useState('');
   const [system, setSystem] = useState('dnd5e');
   const [customRules, setCustomRules] = useState('');
+  
+  // Custom system importer state
+  const [documents, setDocuments] = useState([]);
+  const [textInput, setTextInput] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parsedSystem, setParsedSystem] = useState(null);
+  const [parseError, setParseError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Get server URL
+  const getServerUrl = () => {
+    if (import.meta.env.VITE_SERVER_URL) return import.meta.env.VITE_SERVER_URL;
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:3001';
+    return window.location.origin;
+  };
+
+  // Add document to the list
+  const addDocument = (name, text) => {
+    const doc = { id: Date.now(), name, text };
+    setDocuments(prev => [...prev, doc]);
+    setTextInput('');
+  };
+
+  // Remove document from list
+  const removeDocument = (id) => {
+    setDocuments(prev => prev.filter(doc => doc.id !== id));
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    setParseError(null);
+    
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/upload-system-doc`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        addDocument(result.filename, result.text);
+      } else {
+        setParseError(result.error || 'Erro ao fazer upload do arquivo');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setParseError('Erro ao fazer upload do arquivo');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Handle text paste
+  const handleTextPaste = () => {
+    if (!textInput.trim()) return;
+    addDocument('Texto Colado.txt', textInput.trim());
+  };
+
+  // Handle drag and drop
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach(handleFileUpload);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  // Parse system with OpenAI
+  const handleParseSystem = async () => {
+    if (documents.length === 0) {
+      setParseError('Adicione pelo menos um documento antes de processar');
+      return;
+    }
+    
+    setIsParsing(true);
+    setParseError(null);
+    setParsedSystem(null);
+    
+    try {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/parse-system`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          campaignId: 'preview', // Use preview for lobby parsing
+          documents: documents.map(doc => ({ name: doc.name, text: doc.text }))
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setParsedSystem(result.systemData);
+      } else {
+        setParseError(result.error || 'Erro ao processar sistema');
+      }
+    } catch (err) {
+      console.error('Parse error:', err);
+      setParseError('Erro ao processar sistema com IA');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  // Reset custom system state
+  const resetCustomSystem = () => {
+    setDocuments([]);
+    setTextInput('');
+    setParsedSystem(null);
+    setParseError(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,7 +150,9 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
         break;
       case 'create-campaign':
         if (!campaignName.trim() || !dmPassword.trim()) return;
-        await onCreateCampaign(campaignName.trim(), dmPassword, system, customRules || null);
+        // For custom system, pass the parsed system data or documents
+        const systemData = system === 'custom' ? (parsedSystem || { documents }) : null;
+        await onCreateCampaign(campaignName.trim(), dmPassword, system, systemData || customRules || null);
         break;
       case 'join-campaign':
         if (!campaignId.trim()) return;
@@ -109,30 +236,181 @@ export default function Lobby({ onCreateRoom, onJoinRoom, onCreateCampaign, onJo
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Sistema de RPG</label>
-                  <select
-                    className="input"
-                    value={system}
-                    onChange={(e) => setSystem(e.target.value)}
-                  >
-                    <option value="dnd5e">D&D 5e</option>
-                    <option value="generic">Genérico</option>
-                    <option value="custom">Personalizado</option>
-                  </select>
-                </div>
-                {system === 'custom' && (
-                  <div className="form-group">
-                    <label className="form-label">Regras Customizadas</label>
-                    <textarea
-                      className="input"
-                      placeholder="Descreva as regras especiais desta campanha..."
-                      value={customRules}
-                      onChange={(e) => setCustomRules(e.target.value)}
-                      rows={3}
-                    />
+                {/* 📚 Regras do Sistema section */}
+                <div className="form-group rules-system-section">
+                  <label className="form-label">📚 Regras do Sistema</label>
+                  <div className="system-selection">
+                    <div className="radio-group">
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="system"
+                          value="dnd5e"
+                          checked={system === 'dnd5e'}
+                          onChange={(e) => {
+                            setSystem(e.target.value);
+                            if (e.target.value !== 'custom') resetCustomSystem();
+                          }}
+                        />
+                        <span>D&D 5e (Padrão)</span>
+                      </label>
+                      <label className="radio-option">
+                        <input
+                          type="radio"
+                          name="system"
+                          value="custom"
+                          checked={system === 'custom'}
+                          onChange={(e) => setSystem(e.target.value)}
+                        />
+                        <span>Sistema Customizado</span>
+                      </label>
+                    </div>
                   </div>
-                )}
+
+                  {system === 'custom' && (
+                    <div className="custom-system-importer">
+                      {!parsedSystem ? (
+                        <>
+                          {/* File Upload Area */}
+                          <div className="upload-section">
+                            <h4>Upload de Documentos</h4>
+                            <div 
+                              className="upload-area"
+                              onDrop={handleDrop}
+                              onDragOver={handleDragOver}
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              <div className="upload-content">
+                                <div className="upload-icon">📁</div>
+                                <p>Arraste arquivos aqui ou clique para selecionar</p>
+                                <p className="upload-formats">Suporte: .txt, .md, .pdf, .csv, .json</p>
+                              </div>
+                              <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".txt,.md,.pdf,.csv,.json"
+                                multiple
+                                onChange={(e) => Array.from(e.target.files).forEach(handleFileUpload)}
+                                style={{ display: 'none' }}
+                              />
+                            </div>
+                            {isUploading && <div className="upload-status">📤 Fazendo upload...</div>}
+                          </div>
+
+                          {/* Text Paste Area */}
+                          <div className="paste-section">
+                            <h4>Colar Texto Diretamente</h4>
+                            <textarea
+                              className="text-paste-area"
+                              placeholder="Cole aqui o texto do seu sistema de RPG..."
+                              value={textInput}
+                              onChange={(e) => setTextInput(e.target.value)}
+                              rows={4}
+                            />
+                            <button 
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={handleTextPaste}
+                              disabled={!textInput.trim()}
+                            >
+                              Adicionar Texto
+                            </button>
+                          </div>
+
+                          {/* Document List */}
+                          {documents.length > 0 && (
+                            <div className="documents-section">
+                              <h4>Documentos Adicionados ({documents.length})</h4>
+                              <div className="documents-list">
+                                {documents.map(doc => (
+                                  <div key={doc.id} className="document-item">
+                                    <span className="doc-name">📄 {doc.name}</span>
+                                    <span className="doc-size">({doc.text.length} caracteres)</span>
+                                    <button 
+                                      type="button"
+                                      className="btn-remove"
+                                      onClick={() => removeDocument(doc.id)}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Process Button */}
+                              <button
+                                type="button"
+                                className="btn btn-primary process-btn"
+                                onClick={handleParseSystem}
+                                disabled={isParsing}
+                              >
+                                {isParsing ? '🤖 IA analisando sistema...' : '🚀 Processar com IA'}
+                              </button>
+                              
+                              {isParsing && (
+                                <div className="parsing-status">
+                                  <div className="spinner"></div>
+                                  <p>Isso pode levar alguns segundos...</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        /* Parsed System Preview */
+                        <div className="parsed-system-preview">
+                          <h4>✅ Sistema Processado</h4>
+                          
+                          <div className="system-preview-card">
+                            <div className="system-header">
+                              <h5>📖 {parsedSystem.systemName || 'Sistema Customizado'}</h5>
+                              {parsedSystem.description && (
+                                <p className="system-description">{parsedSystem.description}</p>
+                              )}
+                            </div>
+
+                            <div className="system-sections">
+                              {parsedSystem.stats && (
+                                <div className="section">
+                                  <span className="section-label">📊 Atributos ({parsedSystem.stats.length})</span>
+                                </div>
+                              )}
+                              {parsedSystem.races && (
+                                <div className="section">
+                                  <span className="section-label">👥 Raças ({parsedSystem.races.length})</span>
+                                </div>
+                              )}
+                              {parsedSystem.classes && (
+                                <div className="section">
+                                  <span className="section-label">⚔️ Classes ({parsedSystem.classes.length})</span>
+                                </div>
+                              )}
+                              {parsedSystem.skills && (
+                                <div className="section">
+                                  <span className="section-label">🎯 Perícias ({parsedSystem.skills.length})</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <button 
+                            type="button"
+                            className="btn btn-ghost reprocess-btn" 
+                            onClick={() => setParsedSystem(null)}
+                          >
+                            🔄 Editar/Reprocessar
+                          </button>
+                        </div>
+                      )}
+
+                      {parseError && (
+                        <div className="error-message">
+                          ⚠️ {parseError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
