@@ -22,8 +22,19 @@ const CharacterWizard = ({
   onClose, 
   onCreateCharacter,
   system = 'dnd5e',
-  systemData = null 
+  systemData: rawSystemData = null 
 }) => {
+  // Normalize systemData — handle wrapped formats
+  const systemData = React.useMemo(() => {
+    if (!rawSystemData) return null;
+    // If systemData is wrapped in a nested systemData property
+    if (rawSystemData.systemData && typeof rawSystemData.systemData === 'object') {
+      return rawSystemData.systemData;
+    }
+    return rawSystemData;
+  }, [rawSystemData]);
+  
+  console.log('[CharacterWizard] system:', system, 'systemData keys:', systemData ? Object.keys(systemData) : null, 'races?', Array.isArray(systemData?.races), systemData?.races?.length);
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [wizardData, setWizardData] = useState({
