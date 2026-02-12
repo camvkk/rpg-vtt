@@ -11,6 +11,7 @@ import DMDashboard from './DMDashboard';
 import GridConfigPanel from './GridConfigPanel';
 import CharacterWizard from './CharacterWizard';
 import '../styles/GameBoard.css';
+import '../styles/dropdown-menu.css';
 
 // Error boundary to catch MapCanvas crashes
 import { Component } from 'react';
