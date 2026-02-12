@@ -83,12 +83,9 @@
 /* ── Canvas Area ── */
 .gb-canvas-area {
   flex: 1;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-  background: var(--bg-primary);
   position: relative;
   overflow: hidden;
+  background: var(--bg-primary);
 }
 
 /* ── Players ── */
@@ -345,13 +342,17 @@
 
 /* ── Google Docs Panel ── */
 .gb-docs-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
   width: 50%;
   min-width: 400px;
+  height: 100%;
   background: var(--bg-surface);
   border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  height: 100%;
+  z-index: 10;
 }
 
 .gb-docs-header {

@@ -335,11 +335,8 @@ export default function GameBoard({ onLeaveRoom }) {
         )}
 
         {/* Center — Map Canvas */}
-        <div className="gb-canvas-area" style={{ 
-          display: 'flex', 
-          flexDirection: showGoogleDocs ? 'row' : 'column' 
-        }}>
-          <div style={{ flex: 1, width: '100%', height: '100%', minHeight: 0 }}>
+        <div className="gb-canvas-area">
+          <div style={{ position: 'absolute', inset: 0 }}>
             <CanvasErrorBoundary>
               <MapCanvas 
                 isDM={isDM} 
