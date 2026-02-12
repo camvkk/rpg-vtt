@@ -157,7 +157,7 @@ async function callKimiK2(systemPrompt, userPrompt) {
                 { role: 'user', content: userPrompt }
             ],
             max_tokens: 8000,
-            temperature: 0.2
+            temperature: 1
         })
     });
     
