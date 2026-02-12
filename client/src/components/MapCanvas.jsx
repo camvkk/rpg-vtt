@@ -5,6 +5,117 @@ import { snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS } from '../u
 
 const GRID_SIZE = GRID_CONSTANTS.SIZE;
 
+// ── AoE Utility Functions ──
+const getAoEColor = (colorType, alpha = 0.3) => {
+  const colors = {
+    damage: { fill: 0xff6b35, stroke: 0xd63031, alpha },
+    healing: { fill: 0x3b82f6, stroke: 0x2563eb, alpha },
+    buff: { fill: 0x10b981, stroke: 0x059669, alpha },
+    debuff: { fill: 0x8b5cf6, stroke: 0x7c3aed, alpha },
+    utility: { fill: 0xf59e0b, stroke: 0xd97706, alpha }
+  };
+  return colors[colorType] || colors.damage;
+};
+
+const createAoEGraphics = (shape, config, x, y, targetX = null, targetY = null, isPreview = false) => {
+  const graphics = new Graphics();
+  const colors = getAoEColor(config.color, isPreview ? 0.15 : 0.3);
+  const feetToPixels = (feet) => (feet / 5) * GRID_SIZE;
+  
+  // Set fill and stroke
+  graphics.fill({ color: colors.fill, alpha: colors.alpha });
+  graphics.setStrokeStyle({ width: 2, color: colors.stroke, alpha: 0.8 });
+
+  switch (shape) {
+    case 'circle': {
+      const radiusPixels = feetToPixels(config.radius);
+      graphics.circle(x, y, radiusPixels);
+      break;
+    }
+    
+    case 'cone': {
+      const lengthPixels = feetToPixels(config.length);
+      const angleRad = (config.angle * Math.PI) / 180;
+      
+      // Calculate cone direction
+      let direction = 0;
+      if (targetX !== null && targetY !== null) {
+        direction = Math.atan2(targetY - y, targetX - x);
+      }
+      
+      // Create cone path
+      const halfAngle = angleRad / 2;
+      const startAngle = direction - halfAngle;
+      const endAngle = direction + halfAngle;
+      
+      // Draw cone as a triangle/sector
+      graphics.moveTo(x, y);
+      graphics.lineTo(
+        x + Math.cos(startAngle) * lengthPixels,
+        y + Math.sin(startAngle) * lengthPixels
+      );
+      
+      // Add arc for the cone end
+      const steps = 8;
+      for (let i = 1; i <= steps; i++) {
+        const angle = startAngle + (angleRad * i) / steps;
+        graphics.lineTo(
+          x + Math.cos(angle) * lengthPixels,
+          y + Math.sin(angle) * lengthPixels
+        );
+      }
+      
+      graphics.lineTo(x, y);
+      break;
+    }
+    
+    case 'line': {
+      const lengthPixels = feetToPixels(config.length);
+      const widthPixels = feetToPixels(config.width);
+      
+      // Calculate line direction
+      let direction = 0;
+      if (targetX !== null && targetY !== null) {
+        direction = Math.atan2(targetY - y, targetX - x);
+      }
+      
+      // Calculate line endpoints
+      const endX = x + Math.cos(direction) * lengthPixels;
+      const endY = y + Math.sin(direction) * lengthPixels;
+      
+      // Create rectangle along the line
+      const perpDir = direction + Math.PI / 2;
+      const halfWidth = widthPixels / 2;
+      
+      const p1x = x + Math.cos(perpDir) * halfWidth;
+      const p1y = y + Math.sin(perpDir) * halfWidth;
+      const p2x = x - Math.cos(perpDir) * halfWidth;
+      const p2y = y - Math.sin(perpDir) * halfWidth;
+      const p3x = endX - Math.cos(perpDir) * halfWidth;
+      const p3y = endY - Math.sin(perpDir) * halfWidth;
+      const p4x = endX + Math.cos(perpDir) * halfWidth;
+      const p4y = endY + Math.sin(perpDir) * halfWidth;
+      
+      graphics.moveTo(p1x, p1y);
+      graphics.lineTo(p2x, p2y);
+      graphics.lineTo(p3x, p3y);
+      graphics.lineTo(p4x, p4y);
+      graphics.lineTo(p1x, p1y);
+      break;
+    }
+    
+    case 'square': {
+      const sizePixels = feetToPixels(config.length);
+      const halfSize = sizePixels / 2;
+      graphics.rect(x - halfSize, y - halfSize, sizePixels, sizePixels);
+      break;
+    }
+  }
+  
+  graphics.stroke();
+  return graphics;
+};
+
 export default function MapCanvas({ 
   isDM = false, 
   tokenAwaitingPlacement = null, 
@@ -20,9 +131,13 @@ export default function MapCanvas({
   const rulerRef = useRef({ isActive: false, startPoint: null, endPoint: null, graphics: null });
   const drawingRef = useRef({ isDrawing: false, currentPath: [], graphics: null });
   const drawingsMapRef = useRef(new Map());
+  const aoeRef = useRef({ previewGraphics: null, isPlacing: false });
+  const aoeMapRef = useRef(new Map());
+  const wallPlacementRef = useRef({ isPlacing: false, startPoint: null, graphics: null });
+  const wallsMapRef = useRef(new Map());
 
   const { state, actions } = useGame();
-  const { tokens, fogAreas, drawings, map, ui } = state;
+  const { tokens, fogAreas, drawings, walls, map, ui, aoeEffects, player } = state;
   
   // Refs for values accessed in event handlers (avoid stale closures)
   const activeToolRef = useRef(ui.activeTool);
@@ -71,11 +186,13 @@ export default function MapCanvas({
       const bgLayer = new Container();
       const gridLayer = new Container();
       const tokenLayer = new Container();
+      const wallLayer = new Container();
+      const lightingLayer = new Container();
       const fogLayer = new Container();
       const uiLayer = new Container();
 
-      app.stage.addChild(bgLayer, gridLayer, tokenLayer, fogLayer, uiLayer);
-      layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, fog: fogLayer, ui: uiLayer };
+      app.stage.addChild(bgLayer, gridLayer, tokenLayer, wallLayer, lightingLayer, fogLayer, uiLayer);
+      layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, wall: wallLayer, lighting: lightingLayer, fog: fogLayer, ui: uiLayer };
 
       drawGrid(gridLayer, app.screen.width, app.screen.height);
       setupInteractions(app);
@@ -88,6 +205,13 @@ export default function MapCanvas({
       destroyed = true;
       if (app) {
         if (app._resizeObserver) app._resizeObserver.disconnect();
+        
+        // Cleanup all token animations before destroying
+        tokensMapRef.current.forEach((sprite) => {
+          if (sprite._vttCleanup) sprite._vttCleanup();
+        });
+        tokensMapRef.current.clear();
+        
         try {
           const canvas = app.renderer?.canvas;
           if (canvas?._vttCleanup) canvas._vttCleanup();
@@ -362,11 +486,356 @@ export default function MapCanvas({
     }
   }, []);
 
+  // ── AoE Functions ──
+  const showAoEPreview = useCallback((worldX, worldY, targetX = null, targetY = null) => {
+    const uiLayer = layersRef.current.ui;
+    if (!uiLayer || !ui.aoeConfig) return;
+
+    // Clear previous preview
+    if (aoeRef.current.previewGraphics) {
+      uiLayer.removeChild(aoeRef.current.previewGraphics);
+      aoeRef.current.previewGraphics = null;
+    }
+
+    // Create new preview
+    const graphics = createAoEGraphics(
+      ui.aoeConfig.shape,
+      ui.aoeConfig,
+      worldX,
+      worldY,
+      targetX,
+      targetY,
+      true // isPreview
+    );
+    
+    uiLayer.addChild(graphics);
+    aoeRef.current.previewGraphics = graphics;
+  }, [ui.aoeConfig]);
+
+  const clearAoEPreview = useCallback(() => {
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer && aoeRef.current.previewGraphics) {
+      uiLayer.removeChild(aoeRef.current.previewGraphics);
+      aoeRef.current.previewGraphics = null;
+    }
+  }, []);
+
+  const placeAoE = useCallback((worldX, worldY, targetX = null, targetY = null) => {
+    if (!ui.aoeConfig || !isDM) return;
+
+    const aoeData = {
+      id: `aoe_${Date.now()}`,
+      shape: ui.aoeConfig.shape,
+      x: worldX,
+      y: worldY,
+      targetX,
+      targetY,
+      config: { ...ui.aoeConfig },
+      timestamp: Date.now(),
+      playerName: player?.name || 'DM'
+    };
+
+    actions.addAoE(aoeData);
+    clearAoEPreview();
+  }, [ui.aoeConfig, isDM, actions, clearAoEPreview]);
+
+  const drawAoEEffects = useCallback(() => {
+    const uiLayer = layersRef.current.ui;
+    if (!uiLayer) return;
+
+    // Clear existing AoE graphics and their animations
+    aoeMapRef.current.forEach((graphics) => {
+      // Remove animation from ticker
+      const app = pixiRef.current;
+      if (app && graphics._pulseAnimate) {
+        app.ticker.remove(graphics._pulseAnimate);
+      }
+      uiLayer.removeChild(graphics);
+    });
+    aoeMapRef.current.clear();
+
+    // Draw all AoE effects
+    aoeEffects.forEach((aoe) => {
+      const graphics = createAoEGraphics(
+        aoe.shape,
+        aoe.config,
+        aoe.x,
+        aoe.y,
+        aoe.targetX,
+        aoe.targetY,
+        false // not preview
+      );
+
+      // Add pulsing animation
+      let pulseDirection = 1;
+      let currentAlpha = 0.3;
+      const pulseSpeed = 0.02;
+      const minAlpha = 0.2;
+      const maxAlpha = 0.5;
+
+      const animate = () => {
+        currentAlpha += pulseSpeed * pulseDirection;
+        
+        if (currentAlpha >= maxAlpha) {
+          pulseDirection = -1;
+          currentAlpha = maxAlpha;
+        } else if (currentAlpha <= minAlpha) {
+          pulseDirection = 1;
+          currentAlpha = minAlpha;
+        }
+
+        graphics.alpha = currentAlpha;
+      };
+
+      // Add to ticker for animation
+      const app = pixiRef.current;
+      if (app) {
+        app.ticker.add(animate);
+        graphics._pulseAnimate = animate; // Store reference for cleanup
+      }
+
+      uiLayer.addChild(graphics);
+      aoeMapRef.current.set(aoe.id, graphics);
+    });
+  }, [aoeEffects]);
+
+  // ── Wall Placement Functions ──
+  const startWallPlacement = useCallback((x, y) => {
+    wallPlacementRef.current.isPlacing = true;
+    wallPlacementRef.current.startPoint = { x, y };
+    
+    // Create temporary graphics for live preview
+    const uiLayer = layersRef.current.ui;
+    if (uiLayer) {
+      const graphics = new Graphics();
+      uiLayer.addChild(graphics);
+      wallPlacementRef.current.graphics = graphics;
+    }
+  }, []);
+
+  const updateWallPlacement = useCallback((x, y) => {
+    if (!wallPlacementRef.current.isPlacing || !wallPlacementRef.current.startPoint) return;
+    
+    if (wallPlacementRef.current.graphics) {
+      const graphics = wallPlacementRef.current.graphics;
+      graphics.clear();
+      
+      const start = wallPlacementRef.current.startPoint;
+      graphics
+        .setStrokeStyle({ width: 4, color: 0x8b5cf6, alpha: 0.8 })
+        .moveTo(start.x, start.y)
+        .lineTo(x, y)
+        .stroke();
+      
+      // Draw end points
+      graphics
+        .circle(start.x, start.y, 4)
+        .fill({ color: 0x8b5cf6, alpha: 0.8 })
+        .circle(x, y, 4)
+        .fill({ color: 0x8b5cf6, alpha: 0.8 });
+    }
+  }, []);
+
+  const finishWallPlacement = useCallback((x, y) => {
+    if (!wallPlacementRef.current.isPlacing || !wallPlacementRef.current.startPoint) return;
+    
+    const start = wallPlacementRef.current.startPoint;
+    const end = { x, y };
+    
+    // Calculate minimum distance to place wall
+    const distance = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+    if (distance > GRID_SIZE / 4) { // Only place if wall is longer than quarter grid size
+      actions.addWall(start.x, start.y, end.x, end.y);
+    }
+    
+    // Clean up
+    if (wallPlacementRef.current.graphics) {
+      const uiLayer = layersRef.current.ui;
+      if (uiLayer) {
+        uiLayer.removeChild(wallPlacementRef.current.graphics);
+      }
+      wallPlacementRef.current.graphics = null;
+    }
+    
+    wallPlacementRef.current.isPlacing = false;
+    wallPlacementRef.current.startPoint = null;
+  }, [actions]);
+
+  const drawWalls = useCallback(() => {
+    const wallLayer = layersRef.current.wall;
+    if (!wallLayer) return;
+
+    // Clear existing wall graphics
+    wallsMapRef.current.forEach((graphics) => {
+      wallLayer.removeChild(graphics);
+    });
+    wallsMapRef.current.clear();
+
+    // Draw all walls
+    walls.forEach((wall) => {
+      const graphics = new Graphics();
+      
+      graphics
+        .setStrokeStyle({ width: 6, color: 0x4a5568, alpha: 0.9 })
+        .moveTo(wall.x1, wall.y1)
+        .lineTo(wall.x2, wall.y2)
+        .stroke();
+      
+      // Add end caps
+      graphics
+        .circle(wall.x1, wall.y1, 3)
+        .fill({ color: 0x4a5568, alpha: 0.9 })
+        .circle(wall.x2, wall.y2, 3)
+        .fill({ color: 0x4a5568, alpha: 0.9 });
+      
+      wallLayer.addChild(graphics);
+      wallsMapRef.current.set(wall.id, graphics);
+    });
+  }, [walls]);
+
+  // ── Raycasting Algorithm for Dynamic Lighting ──
+  const lineIntersection = useCallback((x1, y1, x2, y2, x3, y3, x4, y4) => {
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 1e-10) return null; // Lines are parallel
+    
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+    
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+      return {
+        x: x1 + t * (x2 - x1),
+        y: y1 + t * (y2 - y1),
+        distance: Math.sqrt((x1 + t * (x2 - x1) - x1) ** 2 + (y1 + t * (y2 - y1) - y1) ** 2)
+      };
+    }
+    return null;
+  }, []);
+
+  const castRay = useCallback((startX, startY, angle, maxDistance) => {
+    const endX = startX + Math.cos(angle) * maxDistance;
+    const endY = startY + Math.sin(angle) * maxDistance;
+    
+    let nearestIntersection = null;
+    let minDistance = maxDistance;
+    
+    // Check intersection with all walls
+    for (const wall of walls) {
+      const intersection = lineIntersection(startX, startY, endX, endY, wall.x1, wall.y1, wall.x2, wall.y2);
+      if (intersection && intersection.distance < minDistance) {
+        nearestIntersection = intersection;
+        minDistance = intersection.distance;
+      }
+    }
+    
+    if (nearestIntersection) {
+      return { x: nearestIntersection.x, y: nearestIntersection.y };
+    }
+    return { x: endX, y: endY };
+  }, [walls, lineIntersection]);
+
+  const calculateVisibilityPolygon = useCallback((lightX, lightY, lightRadius) => {
+    const maxDistance = lightRadius * GRID_SIZE;
+    const rays = [];
+    
+    // Cast rays at regular intervals
+    const angleStep = Math.PI / 180; // 1 degree in radians
+    for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+      const endpoint = castRay(lightX, lightY, angle, maxDistance);
+      rays.push(endpoint);
+    }
+    
+    // Add extra rays toward wall endpoints for sharp shadows
+    for (const wall of walls) {
+      const wallPoints = [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 }
+      ];
+      
+      for (const point of wallPoints) {
+        const dx = point.x - lightX;
+        const dy = point.y - lightY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < maxDistance) {
+          // Cast rays slightly offset from the wall endpoint
+          const baseAngle = Math.atan2(dy, dx);
+          const offsets = [-0.01, 0.01]; // Small angle offsets in radians
+          
+          for (const offset of offsets) {
+            const angle = baseAngle + offset;
+            const endpoint = castRay(lightX, lightY, angle, maxDistance);
+            rays.push(endpoint);
+          }
+        }
+      }
+    }
+    
+    // Sort rays by angle for proper polygon creation
+    rays.sort((a, b) => {
+      const angleA = Math.atan2(a.y - lightY, a.x - lightX);
+      const angleB = Math.atan2(b.y - lightY, b.x - lightX);
+      return angleA - angleB;
+    });
+    
+    return rays;
+  }, [walls, castRay]);
+
+  const drawDynamicLighting = useCallback(() => {
+    const lightingLayer = layersRef.current.lighting;
+    if (!lightingLayer) return;
+
+    // Clear previous lighting
+    lightingLayer.removeChildren();
+
+    // Find tokens with light sources
+    const lightSources = tokens.filter(token => token.lightRadius && token.lightRadius > 0);
+
+    if (lightSources.length === 0) {
+      // No light sources - create full darkness overlay
+      const darkness = new Graphics();
+      darkness.rect(0, 0, 4000, 4000).fill({ color: 0x000000, alpha: 0.85 });
+      lightingLayer.addChild(darkness);
+      return;
+    }
+
+    // Create darkness overlay with holes for lit areas
+    const darkness = new Graphics();
+    darkness.rect(0, 0, 4000, 4000).fill({ color: 0x000000, alpha: 0.85 });
+
+    // Create visibility holes for each light source
+    for (const token of lightSources) {
+      try {
+        // Calculate token center position in world coordinates
+        const tokenWorldX = (token.x + 0.5) * GRID_SIZE;
+        const tokenWorldY = (token.y + 0.5) * GRID_SIZE;
+        
+        // Calculate visibility polygon
+        const visibilityPoints = calculateVisibilityPolygon(tokenWorldX, tokenWorldY, token.lightRadius);
+        
+        if (visibilityPoints.length > 3) { // Need at least 3 points for a polygon
+          // Create visibility polygon as a hole in darkness
+          const firstPoint = visibilityPoints[0];
+          darkness.moveTo(firstPoint.x, firstPoint.y);
+          
+          for (let i = 1; i < visibilityPoints.length; i++) {
+            darkness.lineTo(visibilityPoints[i].x, visibilityPoints[i].y);
+          }
+          
+          darkness.closePath().cut(); // Cut a hole in the darkness
+        }
+      } catch (error) {
+        console.warn('Error creating visibility polygon for token:', token.name, error);
+      }
+    }
+
+    lightingLayer.addChild(darkness);
+  }, [tokens, walls, calculateVisibilityPolygon]);
+
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
     const v = viewRef.current;
-    const { bg, grid, token, fog } = layersRef.current;
-    [bg, grid, token, fog].forEach(c => {
+    const { bg, grid, token, wall, lighting, fog } = layersRef.current;
+    [bg, grid, token, wall, lighting, fog].forEach(c => {
       if (!c) return;
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
@@ -472,6 +941,32 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         startDrawing(worldX, worldY);
+      } else if (e.button === 0 && activeToolRef.current === 'wall' && isDMRef.current) {
+        // Wall placement mode
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        startWallPlacement(worldX, worldY);
+      } else if (e.button === 0 && activeToolRef.current === 'aoe' && isDMRef.current) {
+        // AoE placement mode
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        // Snap to grid center for placement
+        const gridPos = pixelToGrid(worldX, worldY);
+        const snappedPos = gridCenterToPixel(gridPos.x, gridPos.y);
+        
+        placeAoE(snappedPos.x, snappedPos.y, worldX, worldY);
       }
     });
     canvas.addEventListener('pointermove', (e) => {
@@ -511,6 +1006,28 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         continueDrawing(worldX, worldY);
+      } else if (wallPlacementRef.current.isPlacing && activeToolRef.current === 'wall' && isDMRef.current) {
+        // Update wall placement preview while dragging
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        updateWallPlacement(worldX, worldY);
+      } else if (activeToolRef.current === 'aoe' && isDMRef.current && !v.isPanning) {
+        // Show AoE preview on hover
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        // Snap to grid center for preview
+        const gridPos = pixelToGrid(worldX, worldY);
+        const snappedPos = gridCenterToPixel(gridPos.x, gridPos.y);
+        
+        showAoEPreview(snappedPos.x, snappedPos.y, worldX, worldY);
       }
     });
     canvas.addEventListener('pointerup', (e) => {
@@ -537,6 +1054,18 @@ export default function MapCanvas({
       // Finish drawing
       if (drawingRef.current.isDrawing && activeToolRef.current === 'draw' && isDMRef.current) {
         finishDrawing();
+      }
+      
+      // Finish wall placement
+      if (wallPlacementRef.current.isPlacing && activeToolRef.current === 'wall' && isDMRef.current) {
+        const rect = canvas.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
+        const v = viewRef.current;
+        const worldX = (canvasX - v.panX) / v.zoom;
+        const worldY = (canvasY - v.panY) / v.zoom;
+        
+        finishWallPlacement(worldX, worldY);
       }
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -572,6 +1101,44 @@ export default function MapCanvas({
     }
   }, [ui.activeTool, finishDrawing]);
 
+  // ── Clear wall placement when tool changes ──
+  useEffect(() => {
+    if (ui.activeTool !== 'wall' && wallPlacementRef.current.isPlacing) {
+      // Clean up wall placement preview
+      if (wallPlacementRef.current.graphics) {
+        const uiLayer = layersRef.current.ui;
+        if (uiLayer) {
+          uiLayer.removeChild(wallPlacementRef.current.graphics);
+        }
+        wallPlacementRef.current.graphics = null;
+      }
+      wallPlacementRef.current.isPlacing = false;
+      wallPlacementRef.current.startPoint = null;
+    }
+  }, [ui.activeTool]);
+
+  // ── Sync walls ──
+  useEffect(() => {
+    drawWalls();
+  }, [walls, drawWalls]);
+
+  // ── Sync dynamic lighting ──
+  useEffect(() => {
+    drawDynamicLighting();
+  }, [tokens, walls, drawDynamicLighting]);
+
+  // ── Sync AoE effects ──
+  useEffect(() => {
+    drawAoEEffects();
+  }, [aoeEffects, drawAoEEffects]);
+
+  // ── Clear AoE preview when tool changes ──
+  useEffect(() => {
+    if (ui.activeTool !== 'aoe') {
+      clearAoEPreview();
+    }
+  }, [ui.activeTool, clearAoEPreview]);
+
   // ── Sync tokens to Pixi ──
   useEffect(() => {
     const layer = layersRef.current.token;
@@ -583,6 +1150,8 @@ export default function MapCanvas({
     // Remove old
     existing.forEach((sprite, id) => {
       if (!currentIds.has(id)) {
+        // Cleanup animations before removing
+        if (sprite._vttCleanup) sprite._vttCleanup();
         layer.removeChild(sprite);
         existing.delete(id);
       }
@@ -591,28 +1160,100 @@ export default function MapCanvas({
     // Add / update
     tokens.forEach((token) => {
       let sprite = existing.get(token.id);
-      if (!sprite) {
+      const needsRecreate = sprite && (
+        // Check if conditions or HP changed (requires visual update)
+        JSON.stringify(sprite._lastConditions) !== JSON.stringify(token.conditions) ||
+        JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp)
+      );
+      
+      if (!sprite || needsRecreate) {
+        if (sprite) {
+          // Cleanup old sprite animations
+          if (sprite._vttCleanup) sprite._vttCleanup();
+          layer.removeChild(sprite);
+        }
+        
+        // Create new sprite with current token data
         sprite = createTokenSprite(token);
+        // Cache token data for comparison
+        sprite._lastConditions = JSON.parse(JSON.stringify(token.conditions || []));
+        sprite._lastHP = JSON.parse(JSON.stringify(token.hp || null));
+        
         layer.addChild(sprite);
         existing.set(token.id, sprite);
       }
+      
       // Update position
       const pos = gridCenterToPixel(token.x || 0, token.y || 0);
       sprite.position.set(pos.x, pos.y);
     });
-  }, [tokens]);
+  }, [tokens, createTokenSprite]);
 
-  // ── Create a simple token sprite (Pixi v8) ──
+  // ── Create a token sprite with visual effects (Pixi v8) ──
   const createTokenSprite = useCallback((token) => {
     const c = new Container();
     const sizeMultiplier = token.size === 'small' ? 0.7 : token.size === 'large' ? 1.5 : 1;
     const baseRadius = 18 * sizeMultiplier;
+    const conditions = token.conditions || [];
+    const hp = token.hp || null;
+
+    // Store references for animations and cleanup
+    const tokenRefs = { 
+      animations: [],
+      baseElement: null,
+      effectsContainer: new Container()
+    };
+
+    // Create effects container (for animations and overlays)
+    c.addChild(tokenRefs.effectsContainer);
+
+    // Apply condition-based visual effects BEFORE creating the main sprite
+    const isInvisible = conditions.some(c => c.name === 'Invisível');
+    const isPoisoned = conditions.some(c => c.name === 'Envenenado');
+    const isProne = conditions.some(c => c.name === 'Prone');
+    const isConcentrating = conditions.some(c => c.name === 'Concentrating');
+
+    // Draw light radius indicator if token has light (DM only)
+    if (token.lightRadius && token.lightRadius > 0 && isDM) {
+      const lightCircle = new Graphics();
+      lightCircle.circle(0, 0, token.lightRadius * GRID_SIZE)
+        .stroke({ width: 2, color: 0xffd700, alpha: 0.3 });
+      tokenRefs.effectsContainer.addChild(lightCircle);
+    }
+
+    // Create main token container
+    const tokenContainer = new Container();
+    
+    // Apply prone effect (flatten token)
+    if (isProne) {
+      tokenContainer.scale.y = 0.6; // Visually "flattened"
+    }
+
+    // Apply invisible effect (semi-transparent for DM, hidden for players)
+    if (isInvisible) {
+      tokenContainer.alpha = isDM ? 0.3 : (state.player.isDM ? 0.3 : 0.1);
+    }
 
     // Create fallback colored circle first
     const circle = new Graphics();
     const color = token.color || 0x3b82f6;
-    circle.circle(0, 0, baseRadius).fill({ color, alpha: 0.85 }).stroke({ width: 2, color: 0xffffff });
-    c.addChild(circle);
+    
+    // Apply poison tint
+    let fillColor = color;
+    let fillAlpha = 0.85;
+    if (isPoisoned) {
+      fillColor = 0x44cc44; // Green tint
+      fillAlpha = 0.9;
+      
+      // Add green glow effect
+      const glowCircle = new Graphics();
+      glowCircle.circle(0, 0, baseRadius + 4).fill({ color: 0x44cc44, alpha: 0.3 });
+      tokenRefs.effectsContainer.addChild(glowCircle);
+    }
+
+    circle.circle(0, 0, baseRadius).fill({ color: fillColor, alpha: fillAlpha }).stroke({ width: 2, color: 0xffffff });
+    tokenContainer.addChild(circle);
+    tokenRefs.baseElement = circle;
 
     const label = new Text({
       text: token.name?.[0]?.toUpperCase() || '?',
@@ -624,7 +1265,10 @@ export default function MapCanvas({
       }),
     });
     label.anchor.set(0.5);
-    c.addChild(label);
+    tokenContainer.addChild(label);
+
+    // Add token container to main container
+    c.addChild(tokenContainer);
 
     // If token has an image, load it asynchronously
     if (token.imageUrl) {
@@ -650,18 +1294,194 @@ export default function MapCanvas({
           const mask = new GraphicsMask();
           mask.circle(0, 0, baseRadius).fill({ color: 0xffffff });
           sprite.mask = mask;
-          c.addChild(mask); // Add mask to container
+          tokenContainer.addChild(mask); // Add mask to container
           
           // Replace circle and label with image
-          c.removeChild(circle);
-          c.removeChild(label);
-          c.addChildAt(sprite, 0); // Add image at bottom layer
+          tokenContainer.removeChild(circle);
+          tokenContainer.removeChild(label);
+          tokenContainer.addChildAt(sprite, 0); // Add image at bottom layer
+          tokenRefs.baseElement = sprite;
           
         } catch (err) {
           console.warn('Failed to load token image, using fallback:', err);
           // Keep the colored circle as fallback
         }
       })();
+    }
+
+    // ── Condition Visual Effects ──
+    
+    // Concentrating: Blue ring around token
+    if (isConcentrating) {
+      const concentrationRing = new Graphics();
+      concentrationRing.circle(0, 0, baseRadius + 6).stroke({ width: 3, color: 0x3b82f6, alpha: 0.8 });
+      tokenRefs.effectsContainer.addChild(concentrationRing);
+    }
+
+    // Stunned: Spinning yellow stars
+    const isStunned = conditions.some(c => c.name === 'Atordoado');
+    if (isStunned) {
+      const starsContainer = new Container();
+      
+      // Create multiple star shapes around the token
+      for (let i = 0; i < 3; i++) {
+        const star = new Graphics();
+        const angle = (i * Math.PI * 2) / 3;
+        const radius = baseRadius + 15;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        
+        // Simple star shape (could be improved)
+        star.star(0, 0, 4, 8, 0, 0).fill({ color: 0xffdd44, alpha: 0.8 });
+        star.position.set(x, y);
+        starsContainer.addChild(star);
+      }
+      
+      tokenRefs.effectsContainer.addChild(starsContainer);
+      
+      // Animation: rotate stars around token
+      if (pixiRef.current) {
+        const animateSpin = (delta) => {
+          starsContainer.rotation += 0.05 * delta;
+        };
+        pixiRef.current.ticker.add(animateSpin);
+        tokenRefs.animations.push(() => pixiRef.current?.ticker.remove(animateSpin));
+      }
+    }
+
+    // On fire/burning: Orange particle effect
+    const isBurning = conditions.some(c => c.name && (
+      c.name.toLowerCase().includes('queimando') || 
+      c.name.toLowerCase().includes('chamas') || 
+      c.name.toLowerCase().includes('fogo') || 
+      c.name.toLowerCase().includes('burning') ||
+      c.name === 'Em Chamas' ||
+      c.name === 'Queimando'
+    ));
+    if (isBurning) {
+      const fireContainer = new Container();
+      
+      // Create simple fire particles
+      for (let i = 0; i < 6; i++) {
+        const particle = new Graphics();
+        const size = 2 + Math.random() * 3;
+        particle.circle(0, 0, size).fill({ color: 0xff6600, alpha: 0.7 });
+        
+        // Random position around token
+        const angle = Math.random() * Math.PI * 2;
+        const radius = baseRadius + Math.random() * 10;
+        particle.position.set(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius - 5
+        );
+        
+        fireContainer.addChild(particle);
+      }
+      
+      tokenRefs.effectsContainer.addChild(fireContainer);
+      
+      // Animation: flicker particles
+      if (pixiRef.current) {
+        let time = 0;
+        const animateFirey = (delta) => {
+          time += 0.1 * delta;
+          fireContainer.children.forEach((particle, i) => {
+            particle.alpha = 0.5 + 0.3 * Math.sin(time + i * 0.5);
+            particle.y += Math.sin(time + i) * 0.5;
+          });
+        };
+        pixiRef.current.ticker.add(animateFirey);
+        tokenRefs.animations.push(() => pixiRef.current?.ticker.remove(animateFirey));
+      }
+    }
+
+    // Default condition indicators: small colored dots for other conditions
+    const specialConditions = ['Invisível', 'Envenenado', 'Prone', 'Atordoado', 'Concentrating'];
+    const otherConditions = conditions.filter(c => !specialConditions.includes(c.name));
+    
+    if (otherConditions.length > 0) {
+      const indicatorsContainer = new Container();
+      
+      otherConditions.forEach((condition, index) => {
+        const indicator = new Graphics();
+        const dotSize = 3;
+        const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
+        const color = colors[index % colors.length];
+        
+        indicator.circle(0, 0, dotSize).fill({ color, alpha: 0.9 });
+        
+        // Position dots in a row below the token
+        const spacing = 8;
+        const totalWidth = (otherConditions.length - 1) * spacing;
+        const startX = -totalWidth / 2;
+        
+        indicator.position.set(startX + index * spacing, baseRadius + 20);
+        indicatorsContainer.addChild(indicator);
+        
+        // Add tooltip-like text on hover (simple implementation)
+        indicator.eventMode = 'static';
+        const tooltipText = new Text({
+          text: `${condition.icon || '⚡'} ${condition.name}`,
+          style: new TextStyle({
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 8,
+            fill: 0xffffff,
+            stroke: { color: 0x000000, width: 1 },
+          }),
+        });
+        tooltipText.anchor.set(0.5, 1);
+        tooltipText.position.set(0, -5);
+        tooltipText.visible = false;
+        indicator.addChild(tooltipText);
+        
+        indicator.on('pointerover', () => { tooltipText.visible = true; });
+        indicator.on('pointerout', () => { tooltipText.visible = false; });
+      });
+      
+      tokenRefs.effectsContainer.addChild(indicatorsContainer);
+    }
+
+    // ── HP Bar ──
+    if (hp && hp.max > 0) {
+      const hpBarContainer = new Container();
+      
+      const barWidth = baseRadius * 2;
+      const barHeight = 4;
+      const currentHP = Math.max(0, hp.current || 0);
+      const maxHP = hp.max;
+      const tempHP = hp.temp || 0;
+      const percentage = currentHP / maxHP;
+      
+      // Background bar
+      const bgBar = new Graphics();
+      bgBar.rect(-barWidth / 2, 0, barWidth, barHeight).fill({ color: 0x333333, alpha: 0.8 });
+      hpBarContainer.addChild(bgBar);
+      
+      // HP fill with color gradient
+      if (currentHP > 0) {
+        const hpBar = new Graphics();
+        let hpColor;
+        if (percentage > 0.75) hpColor = 0x44cc44; // Green
+        else if (percentage > 0.5) hpColor = 0xcccc44; // Yellow
+        else if (percentage > 0.25) hpColor = 0xcc8844; // Orange
+        else hpColor = 0xcc4444; // Red
+        
+        const fillWidth = (currentHP / maxHP) * barWidth;
+        hpBar.rect(-barWidth / 2, 0, fillWidth, barHeight).fill({ color: hpColor, alpha: 0.9 });
+        hpBarContainer.addChild(hpBar);
+      }
+      
+      // Temp HP (additional blue bar)
+      if (tempHP > 0) {
+        const tempBar = new Graphics();
+        const tempWidth = Math.min((tempHP / maxHP) * barWidth, barWidth * 0.3); // Cap temp HP visual
+        tempBar.rect(barWidth / 2 - tempWidth, 0, tempWidth, barHeight).fill({ color: 0x4488cc, alpha: 0.7 });
+        hpBarContainer.addChild(tempBar);
+      }
+      
+      // Position HP bar below name tag
+      hpBarContainer.position.set(0, baseRadius + 18);
+      c.addChild(hpBarContainer);
     }
 
     const nameTag = new Text({
@@ -679,6 +1499,12 @@ export default function MapCanvas({
 
     c.eventMode = 'static';
     c.cursor = 'pointer';
+
+    // Store cleanup function for animations
+    c._vttCleanup = () => {
+      tokenRefs.animations.forEach(cleanup => cleanup());
+      tokenRefs.animations = [];
+    };
 
     // Drag
     let dragging = false;
@@ -712,7 +1538,7 @@ export default function MapCanvas({
     });
 
     return c;
-  }, [actions]);
+  }, [actions, isDM, state.player.isDM]);
 
   return (
     <div

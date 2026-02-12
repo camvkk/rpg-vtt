@@ -22,7 +22,14 @@ const CONDITIONS = [
   { name: 'Petrificado', icon: '🗿' },
   { name: 'Prone', icon: '🔽' },
   { name: 'Restringido', icon: '🔗' },
-  { name: 'Surdo', icon: '🙉' }
+  { name: 'Surdo', icon: '🙉' },
+  { name: 'Concentrating', icon: '🧘' },
+  { name: 'Em Chamas', icon: '🔥' },
+  { name: 'Queimando', icon: '🔥' },
+  { name: 'Sangrando', icon: '🩸' },
+  { name: 'Marcado', icon: '🎯' },
+  { name: 'Abençoado', icon: '✨' },
+  { name: 'Amaldiçoado', icon: '💀' }
 ];
 
 // Available skills for dice requests
@@ -123,13 +130,28 @@ export default function DMDashboard({ isOpen, onClose }) {
       (character.hp.max || 1) + (character.hp.temp || 0)
     ));
     
+    const updatedHP = { ...character.hp, current: newHP };
     const updatedCharacter = {
       ...character,
-      hp: { ...character.hp, current: newHP }
+      hp: updatedHP
     };
     
     try {
       await actions.dmUpdateCharacter(campaign.id, playerName, updatedCharacter);
+      
+      // Also update the corresponding token on the map if it exists
+      const correspondingToken = state.tokens.find(token => 
+        token.name === character.name || 
+        token.characterName === playerName ||
+        token.playerId === playerName
+      );
+      
+      if (correspondingToken) {
+        await actions.updateToken(correspondingToken.id, {
+          hp: updatedHP,
+          conditions: character.conditions // Also sync conditions
+        });
+      }
     } catch (error) {
       console.error('Error updating HP:', error);
     }
@@ -157,6 +179,20 @@ export default function DMDashboard({ isOpen, onClose }) {
     
     try {
       await actions.dmUpdateCharacter(campaign.id, playerName, updatedCharacter);
+      
+      // Also update the corresponding token on the map if it exists
+      const correspondingToken = state.tokens.find(token => 
+        token.name === character.name || 
+        token.characterName === playerName ||
+        token.playerId === playerName
+      );
+      
+      if (correspondingToken) {
+        await actions.updateToken(correspondingToken.id, {
+          conditions: newConditions,
+          hp: character.hp // Also sync HP data
+        });
+      }
     } catch (error) {
       console.error('Error updating condition:', error);
     }
@@ -177,6 +213,28 @@ export default function DMDashboard({ isOpen, onClose }) {
       setSelectedCharacter(updatedCharacter);
     } catch (error) {
       console.error('Error updating character:', error);
+    }
+  };
+
+  // Create token from character (for testing and quick token creation)
+  const handleCreateTokenFromCharacter = async (playerName, character) => {
+    try {
+      const tokenData = {
+        name: character.name || playerName,
+        characterName: playerName,
+        playerId: playerName,
+        x: 5, // Place at grid 5,5 by default
+        y: 5,
+        conditions: character.conditions || [],
+        hp: character.hp || null,
+        color: 0x3b82f6, // Default blue
+        size: 'medium'
+      };
+      
+      await actions.addToken(tokenData);
+      console.log(`Token created for ${character.name || playerName}`);
+    } catch (error) {
+      console.error('Error creating token:', error);
     }
   };
 
@@ -279,6 +337,7 @@ export default function DMDashboard({ isOpen, onClose }) {
                     onHPChange={(delta) => handleHPChange(playerName, character, delta)}
                     onConditionToggle={(condition) => handleConditionToggle(playerName, character, condition)}
                     onRequestTest={(type, name) => handleRequestTest(playerName, character, type, name)}
+                    onCreateToken={() => handleCreateTokenFromCharacter(playerName, character)}
                     onViewDetails={() => {
                       setSelectedCharacter(character);
                       setSelectedPlayerName(playerName);
@@ -342,6 +401,7 @@ function CharacterCard({
   onHPChange,
   onConditionToggle,
   onRequestTest,
+  onCreateToken,
   onViewDetails,
   getHPPercentage,
   getHPColor,
@@ -402,6 +462,7 @@ function CharacterCard({
               onHPChange={onHPChange}
               onConditionToggle={onConditionToggle}
               onRequestTest={onRequestTest}
+              onCreateToken={onCreateToken}
               onViewDetails={onViewDetails}
               compact={true}
             />
@@ -487,6 +548,7 @@ function CharacterCard({
           onHPChange={onHPChange}
           onConditionToggle={onConditionToggle}
           onRequestTest={onRequestTest}
+          onCreateToken={onCreateToken}
           onViewDetails={onViewDetails}
         />
       </div>
@@ -495,7 +557,7 @@ function CharacterCard({
 }
 
 // Quick Actions Component
-function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest, onViewDetails, compact = false }) {
+function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest, onCreateToken, onViewDetails, compact = false }) {
   const [showHPInput, setShowHPInput] = useState(false);
   const [hpInput, setHpInput] = useState('');
   const [showConditionsMenu, setShowConditionsMenu] = useState(false);
@@ -522,6 +584,9 @@ function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest,
         </button>
         <button className="action-btn" onClick={() => setShowTestsMenu(!showTestsMenu)} title="Pedir Teste">
           🎲
+        </button>
+        <button className="action-btn" onClick={onCreateToken} title="Criar Token no Mapa">
+          🎭
         </button>
         <button className="action-btn" onClick={onViewDetails} title="Ver Ficha">
           👁️
@@ -604,6 +669,14 @@ function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest,
         title="Pedir Teste"
       >
         🎲 Teste
+      </button>
+
+      <button
+        className="action-btn token-btn"
+        onClick={onCreateToken}
+        title="Criar Token no Mapa"
+      >
+        🎭 Token
       </button>
 
       <button

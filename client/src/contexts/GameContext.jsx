@@ -30,6 +30,9 @@ const initialState = {
   // Drawings on the map
   drawings: [],
 
+  // Walls for dynamic lighting
+  walls: [],
+
   // Initiative
   initiative: { active: false, currentTurn: 0, players: [] },
 
@@ -39,12 +42,24 @@ const initialState = {
   // Ambiance
   ambiance: { trackUrl: null, isPlaying: false },
 
+  // AoE Effects
+  aoeEffects: [],
+
   // UI
   ui: {
     activeTool: 'select',
     selectedTokenId: null,
     leftPanel: true,
     rightPanel: true,
+    aoeConfig: {
+      shape: 'circle',
+      radius: 20,
+      length: 30,
+      width: 5,
+      angle: 60,
+      color: 'damage',
+      spellName: ''
+    }
   },
 
   // Loading / error
@@ -74,6 +89,8 @@ function gameReducer(state, action) {
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
         drawings: gs?.drawings || [],
+        walls: gs?.walls || [],
+        aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
         loading: false,
@@ -99,6 +116,8 @@ function gameReducer(state, action) {
         tokens: gs?.tokens || [],
         fogAreas: gs?.fog || [],
         drawings: gs?.drawings || [],
+        walls: gs?.walls || [],
+        aoeEffects: gs?.aoeEffects || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
         chat: chatHistory || [],
@@ -114,6 +133,8 @@ function gameReducer(state, action) {
         players: d.players || state.players,
         tokens: d.gameState?.tokens || state.tokens,
         fogAreas: d.gameState?.fog || state.fogAreas,
+        walls: d.gameState?.walls || state.walls,
+        aoeEffects: d.gameState?.aoeEffects || state.aoeEffects,
         map: { ...state.map, url: d.gameState?.map || state.map.url },
       };
     }
@@ -195,6 +216,26 @@ function gameReducer(state, action) {
     case 'DRAW_CLEAR':
       return { ...state, drawings: [] };
 
+    // Walls
+    case 'WALL_ADD':
+      return { ...state, walls: [...state.walls, action.payload] };
+
+    case 'WALL_REMOVE':
+      return { ...state, walls: state.walls.filter(w => w.id !== action.payload.wallId) };
+
+    case 'WALL_CLEAR':
+      return { ...state, walls: [] };
+
+    // AoE Effects
+    case 'AOE_ADD':
+      return { ...state, aoeEffects: [...state.aoeEffects, action.payload] };
+
+    case 'AOE_REMOVE':
+      return { ...state, aoeEffects: state.aoeEffects.filter(aoe => aoe.id !== action.payload.aoeId) };
+
+    case 'AOE_CLEAR':
+      return { ...state, aoeEffects: [] };
+
     // Chat
     case 'CHAT_MESSAGE':
       return { ...state, chat: [...state.chat, action.payload] };
@@ -222,6 +263,9 @@ function gameReducer(state, action) {
 
     case 'TOGGLE_RIGHT_PANEL':
       return { ...state, ui: { ...state.ui, rightPanel: !state.ui.rightPanel } };
+
+    case 'SET_AOE_CONFIG':
+      return { ...state, ui: { ...state.ui, aoeConfig: { ...state.ui.aoeConfig, ...action.payload } } };
 
     default:
       return state;
@@ -405,6 +449,16 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     // Drawings
     socket.on('draw:add', (data) => dispatch({ type: 'DRAW_ADD', payload: data }));
     socket.on('draw:clear', () => dispatch({ type: 'DRAW_CLEAR' }));
+
+    // Walls
+    socket.on('wall:add', (data) => dispatch({ type: 'WALL_ADD', payload: data }));
+    socket.on('wall:remove', (data) => dispatch({ type: 'WALL_REMOVE', payload: data }));
+    socket.on('wall:clear', () => dispatch({ type: 'WALL_CLEAR' }));
+
+    // AoE Effects
+    socket.on('aoe:add', (data) => dispatch({ type: 'AOE_ADD', payload: data }));
+    socket.on('aoe:remove', (data) => dispatch({ type: 'AOE_REMOVE', payload: data }));
+    socket.on('aoe:clear', () => dispatch({ type: 'AOE_CLEAR' }));
 
     // Campaign events
     socket.on('campaign:docs-updated', (data) => dispatch({ type: 'CAMPAIGN_DOCS_UPDATED', payload: data }));
@@ -643,11 +697,22 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     addDraw: (type, points, color, strokeWidth) => emit('draw:add', { type, points, color, strokeWidth }),
     clearDrawings: () => emit('draw:clear', {}),
 
+    // Walls
+    addWall: (x1, y1, x2, y2) => emit('wall:add', { x1, y1, x2, y2 }),
+    removeWall: (wallId) => emit('wall:remove', { wallId }),
+    clearWalls: () => emit('wall:clear', {}),
+
+    // AoE Effects
+    addAoE: (aoeData) => emit('aoe:add', aoeData),
+    removeAoE: (aoeId) => emit('aoe:remove', { aoeId }),
+    clearAoE: () => emit('aoe:clear', {}),
+
     // UI (local only)
     setActiveTool: (tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }),
     selectToken: (id) => dispatch({ type: 'SELECT_TOKEN', payload: id }),
     toggleLeftPanel: () => dispatch({ type: 'TOGGLE_LEFT_PANEL' }),
     toggleRightPanel: () => dispatch({ type: 'TOGGLE_RIGHT_PANEL' }),
+    setAoEConfig: (config) => dispatch({ type: 'SET_AOE_CONFIG', payload: config }),
     clearError: () => dispatch({ type: 'SET_ERROR', payload: null }),
   };
 

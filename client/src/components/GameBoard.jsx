@@ -25,7 +25,7 @@ class CanvasErrorBoundary extends Component {
 
 export default function GameBoard({ onLeaveRoom }) {
   const { state, actions } = useGame();
-  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData } = state;
+  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects } = state;
   const isDM = player.isDM;
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
@@ -44,7 +44,11 @@ export default function GameBoard({ onLeaveRoom }) {
       switch (e.key.toLowerCase()) {
         case 's': actions.setActiveTool('select'); e.preventDefault(); break;
         case 'f': if (isDM) { actions.setActiveTool('fog'); e.preventDefault(); } break;
+        case 'w': if (isDM) { actions.setActiveTool('wall'); e.preventDefault(); } break;
         case 't': if (isDM) { actions.setActiveTool('add-token'); e.preventDefault(); } break;
+        case 'a': if (isDM) { actions.setActiveTool('aoe'); e.preventDefault(); } break;
+        case 'm': if (isDM) { actions.setActiveTool('measure'); e.preventDefault(); } break;
+        case 'd': if (isDM) { actions.setActiveTool('draw'); e.preventDefault(); } break;
         case 'escape': actions.setActiveTool('select'); e.preventDefault(); break;
       }
     };
@@ -111,6 +115,28 @@ export default function GameBoard({ onLeaveRoom }) {
     setShowCharacterWizard(false);
   }, [actions]);
 
+  // ── Spell detection handler ──
+  const handleSpellDetected = useCallback((spell) => {
+    if (!isDM) return; // Only DMs can place AoE
+    
+    // Auto-configure AoE tool with spell parameters
+    actions.setAoEConfig({
+      shape: spell.shape,
+      radius: spell.radius || 20,
+      length: spell.length || 30,
+      width: spell.width || 5,
+      angle: spell.angle || 60,
+      color: spell.color || 'damage',
+      spellName: spell.name
+    });
+    
+    // Switch to AoE tool
+    actions.setActiveTool('aoe');
+    
+    // Show notification
+    console.log(`🎯 Magia detectada: ${spell.name} - ${spell.description}`);
+  }, [isDM, actions]);
+
   if (!connected) {
     return (
       <div className="gb-loading">
@@ -136,6 +162,10 @@ export default function GameBoard({ onLeaveRoom }) {
           {isDM && (
             <>
               <ToolButton id="fog" icon="🌫️" label="Névoa" active={ui.activeTool} onClick={actions.setActiveTool} />
+              <ToolButton id="measure" icon="📏" label="Medir" active={ui.activeTool} onClick={actions.setActiveTool} />
+              <ToolButton id="draw" icon="✏️" label="Desenhar" active={ui.activeTool} onClick={actions.setActiveTool} />
+              <ToolButton id="aoe" icon="💥" label="AoE" active={ui.activeTool} onClick={actions.setActiveTool} />
+              <ToolButton id="wall" icon="🧱" label="Paredes" active={ui.activeTool} onClick={actions.setActiveTool} />
               <button 
                 className={`btn ${tokenAwaitingPlacement ? 'btn-primary' : 'btn-ghost'} gb-toolbar-btn`}
                 onClick={() => setShowTokenCreator(true)}
@@ -217,13 +247,22 @@ export default function GameBoard({ onLeaveRoom }) {
             🧙 Criar Personagem
           </button>
           {isDM && (
-            <button 
-              className="btn btn-ghost gb-toolbar-btn" 
-              onClick={actions.clearFog}
-              title="Limpar Névoa"
-            >
-              🌫️ Limpar
-            </button>
+            <>
+              <button 
+                className="btn btn-ghost gb-toolbar-btn" 
+                onClick={actions.clearFog}
+                title="Limpar Névoa"
+              >
+                🌫️ Limpar
+              </button>
+              <button 
+                className="btn btn-ghost gb-toolbar-btn" 
+                onClick={actions.clearWalls}
+                title="Limpar Paredes"
+              >
+                🧱 Limpar
+              </button>
+            </>
           )}
           <button className="btn btn-ghost gb-toolbar-btn" onClick={actions.toggleLeftPanel}>
             {ui.leftPanel ? '◄' : '►'}
@@ -233,6 +272,15 @@ export default function GameBoard({ onLeaveRoom }) {
           </button>
         </div>
       </div>
+
+      {/* ── AoE Configuration Panel (only shown when AoE tool is active) ── */}
+      {ui.activeTool === 'aoe' && isDM && (
+        <AoEConfigPanel 
+          config={ui.aoeConfig} 
+          onConfigChange={actions.setAoEConfig}
+          onClearAoE={actions.clearAoE}
+        />
+      )}
 
       {/* ── Main layout ── */}
       <div className="gb-content">
@@ -331,6 +379,7 @@ export default function GameBoard({ onLeaveRoom }) {
               onSendMessage={handleChatSend}
               currentUser={{ name: player.name, id: player.id }}
               isConnected={connected}
+              onSpellDetected={handleSpellDetected}
             />
             <DiceRoller onRoll={handleDiceRoll} />
           </div>
@@ -464,6 +513,7 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
   const [tokenSize, setTokenSize] = useState('medium');
   const [tokenImage, setTokenImage] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
+  const [lightRadius, setLightRadius] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -530,6 +580,7 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
       name: tokenName.trim(),
       color: tokenColor,
       size: tokenSize,
+      lightRadius: lightRadius,
       x: 0, // Will be set when placed
       y: 0,
       ...(imageUrl && { imageUrl }) // Include imageUrl if we have one
@@ -714,6 +765,42 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
           </div>
         )}
 
+        {/* Light Radius */}
+        <div>
+          <label className="form-label">Raio de Luz (quadrados do mapa)</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="1"
+              value={lightRadius}
+              onChange={(e) => setLightRadius(parseInt(e.target.value))}
+              style={{ flex: 1 }}
+            />
+            <span style={{
+              minWidth: '60px',
+              textAlign: 'center',
+              padding: 'var(--spacing-xs)',
+              background: 'var(--bg-surface-light)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.9rem',
+              fontWeight: 'bold'
+            }}>
+              {lightRadius === 0 ? 'Nenhuma' : `${lightRadius} ${lightRadius === 1 ? 'quadrado' : 'quadrados'}`}
+            </span>
+          </div>
+          {lightRadius > 0 && (
+            <div style={{
+              marginTop: 'var(--spacing-xs)',
+              fontSize: '0.8rem',
+              color: 'var(--color-text-dim)'
+            }}>
+              💡 Este token iluminará {lightRadius} quadrado{lightRadius !== 1 ? 's' : ''} ao redor
+            </div>
+          )}
+        </div>
+
         {/* Create Button */}
         <button
           className="btn btn-primary"
@@ -756,13 +843,38 @@ function MapUploadModal({ onUpload, onUrlSet, onClose }) {
     }
   };
 
+  const builtInMaps = [
+    {
+      id: 'tavern',
+      name: 'Taverna do Anão',
+      filename: 'builtin-tavern.jpg',
+      description: 'Interior de taverna com mesas e lareira'
+    },
+    {
+      id: 'dungeon',
+      name: 'Cripta Antiga',
+      filename: 'builtin-dungeon.jpg',
+      description: 'Complexo de masmorras subterrâneas'
+    },
+    {
+      id: 'forest',
+      name: 'Clareira Gelada',
+      filename: 'builtin-forest.jpg',
+      description: 'Clareira na floresta com portal mágico'
+    }
+  ];
+
+  const handleBuiltInMapSelect = (map) => {
+    onUrlSet(`/public/maps/${map.filename}`);
+  };
+
   return (
     <div style={{
       background: 'var(--bg-surface)',
       border: '1px solid var(--color-border)',
       borderRadius: 'var(--radius-lg)',
       padding: 'var(--spacing-lg)',
-      maxWidth: '400px',
+      maxWidth: '500px',
       width: '100%'
     }}>
       <div style={{
@@ -771,7 +883,7 @@ function MapUploadModal({ onUpload, onUrlSet, onClose }) {
         justifyContent: 'space-between',
         marginBottom: 'var(--spacing-lg)'
       }}>
-        <h3 className="heading-sm" style={{ margin: 0 }}>🗺️ Upload de Mapa</h3>
+        <h3 className="heading-sm" style={{ margin: 0 }}>🗺️ Mapas</h3>
         <button
           onClick={onClose}
           style={{
@@ -786,7 +898,125 @@ function MapUploadModal({ onUpload, onUrlSet, onClose }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        {/* Built-in Maps Section */}
+        <div>
+          <label className="form-label" style={{ marginBottom: 'var(--spacing-sm)' }}>📚 Mapas Inclusos</label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 'var(--spacing-sm)',
+            marginBottom: 'var(--spacing-md)'
+          }}>
+            {builtInMaps.map((map) => (
+              <button
+                key={map.id}
+                className="btn btn-ghost"
+                onClick={() => handleBuiltInMapSelect(map)}
+                style={{
+                  padding: 'var(--spacing-sm)',
+                  height: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 'var(--spacing-xs)',
+                  background: 'var(--bg-surface-dark)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'all 0.2s ease',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.borderColor = 'var(--color-primary)';
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.borderColor = 'var(--color-border)';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              >
+                {/* Map thumbnail */}
+                <div style={{
+                  width: '100%',
+                  height: '80px',
+                  borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--color-border)',
+                  position: 'relative'
+                }}>
+                  <img
+                    src={`/public/maps/${map.filename}`}
+                    alt={map.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      objectPosition: 'center'
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'none',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'var(--bg-surface)',
+                    color: 'var(--color-text-dim)',
+                    fontSize: '1.5rem'
+                  }}>
+                    🗺️
+                  </div>
+                </div>
+                
+                {/* Map info */}
+                <div style={{
+                  textAlign: 'center',
+                  width: '100%'
+                }}>
+                  <div style={{
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    color: 'var(--color-text)',
+                    marginBottom: '2px'
+                  }}>
+                    {map.name}
+                  </div>
+                  <div style={{
+                    fontSize: '0.7rem',
+                    color: 'var(--color-text-dim)',
+                    lineHeight: '1.2'
+                  }}>
+                    {map.description}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--spacing-sm)',
+          color: 'var(--color-text-dim)',
+          fontSize: '0.85rem'
+        }}>
+          <hr style={{ flex: 1, border: '1px solid var(--color-border)' }} />
+          <span>ou envie seu próprio</span>
+          <hr style={{ flex: 1, border: '1px solid var(--color-border)' }} />
+        </div>
+
         {/* File Upload */}
         <div>
           <label className="form-label">Upload de Arquivo</label>
@@ -976,5 +1206,139 @@ function ToolButton({ id, icon, label, active, onClick }) {
     >
       {icon} {label}
     </button>
+  );
+}
+
+// ── AoE Configuration Panel ──
+function AoEConfigPanel({ config, onConfigChange, onClearAoE }) {
+  const shapeOptions = [
+    { value: 'circle', label: '⭕ Círculo', fields: ['radius'] },
+    { value: 'cone', label: '📐 Cone', fields: ['length', 'angle'] },
+    { value: 'line', label: '➖ Linha', fields: ['length', 'width'] },
+    { value: 'square', label: '⬜ Quadrado', fields: ['length'] }
+  ];
+
+  const colorOptions = [
+    { value: 'damage', label: '🔥 Dano', color: '#ff6b35' },
+    { value: 'healing', label: '💙 Cura', color: '#3b82f6' },
+    { value: 'buff', label: '🌟 Buff', color: '#10b981' },
+    { value: 'debuff', label: '💜 Debuff', color: '#8b5cf6' },
+    { value: 'utility', label: '⚡ Utilidade', color: '#f59e0b' }
+  ];
+
+  const currentShape = shapeOptions.find(s => s.value === config.shape);
+
+  return (
+    <div className="gb-aoe-config">
+      {/* Shape Selection */}
+      <div className="gb-aoe-field">
+        <label>Forma</label>
+        <select 
+          value={config.shape} 
+          onChange={(e) => onConfigChange({ shape: e.target.value })}
+        >
+          {shapeOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Dynamic Fields based on shape */}
+      {currentShape?.fields.includes('radius') && (
+        <div className="gb-aoe-field">
+          <label>Raio (ft)</label>
+          <input
+            type="number"
+            value={config.radius}
+            onChange={(e) => onConfigChange({ radius: parseInt(e.target.value) || 0 })}
+            min="5"
+            max="120"
+            step="5"
+          />
+        </div>
+      )}
+
+      {currentShape?.fields.includes('length') && (
+        <div className="gb-aoe-field">
+          <label>
+            {config.shape === 'square' ? 'Lado (ft)' : 'Comprimento (ft)'}
+          </label>
+          <input
+            type="number"
+            value={config.length}
+            onChange={(e) => onConfigChange({ length: parseInt(e.target.value) || 0 })}
+            min="5"
+            max="120"
+            step="5"
+          />
+        </div>
+      )}
+
+      {currentShape?.fields.includes('width') && (
+        <div className="gb-aoe-field">
+          <label>Largura (ft)</label>
+          <input
+            type="number"
+            value={config.width}
+            onChange={(e) => onConfigChange({ width: parseInt(e.target.value) || 0 })}
+            min="5"
+            max="30"
+            step="5"
+          />
+        </div>
+      )}
+
+      {currentShape?.fields.includes('angle') && (
+        <div className="gb-aoe-field">
+          <label>Ângulo (°)</label>
+          <select 
+            value={config.angle} 
+            onChange={(e) => onConfigChange({ angle: parseInt(e.target.value) })}
+          >
+            <option value={15}>15°</option>
+            <option value={30}>30°</option>
+            <option value={60}>60°</option>
+            <option value={90}>90°</option>
+          </select>
+        </div>
+      )}
+
+      {/* Color/Type Selection */}
+      <div className="gb-aoe-field">
+        <label>Tipo</label>
+        <select 
+          value={config.color} 
+          onChange={(e) => onConfigChange({ color: e.target.value })}
+        >
+          {colorOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Quick Spell Input */}
+      <div className="gb-aoe-field spell-input">
+        <label>Magia (opcional)</label>
+        <input
+          type="text"
+          value={config.spellName}
+          onChange={(e) => onConfigChange({ spellName: e.target.value })}
+          placeholder="ex: Fireball"
+        />
+      </div>
+
+      {/* Clear AoEs Button */}
+      <button
+        onClick={onClearAoE}
+        className="btn btn-ghost"
+        title="Limpar todas as AoEs"
+      >
+        🗑️ Limpar
+      </button>
+    </div>
   );
 }

@@ -784,9 +784,24 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player) throw new Error('Player not authenticated');
             
-            const token = await TokenManager.addToken(player.roomId, player.id, data);
+            // Enhanced token data can include conditions and HP from character sheet
+            const tokenData = {
+                name: data.name,
+                x: data.x || 0,
+                y: data.y || 0,
+                color: data.color || null,
+                size: data.size || 'medium',
+                imageUrl: data.imageUrl || null,
+                conditions: data.conditions || [], // Array of condition objects {name, icon}
+                hp: data.hp || null, // HP data: { current, max, temp }
+                characterName: data.characterName || null, // Link to character
+                playerId: data.playerId || null, // Link to player
+                ...data // Allow other token properties
+            };
             
-            console.log(`🎭 Token added: ${token.name} in room ${player.roomId}`);
+            const token = await TokenManager.addToken(player.roomId, player.id, tokenData);
+            
+            console.log(`🎭 Token added: ${token.name} in room ${player.roomId} (conditions: ${(token.conditions || []).length}, HP: ${token.hp ? `${token.hp.current}/${token.hp.max}` : 'N/A'})`);
             
             // Broadcast to room
             io.to(player.roomId).emit('token:add', token);
@@ -822,7 +837,23 @@ io.on('connection', (socket) => {
             if (!player) throw new Error('Player not authenticated');
             
             const { tokenId, updates } = data;
-            const token = await TokenManager.updateToken(tokenId, player.id, updates);
+            
+            // Enhanced update data can include conditions and HP
+            const allowedUpdates = {
+                name: updates.name,
+                x: updates.x,
+                y: updates.y,
+                color: updates.color,
+                size: updates.size,
+                imageUrl: updates.imageUrl,
+                conditions: updates.conditions || [], // Condition indicators
+                hp: updates.hp || null, // HP data: { current, max, temp }
+                ...updates // Allow any other updates while preserving structure
+            };
+            
+            const token = await TokenManager.updateToken(tokenId, player.id, allowedUpdates);
+            
+            console.log(`🎭 Token updated: ${token.name} (conditions: ${(token.conditions || []).length}, HP: ${token.hp ? `${token.hp.current}/${token.hp.max}` : 'N/A'})`);
             
             // Broadcast to room
             io.to(player.roomId).emit('token:update', token);
@@ -1172,6 +1203,81 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: true });
         } catch (error) {
             console.error('Error clearing drawings:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    // Wall events
+    socket.on('wall:add', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can add walls');
+            
+            const { x1, y1, x2, y2 } = data;
+            const wallData = {
+                id: uuidv4(),
+                x1, y1, x2, y2,
+                timestamp: Date.now()
+            };
+            
+            console.log(`🧱 Wall added in room ${player.roomId}: (${x1}, ${y1}) to (${x2}, ${y2})`);
+            
+            // Save wall to persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allWalls = persistedState.walls || [];
+            allWalls.push(wallData);
+            await saveRoomState(player.roomId, 'walls', allWalls);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('wall:add', wallData);
+            
+            if (callback) callback({ success: true, wallData });
+        } catch (error) {
+            console.error('Error adding wall:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('wall:remove', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can remove walls');
+            
+            const { wallId } = data;
+            
+            console.log(`🧱 Wall removed in room ${player.roomId}: ${wallId}`);
+            
+            // Remove wall from persistence
+            const persistedState = await loadRoomState(player.roomId);
+            const allWalls = (persistedState.walls || []).filter(w => w.id !== wallId);
+            await saveRoomState(player.roomId, 'walls', allWalls);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('wall:remove', { wallId });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error removing wall:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('wall:clear', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can clear walls');
+            
+            console.log(`🧹 Walls cleared in room ${player.roomId}`);
+            
+            // Clear walls in persistence
+            await saveRoomState(player.roomId, 'walls', []);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('wall:clear');
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error clearing walls:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });

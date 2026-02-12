@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { findSpellByName } from '../utils/spellDatabase';
 
 const ChatPanel = ({ 
   messages = [], 
   onSendMessage = () => {},
   currentUser = { name: 'Player', id: 'player1' },
-  isConnected = true 
+  isConnected = true,
+  onSpellDetected = () => {} // New prop for spell detection callback
 }) => {
   const [messageInput, setMessageInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -71,6 +73,15 @@ const ChatPanel = ({
         default:
           // Unknown command, treat as regular message
           break;
+      }
+    } else {
+      // Check for spell names in regular messages
+      const detectedSpell = findSpellByName(input);
+      if (detectedSpell) {
+        // Notify parent component about spell detection
+        setTimeout(() => {
+          onSpellDetected(detectedSpell);
+        }, 100); // Small delay to allow message to be sent first
       }
     }
 
