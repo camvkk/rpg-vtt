@@ -7,7 +7,6 @@ const ChatPanel = ({
   isConnected = true 
 }) => {
   const [messageInput, setMessageInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 

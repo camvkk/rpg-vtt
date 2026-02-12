@@ -238,15 +238,24 @@ export function getDicePresets() {
 export function getDiceBreakdown(result) {
   if (!result) return null;
 
+  // Track which rolls are dropped by position (handles duplicate values)
+  const droppedCounts = {};
+  result.droppedRolls.forEach(r => { droppedCounts[r] = (droppedCounts[r] || 0) + 1; });
+  const usedDropped = {};
+
   const breakdown = {
     formula: result.formula,
-    individual: result.rolls.map((roll, index) => ({
-      roll,
-      kept: result.keptRolls.includes(roll),
-      dropped: result.droppedRolls.includes(roll),
-      index,
-      color: getDiceColor(result.sides, roll)
-    })),
+    individual: result.rolls.map((roll, index) => {
+      const isDropped = (usedDropped[roll] || 0) < (droppedCounts[roll] || 0);
+      if (isDropped) usedDropped[roll] = (usedDropped[roll] || 0) + 1;
+      return {
+        roll,
+        kept: !isDropped,
+        dropped: isDropped,
+        index,
+        color: getDiceColor(result.sides, roll)
+      };
+    }),
     subtotal: result.rollSum,
     modifier: result.modifier,
     total: result.total,

@@ -496,7 +496,7 @@ const Initiative = ({
                   color: 'var(--text-primary)',
                   fontSize: '0.8rem'
                 }}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') handleAddCombatant();
                   if (e.key === 'Escape') setShowAddForm(false);
                 }}

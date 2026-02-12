@@ -84,6 +84,7 @@ export default function MapCanvas({
       destroyed = true;
       if (app) {
         if (app._resizeObserver) app._resizeObserver.disconnect();
+        if (app.canvas?._vttCleanup) app.canvas._vttCleanup();
         try { app.destroy(true, { children: true }); } catch (e) { /* Pixi v8 destroy race */ }
         pixiRef.current = null;
       }
@@ -405,7 +406,7 @@ export default function MapCanvas({
         
         // Place token at grid position
         const newToken = {
-          ...tokenAwaitingPlacement,
+          ...tokenPlacementRef.current,
           x: grid.x,
           y: grid.y
         };
