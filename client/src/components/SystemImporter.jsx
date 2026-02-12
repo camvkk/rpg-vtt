@@ -9,6 +9,8 @@ const SystemImporter = ({ isOpen, onClose, campaignId }) => {
   const [parsedSystem, setParsedSystem] = useState(null);
   const [textInput, setTextInput] = useState('');
   const [error, setError] = useState(null);
+  const [gdriveUrl, setGdriveUrl] = useState('');
+  const [isFetchingGdrive, setIsFetchingGdrive] = useState(false);
   const fileInputRef = useRef(null);
 
   // Auto-detect backend URL
@@ -74,6 +76,32 @@ const SystemImporter = ({ isOpen, onClose, campaignId }) => {
 
   const handleDragOver = (e) => {
     e.preventDefault();
+  };
+
+  const handleGdriveImport = async () => {
+    if (!gdriveUrl.trim()) return;
+    setIsFetchingGdrive(true);
+    setError(null);
+    try {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/fetch-gdrive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: gdriveUrl.trim() })
+      });
+      const result = await response.json();
+      if (result.success) {
+        addDocument(result.filename, result.text);
+        setGdriveUrl('');
+      } else {
+        setError(result.error || 'Erro ao importar do Google Drive');
+      }
+    } catch (err) {
+      console.error('Google Drive import error:', err);
+      setError('Erro ao importar do Google Drive');
+    } finally {
+      setIsFetchingGdrive(false);
+    }
   };
 
   const handleParseSystem = async () => {
@@ -167,9 +195,36 @@ const SystemImporter = ({ isOpen, onClose, campaignId }) => {
                 {isUploading && <div className="upload-status">📤 Fazendo upload...</div>}
               </div>
 
+              {/* Google Drive Import */}
+              <div className="gdrive-section" style={{ marginBottom: '1rem' }}>
+                <h3>2. Importar do Google Drive</h3>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    className="text-paste-area"
+                    style={{ flex: 1, minHeight: 'auto', padding: '0.6rem 0.8rem', resize: 'none' }}
+                    placeholder="Cole o link do Google Drive aqui..."
+                    value={gdriveUrl}
+                    onChange={(e) => setGdriveUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGdriveImport()}
+                  />
+                  <button
+                    className="btn-primary"
+                    onClick={handleGdriveImport}
+                    disabled={!gdriveUrl.trim() || isFetchingGdrive}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {isFetchingGdrive ? '⏳ Importando...' : '📥 Importar'}
+                  </button>
+                </div>
+                <p style={{ fontSize: '0.75rem', opacity: 0.6, marginTop: '0.3rem' }}>
+                  O arquivo deve estar compartilhado publicamente.
+                </p>
+              </div>
+
               {/* Text Paste Area */}
               <div className="paste-section">
-                <h3>2. Colar Texto (Google Docs)</h3>
+                <h3>3. Colar Texto</h3>
                 <textarea
                   className="text-paste-area"
                   placeholder="Cole aqui o texto do seu sistema de RPG..."
@@ -189,7 +244,7 @@ const SystemImporter = ({ isOpen, onClose, campaignId }) => {
               {/* Document List */}
               {documents.length > 0 && (
                 <div className="documents-section">
-                  <h3>3. Documentos Adicionados ({documents.length})</h3>
+                  <h3>4. Documentos Adicionados ({documents.length})</h3>
                   <div className="documents-list">
                     {documents.map(doc => (
                       <div key={doc.id} className="document-item">

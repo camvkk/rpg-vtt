@@ -180,6 +180,75 @@ app.post('/api/upload-system-doc', upload.single('document'), async (req, res) =
     }
 });
 
+// Google Drive fetch endpoint
+app.post('/api/fetch-gdrive', express.json(), async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) throw new Error('URL não fornecida');
+
+        // Extract file ID from various Google Drive/Docs URL formats
+        let fileId = null;
+        let isGoogleDoc = false;
+
+        const docMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+        const fileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+        const openMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+
+        if (docMatch) {
+            fileId = docMatch[1];
+            isGoogleDoc = true;
+        } else if (fileMatch) {
+            fileId = fileMatch[1];
+        } else if (openMatch) {
+            fileId = openMatch[1];
+        } else {
+            throw new Error('URL do Google Drive não reconhecida. Use um link de Google Docs ou Google Drive.');
+        }
+
+        // Fetch the content
+        const fetchUrl = isGoogleDoc
+            ? `https://docs.google.com/document/d/${fileId}/export?format=txt`
+            : `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+        const response = await fetch(fetchUrl, { redirect: 'follow' });
+
+        if (response.status === 401 || response.status === 403) {
+            throw new Error('Arquivo não está compartilhado publicamente. Abra as configurações de compartilhamento e selecione "Qualquer pessoa com o link".');
+        }
+        if (!response.ok) {
+            throw new Error(`Erro ao buscar arquivo: ${response.status} ${response.statusText}`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        let extractedText;
+
+        if (contentType.includes('application/pdf')) {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            const pdfData = await pdfParse(buffer);
+            extractedText = pdfData.text;
+        } else {
+            extractedText = await response.text();
+        }
+
+        if (!extractedText || extractedText.trim().length === 0) {
+            throw new Error('Arquivo vazio ou não foi possível extrair texto.');
+        }
+
+        res.json({
+            success: true,
+            text: extractedText,
+            filename: isGoogleDoc ? 'google-docs.txt' : 'google-drive-file.txt'
+        });
+
+    } catch (error) {
+        console.error('Google Drive fetch error:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // System parsing endpoint
 app.post('/api/parse-system', async (req, res) => {
     try {
