@@ -81,14 +81,20 @@ const CharacterWizard = ({
     { id: 6, name: 'Equipamento', icon: '🎒' },
     { id: 7, name: 'Detalhes', icon: '📝' },
     { id: 8, name: 'Resumo', icon: '✅' }
-  ] : [
-    { id: 1, name: 'Nome', icon: '👤' },
-    { id: 2, name: 'Atributos', icon: '⚡' },
-    ...(systemData?.races ? [{ id: 3, name: 'Raça', icon: '🧝' }] : []),
-    ...(systemData?.classes ? [{ id: 4, name: 'Classe', icon: '⚔️' }] : []),
-    { id: 5, name: 'Notas', icon: '📝' },
-    { id: 6, name: 'Resumo', icon: '✅' }
-  ];
+  ] : (() => {
+    const customSteps = [{ id: 1, name: 'Nome', icon: '👤' }];
+    let nextId = 2;
+    const races = systemData?.races;
+    const classes = systemData?.classes;
+    const hasRaces = Array.isArray(races) && races.length > 0;
+    const hasClasses = Array.isArray(classes) && classes.length > 0;
+    if (hasRaces) customSteps.push({ id: nextId++, name: 'Raça', icon: '🧝' });
+    if (hasClasses) customSteps.push({ id: nextId++, name: 'Classe', icon: '⚔️' });
+    customSteps.push({ id: nextId++, name: 'Atributos', icon: '⚡' });
+    customSteps.push({ id: nextId++, name: 'Notas', icon: '📝' });
+    customSteps.push({ id: nextId++, name: 'Resumo', icon: '✅' });
+    return customSteps;
+  })();
 
   // Update wizard data
   const updateWizardData = (updates) => {
@@ -370,6 +376,159 @@ const CharacterWizard = ({
       ))}
     </div>
   );
+
+  // Custom System Step Renderer
+  const CustomStepRenderer = ({ steps, currentStep, systemData, wizardData, updateWizardData }) => {
+    const currentStepData = steps[currentStep - 1];
+    if (!currentStepData) return null;
+    const stepName = currentStepData.name;
+    
+    const cardStyle = {
+      padding: 'var(--spacing-md)',
+      background: 'var(--surface-light)',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border-color)',
+      cursor: 'pointer',
+      transition: 'all 0.2s'
+    };
+    const selectedCardStyle = { ...cardStyle, border: '2px solid var(--color-primary)', background: 'var(--surface-hover)' };
+
+    if (stepName === 'Nome') {
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ color: 'var(--color-primary)', margin: 0 }}>🎭 {systemData?.systemName || 'Sistema Customizado'}</h2>
+            <p style={{ color: 'var(--text-dim)', margin: 'var(--spacing-sm) 0 0' }}>{systemData?.description || 'Crie seu personagem'}</p>
+          </div>
+          <div>
+            <label style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>Nome do Personagem</label>
+            <input
+              type="text"
+              value={wizardData.name || ''}
+              onChange={e => updateWizardData({ name: e.target.value })}
+              placeholder="Digite o nome..."
+              style={{ width: '100%', padding: 'var(--spacing-sm)', marginTop: 'var(--spacing-xs)', background: 'var(--surface-dark)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+            />
+          </div>
+        </div>
+      );
+    }
+    
+    if (stepName === 'Raça' && systemData?.races) {
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', margin: 0 }}>🧝 Escolha sua Raça</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--spacing-sm)', maxHeight: '60vh', overflowY: 'auto' }}>
+            {systemData.races.map((race, i) => (
+              <div
+                key={i}
+                style={wizardData.race === race.name ? selectedCardStyle : cardStyle}
+                onClick={() => updateWizardData({ race: race.name, raceData: race })}
+              >
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{race.icon || '🧝'} {race.name}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px' }}>{race.description?.substring(0, 100)}{race.description?.length > 100 ? '...' : ''}</div>
+                {race.traits && <div style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', marginTop: '4px' }}>{race.traits.slice(0, 2).join(' • ')}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    if (stepName === 'Classe' && systemData?.classes) {
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', margin: 0 }}>⚔️ Escolha sua Classe</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 'var(--spacing-sm)', maxHeight: '60vh', overflowY: 'auto' }}>
+            {systemData.classes.map((cls, i) => (
+              <div
+                key={i}
+                style={wizardData.class === cls.name ? selectedCardStyle : cardStyle}
+                onClick={() => updateWizardData({ class: cls.name, classData: cls })}
+              >
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{cls.icon || '⚔️'} {cls.name}</div>
+                {cls.hitDie && <div style={{ fontSize: '0.75rem', color: 'var(--color-accent)' }}>Hit Die: {cls.hitDie}</div>}
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '4px' }}>{cls.description?.substring(0, 100)}{cls.description?.length > 100 ? '...' : ''}</div>
+                {cls.level1Features && <div style={{ fontSize: '0.75rem', color: 'var(--color-secondary)', marginTop: '4px' }}>{cls.level1Features.slice(0, 2).join(' • ')}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    if (stepName === 'Atributos') {
+      const stats = systemData?.stats || [
+        { key: 'str', name: 'Força', short: 'FOR' },
+        { key: 'dex', name: 'Destreza', short: 'DEX' },
+        { key: 'con', name: 'Constituição', short: 'CON' },
+        { key: 'int', name: 'Inteligência', short: 'INT' },
+        { key: 'wis', name: 'Sabedoria', short: 'SAB' },
+        { key: 'cha', name: 'Carisma', short: 'CAR' }
+      ];
+      const attrs = wizardData.baseAttributes || {};
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', margin: 0 }}>⚡ Defina seus Atributos</h2>
+          <p style={{ color: 'var(--text-dim)', textAlign: 'center', margin: 0 }}>Distribua os valores para cada atributo (8-18)</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 'var(--spacing-sm)' }}>
+            {stats.map(stat => (
+              <div key={stat.key} style={{ ...cardStyle, textAlign: 'center' }}>
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{stat.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-xs)' }}>
+                  <button className="btn btn-ghost" onClick={() => updateWizardData({ baseAttributes: { ...attrs, [stat.key]: Math.max(1, (attrs[stat.key] || 10) - 1) } })}>−</button>
+                  <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--color-primary)', minWidth: '2rem' }}>{attrs[stat.key] || 10}</span>
+                  <button className="btn btn-ghost" onClick={() => updateWizardData({ baseAttributes: { ...attrs, [stat.key]: Math.min(20, (attrs[stat.key] || 10) + 1) } })}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    
+    if (stepName === 'Notas') {
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', margin: 0 }}>📝 Notas & Background</h2>
+          <textarea
+            value={wizardData.notes || ''}
+            onChange={e => updateWizardData({ notes: e.target.value })}
+            placeholder="Descreva o background, personalidade, objetivos do personagem..."
+            rows={8}
+            style={{ width: '100%', padding: 'var(--spacing-sm)', background: 'var(--surface-dark)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', resize: 'vertical' }}
+          />
+        </div>
+      );
+    }
+    
+    if (stepName === 'Resumo') {
+      return (
+        <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <h2 style={{ color: 'var(--color-primary)', textAlign: 'center', margin: 0 }}>✅ Resumo do Personagem</h2>
+          <div style={cardStyle}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>{wizardData.name || 'Sem nome'}</div>
+            {wizardData.race && <div style={{ color: 'var(--text-dim)' }}>🧝 Raça: {wizardData.race}</div>}
+            {wizardData.class && <div style={{ color: 'var(--text-dim)' }}>⚔️ Classe: {wizardData.class}</div>}
+            {wizardData.baseAttributes && (
+              <div style={{ marginTop: 'var(--spacing-sm)' }}>
+                <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '4px' }}>Atributos:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-xs)' }}>
+                  {Object.entries(wizardData.baseAttributes).map(([key, val]) => {
+                    const stat = systemData?.stats?.find(s => s.key === key);
+                    return <span key={key} style={{ background: 'var(--surface-dark)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', color: 'var(--color-primary)', fontSize: '0.85rem' }}>{stat?.short || key.toUpperCase()}: {val}</span>;
+                  })}
+                </div>
+              </div>
+            )}
+            {wizardData.notes && <div style={{ marginTop: 'var(--spacing-sm)', color: 'var(--text-dim)', fontStyle: 'italic' }}>{wizardData.notes.substring(0, 200)}{wizardData.notes.length > 200 ? '...' : ''}</div>}
+          </div>
+        </div>
+      );
+    }
+    
+    return <div style={{ padding: 'var(--spacing-lg)', color: 'var(--text-dim)', textAlign: 'center' }}>Passo não reconhecido</div>;
+  };
 
   // Step 1 - Identity
   const Step1Identity = () => (
@@ -1798,14 +1957,26 @@ const CharacterWizard = ({
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {currentStep === 1 && <Step1Identity />}
-          {currentStep === 2 && system === 'dnd5e' && <Step2Race />}
-          {currentStep === 3 && system === 'dnd5e' && <Step3Class />}
-          {currentStep === 4 && system === 'dnd5e' && <Step4Attributes />}
-          {currentStep === 5 && system === 'dnd5e' && <Step5Skills />}
-          {currentStep === 6 && system === 'dnd5e' && <Step6Equipment />}
-          {currentStep === 7 && system === 'dnd5e' && <Step7Details />}
-          {currentStep === 8 && system === 'dnd5e' && <Step8Summary />}
+          {system === 'dnd5e' ? (
+            <>
+              {currentStep === 1 && <Step1Identity />}
+              {currentStep === 2 && <Step2Race />}
+              {currentStep === 3 && <Step3Class />}
+              {currentStep === 4 && <Step4Attributes />}
+              {currentStep === 5 && <Step5Skills />}
+              {currentStep === 6 && <Step6Equipment />}
+              {currentStep === 7 && <Step7Details />}
+              {currentStep === 8 && <Step8Summary />}
+            </>
+          ) : (
+            <CustomStepRenderer
+              steps={steps}
+              currentStep={currentStep}
+              systemData={systemData}
+              wizardData={wizardData}
+              updateWizardData={updateWizardData}
+            />
+          )}
         </div>
 
         {/* Navigation */}
