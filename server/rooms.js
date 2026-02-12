@@ -12,7 +12,7 @@ function generateRoomCode() {
 }
 
 // Create a new room
-async function createRoom(dmName) {
+async function createRoom(dmName, system = 'dnd5e') {
     const roomId = uuidv4();
     const code = generateRoomCode();
     
@@ -35,9 +35,9 @@ async function createRoom(dmName) {
 
         // Create room
         await run(`
-            INSERT INTO rooms (id, code, dm_name)
-            VALUES (?, ?, ?)
-        `, [roomId, finalCode, dmName]);
+            INSERT INTO rooms (id, code, dm_name, system)
+            VALUES (?, ?, ?, ?)
+        `, [roomId, finalCode, dmName, system]);
 
         // Add DM as player
         const dmId = uuidv4();
@@ -54,6 +54,42 @@ async function createRoom(dmName) {
         };
     } catch (error) {
         console.error('Error creating room:', error);
+        throw error;
+    }
+}
+
+// Create a new room with a specific code (for campaigns)
+async function createRoomWithCode(dmName, system = 'dnd5e', code) {
+    const roomId = uuidv4();
+    
+    try {
+        // Check if code already exists
+        const existing = await get('SELECT id FROM rooms WHERE code = ?', [code]);
+        if (existing) {
+            throw new Error('Room code already exists');
+        }
+
+        // Create room
+        await run(`
+            INSERT INTO rooms (id, code, dm_name, system)
+            VALUES (?, ?, ?, ?)
+        `, [roomId, code, dmName, system]);
+
+        // Add DM as player
+        const dmId = uuidv4();
+        await run(`
+            INSERT INTO players (id, room_id, name, is_dm, is_connected)
+            VALUES (?, ?, ?, 1, 1)
+        `, [dmId, roomId, dmName]);
+
+        return {
+            id: roomId,
+            code: code,
+            dm_name: dmName,
+            dm_id: dmId
+        };
+    } catch (error) {
+        console.error('Error creating room with code:', error);
         throw error;
     }
 }
@@ -137,7 +173,7 @@ async function getRoomPlayers(roomId) {
 async function getRoomDetails(roomId) {
     try {
         const room = await get(`
-            SELECT id, code, dm_name, created_at, current_map, ambiance_track, initiative_turn
+            SELECT id, code, dm_name, system, created_at, current_map, ambiance_track, initiative_turn
             FROM rooms 
             WHERE id = ? AND is_active = 1
         `, [roomId]);
@@ -250,8 +286,25 @@ async function listActiveRooms() {
     }
 }
 
+// Update room code (for campaigns)
+async function updateRoomCode(roomId, newCode) {
+    try {
+        await run(`
+            UPDATE rooms 
+            SET code = ?
+            WHERE id = ?
+        `, [newCode, roomId]);
+        
+        return true;
+    } catch (error) {
+        console.error('Error updating room code:', error);
+        throw error;
+    }
+}
+
 module.exports = {
     createRoom,
+    createRoomWithCode,
     joinRoom,
     leaveRoom,
     getRoomPlayers,
@@ -261,5 +314,6 @@ module.exports = {
     getPlayerBySocket,
     closeRoom,
     listActiveRooms,
-    generateRoomCode
+    generateRoomCode,
+    updateRoomCode
 };

@@ -88,7 +88,10 @@ export default function MapCanvas({
       destroyed = true;
       if (app) {
         if (app._resizeObserver) app._resizeObserver.disconnect();
-        if (app.canvas?._vttCleanup) app.canvas._vttCleanup();
+        try {
+          const canvas = app.renderer?.canvas;
+          if (canvas?._vttCleanup) canvas._vttCleanup();
+        } catch (e) { /* canvas may not exist if init didn't complete */ }
         try { app.destroy(true, { children: true }); } catch (e) { /* Pixi v8 destroy race */ }
         pixiRef.current = null;
       }

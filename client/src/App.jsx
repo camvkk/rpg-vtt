@@ -28,6 +28,24 @@ function AppInner() {
     }
   };
 
+  const handleCreateCampaign = async (name, dmPassword, system, customRules) => {
+    try {
+      setError(null);
+      await actions.createCampaign(name, dmPassword, system, customRules);
+    } catch (err) {
+      setError(err.message || 'Erro ao criar a campanha');
+    }
+  };
+
+  const handleJoinCampaign = async (campaignId, playerName, dmPassword) => {
+    try {
+      setError(null);
+      await actions.joinCampaign(campaignId, playerName, dmPassword);
+    } catch (err) {
+      setError(err.message || 'Campanha não encontrada ou senha incorreta');
+    }
+  };
+
   const handleLeaveRoom = () => {
     actions.leaveRoom();
     setError(null);
@@ -49,6 +67,8 @@ function AppInner() {
         <Lobby
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          onCreateCampaign={handleCreateCampaign}
+          onJoinCampaign={handleJoinCampaign}
           isLoading={state.loading}
           error={error || state.error}
         />

@@ -6,6 +6,7 @@ import ChatPanel from './ChatPanel';
 import Initiative from './Initiative';
 import CharSheet from './CharSheet';
 import Ambiance from './Ambiance';
+import SystemImporter from './SystemImporter';
 import '../styles/GameBoard.css';
 
 // Error boundary to catch MapCanvas crashes
@@ -22,11 +23,14 @@ class CanvasErrorBoundary extends Component {
 
 export default function GameBoard({ onLeaveRoom }) {
   const { state, actions } = useGame();
-  const { room, player, players, tokens, initiative, chat, ui, connected } = state;
+  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData } = state;
   const isDM = player.isDM;
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
+  const [showGoogleDocs, setShowGoogleDocs] = useState(false);
+  const [showDocsModal, setShowDocsModal] = useState(false);
+  const [showSystemImporter, setShowSystemImporter] = useState(false);
   const [tokenAwaitingPlacement, setTokenAwaitingPlacement] = useState(null);
 
   // ── Keyboard shortcuts ──
@@ -136,15 +140,51 @@ export default function GameBoard({ onLeaveRoom }) {
               >
                 🗺️ Mapa
               </button>
+              {campaign.id && (
+                <>
+                  <button 
+                    className="btn btn-ghost gb-toolbar-btn" 
+                    onClick={() => setShowDocsModal(true)}
+                    title="Google Docs"
+                  >
+                    📄 Documento
+                  </button>
+                  {campaign.system === 'custom' && (
+                    <button 
+                      className="btn btn-ghost gb-toolbar-btn" 
+                      onClick={() => setShowSystemImporter(true)}
+                      title="Sistema Customizado"
+                    >
+                      📖 Sistema
+                    </button>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
 
         <div className="gb-toolbar-center">
-          <span className="gb-room-code">#{room.code}</span>
+          {campaign.id ? (
+            <div className="gb-campaign-info">
+              <span className="gb-campaign-name">{campaign.name}</span>
+              <span className="gb-room-code">#{room.code}</span>
+            </div>
+          ) : (
+            <span className="gb-room-code">#{room.code}</span>
+          )}
         </div>
 
         <div className="gb-toolbar-right">
+          {campaign.googleDocsUrl && (
+            <button 
+              className={`btn btn-ghost gb-toolbar-btn ${showGoogleDocs ? 'active' : ''}`} 
+              onClick={() => setShowGoogleDocs(!showGoogleDocs)}
+              title="Mostrar/Ocultar Google Docs"
+            >
+              📄 Docs
+            </button>
+          )}
           <button 
             className="btn btn-ghost gb-toolbar-btn" 
             onClick={() => setShowCharSheet(!showCharSheet)}
@@ -223,14 +263,40 @@ export default function GameBoard({ onLeaveRoom }) {
         )}
 
         {/* Center — Map Canvas */}
-        <div className="gb-canvas-area">
-          <CanvasErrorBoundary>
-            <MapCanvas 
-              isDM={isDM} 
-              tokenAwaitingPlacement={tokenAwaitingPlacement}
-              onTokenPlaced={() => setTokenAwaitingPlacement(null)}
-            />
-          </CanvasErrorBoundary>
+        <div className="gb-canvas-area" style={{ 
+          display: 'flex', 
+          flexDirection: showGoogleDocs ? 'row' : 'column' 
+        }}>
+          <div style={{ flex: showGoogleDocs ? '1' : '1 1 100%' }}>
+            <CanvasErrorBoundary>
+              <MapCanvas 
+                isDM={isDM} 
+                tokenAwaitingPlacement={tokenAwaitingPlacement}
+                onTokenPlaced={() => setTokenAwaitingPlacement(null)}
+              />
+            </CanvasErrorBoundary>
+          </div>
+          
+          {/* Google Docs Panel */}
+          {showGoogleDocs && campaign.googleDocsUrl && (
+            <div className="gb-docs-panel">
+              <div className="gb-docs-header">
+                <span>📄 Documentos da Campanha</span>
+                <button 
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShowGoogleDocs(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <iframe
+                src={convertToEmbedUrl(campaign.googleDocsUrl)}
+                className="gb-docs-iframe"
+                title="Google Docs"
+                allowFullScreen
+              />
+            </div>
+          )}
         </div>
 
         {/* Right panel */}
@@ -252,11 +318,13 @@ export default function GameBoard({ onLeaveRoom }) {
         <div className="gb-charsheet-overlay">
           <div className="gb-charsheet-container">
             <CharSheet
-              character={null} // Usar personagem padrão por enquanto
+              character={character}
               isEditable={!isDM} // Jogadores editam, DM só visualiza
-              onUpdateCharacter={() => {}}
+              onUpdateCharacter={(char) => actions.updateCharacter(char)}
               onRollDice={handleDiceRoll}
               onToggleCollapse={() => setShowCharSheet(false)}
+              system={campaign.system || room.system || 'dnd5e'}
+              systemData={systemData}
             />
           </div>
         </div>
@@ -286,8 +354,62 @@ export default function GameBoard({ onLeaveRoom }) {
           </div>
         </div>
       )}
+
+      {/* Google Docs Modal */}
+      {showDocsModal && (
+        <div className="gb-charsheet-overlay">
+          <div className="gb-docs-modal-container">
+            <GoogleDocsModal
+              currentUrl={campaign.googleDocsUrl}
+              onSave={async (url) => {
+                try {
+                  await actions.setGoogleDocs(campaign.id, url);
+                  setShowDocsModal(false);
+                } catch (err) {
+                  console.error('Error setting Google Docs URL:', err);
+                }
+              }}
+              onClose={() => setShowDocsModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* System Importer Modal */}
+      {showSystemImporter && (
+        <SystemImporter
+          isOpen={showSystemImporter}
+          onClose={() => setShowSystemImporter(false)}
+          campaignId={campaign.id}
+        />
+      )}
     </div>
   );
+}
+
+// ── Google Docs URL conversion helper ──
+function convertToEmbedUrl(url) {
+  if (!url) return '';
+  
+  // Handle Google Docs
+  if (url.includes('docs.google.com/document')) {
+    // Convert /edit or /view to /preview
+    return url.replace(/\/(edit|view).*$/, '/preview');
+  }
+  
+  // Handle Google Sheets
+  if (url.includes('docs.google.com/spreadsheets')) {
+    // For sheets, use /htmlembed or /pubhtml
+    return url.replace(/\/(edit|view).*$/, '/pubhtml?embedded=true');
+  }
+  
+  // Handle Google Slides
+  if (url.includes('docs.google.com/presentation')) {
+    return url.replace(/\/(edit|view).*$/, '/embed');
+  }
+  
+  // For other URLs, just return as-is
+  return url;
 }
 
 // ── Token Creator Modal ──
@@ -686,6 +808,117 @@ function MapUploadModal({ onUpload, onUrlSet, onClose }) {
       </div>
     </div>
   );
+}
+
+// ── Google Docs Modal ──
+function GoogleDocsModal({ currentUrl, onSave, onClose }) {
+  const [url, setUrl] = useState(currentUrl || '');
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    if (!url.trim()) {
+      onSave('');
+      return;
+    }
+
+    // Validate Google Docs URL
+    if (!isValidGoogleUrl(url)) {
+      setError('URL deve ser do Google Docs, Sheets ou Slides');
+      return;
+    }
+
+    setError('');
+    onSave(url.trim());
+  };
+
+  return (
+    <div style={{
+      background: 'var(--bg-surface)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 'var(--radius-lg)',
+      padding: 'var(--spacing-lg)',
+      maxWidth: '500px',
+      width: '100%'
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 'var(--spacing-lg)'
+      }}>
+        <h3 className="heading-sm" style={{ margin: 0 }}>📄 Google Docs da Campanha</h3>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--color-text-dim)',
+            cursor: 'pointer',
+            fontSize: '1.2rem'
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+        <div>
+          <label className="form-label">URL do Documento</label>
+          <input
+            type="url"
+            className="input"
+            placeholder="https://docs.google.com/document/d/..."
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setError('');
+            }}
+            style={{ width: '100%' }}
+          />
+          {error && (
+            <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          padding: 'var(--spacing-sm)',
+          background: 'var(--bg-surface-light)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '0.8rem',
+          color: 'var(--color-text-dim)'
+        }}>
+          <strong>Como usar:</strong>
+          <br />• Cole a URL do Google Docs, Sheets ou Slides
+          <br />• O documento será incorporado na interface
+          <br />• Deixe vazio para remover o documento atual
+        </div>
+
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn btn-primary" onClick={handleSave}>
+            {currentUrl ? 'Atualizar' : 'Definir'} Documento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Validate Google URL helper ──
+function isValidGoogleUrl(url) {
+  if (!url) return true; // Empty URL is valid (removes the doc)
+  
+  const googleDomains = [
+    'docs.google.com/document',
+    'docs.google.com/spreadsheets',
+    'docs.google.com/presentation'
+  ];
+  
+  return googleDomains.some(domain => url.includes(domain));
 }
 
 // ── Small tool button ──

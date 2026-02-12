@@ -8,9 +8,14 @@ const initialState = {
   socketId: null,
 
   // Room
-  room: { id: null, code: null, dmName: null, status: 'lobby' },
+  room: { id: null, code: null, dmName: null, status: 'lobby', system: 'dnd5e' },
   player: { id: null, name: '', isDM: false },
   players: [],
+
+  // Campaign
+  campaign: { id: null, name: null, googleDocsUrl: null, system: 'dnd5e' },
+  character: null,
+  systemData: null,
 
   // Map
   map: { url: null, width: 2000, height: 2000, gridSize: 40, gridVisible: true },
@@ -62,7 +67,7 @@ function gameReducer(state, action) {
       const { room, player, players, gameState: gs } = action.payload;
       return {
         ...state,
-        room: { id: room.id, code: room.code, dmName: room.dm_name, status: 'playing' },
+        room: { id: room.id, code: room.code, dmName: room.dm_name, status: 'playing', system: room.system || 'dnd5e' },
         player: { id: player.id, name: player.name, isDM: player.isDM },
         players: players || [],
         tokens: gs?.tokens || [],
@@ -70,6 +75,32 @@ function gameReducer(state, action) {
         drawings: gs?.drawings || [],
         ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
         map: { ...state.map, url: gs?.map || null },
+        loading: false,
+        error: null,
+      };
+    }
+
+    case 'CAMPAIGN_JOINED': {
+      const { campaign, room, player, players, gameState: gs, character, chatHistory, isDM } = action.payload;
+      return {
+        ...state,
+        campaign: { 
+          id: campaign.id, 
+          name: campaign.name, 
+          googleDocsUrl: campaign.googleDocsUrl,
+          system: campaign.system
+        },
+        systemData: campaign.systemData || null,
+        room: { id: room.id, code: room.code, dmName: room.dm_name, status: 'playing', system: room.system || campaign.system },
+        player: { id: player.id, name: player.name, isDM: isDM },
+        players: players || [],
+        character: character,
+        tokens: gs?.tokens || [],
+        fogAreas: gs?.fog || [],
+        drawings: gs?.drawings || [],
+        ambiance: { trackUrl: gs?.ambiance || null, isPlaying: false },
+        map: { ...state.map, url: gs?.map || null },
+        chat: chatHistory || [],
         loading: false,
         error: null,
       };
@@ -94,6 +125,16 @@ function gameReducer(state, action) {
 
     case 'LEAVE_ROOM':
       return { ...initialState, connected: state.connected, socketId: state.socketId };
+
+    // Campaign
+    case 'CAMPAIGN_DOCS_UPDATED':
+      return { ...state, campaign: { ...state.campaign, googleDocsUrl: action.payload.url } };
+
+    case 'CHARACTER_UPDATED':
+      return { ...state, character: action.payload };
+
+    case 'SYSTEM_PARSED':
+      return { ...state, systemData: action.payload.systemData };
 
     // Tokens
     case 'TOKEN_ADD':
@@ -341,6 +382,12 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     socket.on('draw:add', (data) => dispatch({ type: 'DRAW_ADD', payload: data }));
     socket.on('draw:clear', () => dispatch({ type: 'DRAW_CLEAR' }));
 
+    // Campaign events
+    socket.on('campaign:docs-updated', (data) => dispatch({ type: 'CAMPAIGN_DOCS_UPDATED', payload: data }));
+
+    // System events
+    socket.on('system:parsed', (data) => dispatch({ type: 'SYSTEM_PARSED', payload: data }));
+
     return () => {
       socket.removeAllListeners();
       socket.disconnect();
@@ -360,12 +407,29 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     });
   }, []);
 
+  // Character auto-save (debounced)
+  const characterSaveTimeoutRef = useRef(null);
+  
+  const saveCharacterDebounced = useCallback((campaignId, playerName, characterData) => {
+    if (characterSaveTimeoutRef.current) {
+      clearTimeout(characterSaveTimeoutRef.current);
+    }
+    
+    characterSaveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await emit('campaign:save-character', { campaignId, playerName, characterData });
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 30000); // 30 second debounce
+  }, [emit]);
+
   // ── Actions ──
   const actions = {
-    createRoom: async (dmName) => {
+    createRoom: async (dmName, system = 'dnd5e') => {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        const res = await emit('room:create', { dmName });
+        const res = await emit('room:create', { dmName, system });
         if (!res.success) throw new Error(res.error);
         
         // Save session data
@@ -416,6 +480,90 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       socketRef.current?.emit('room:leave');
       clearSessionData();
       dispatch({ type: 'LEAVE_ROOM' });
+    },
+
+    // Campaigns
+    createCampaign: async (name, dmPassword, system = 'dnd5e', customRules = null) => {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      try {
+        const res = await emit('campaign:create', { name, dmPassword, system, customRules });
+        if (!res.success) throw new Error(res.error);
+        
+        // Server auto-joins DM, dispatch full state
+        saveSessionData(res.campaignId, 'Mestre', true);
+        dispatch({
+          type: 'CAMPAIGN_JOINED',
+          payload: {
+            campaign: res.campaign,
+            room: res.room,
+            player: { id: res.room.dm_id || res.room.players?.find(p => p.is_dm)?.id, name: 'Mestre', isDM: true },
+            players: res.room.players || [],
+            gameState: res.room.gameState,
+            character: res.character,
+            chatHistory: res.chatHistory || [],
+            isDM: true
+          },
+        });
+        return res;
+      } catch (err) {
+        dispatch({ type: 'SET_ERROR', payload: err.message });
+        throw err;
+      }
+    },
+
+    joinCampaign: async (campaignId, playerName, dmPassword = null) => {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      try {
+        const res = await emit('campaign:join', { campaignId, playerName, dmPassword });
+        if (!res.success) throw new Error(res.error);
+        
+        // Save session data
+        saveSessionData(campaignId, playerName, res.isDM);
+        
+        dispatch({
+          type: 'CAMPAIGN_JOINED',
+          payload: {
+            campaign: res.campaign,
+            room: res.room,
+            player: { id: res.room.playerId, name: playerName, isDM: res.isDM },
+            players: res.room.players || [],
+            gameState: res.room.gameState,
+            character: res.character,
+            chatHistory: res.chatHistory,
+            isDM: res.isDM
+          },
+        });
+        return res;
+      } catch (err) {
+        dispatch({ type: 'SET_ERROR', payload: err.message });
+        throw err;
+      }
+    },
+
+    updateCharacter: (characterData) => {
+      dispatch({ type: 'CHARACTER_UPDATED', payload: characterData });
+      
+      // Auto-save if in a campaign
+      if (state.campaign.id && state.player.name) {
+        saveCharacterDebounced(state.campaign.id, state.player.name, characterData);
+      }
+    },
+
+    saveCharacter: async (campaignId, playerName, characterData) => {
+      return emit('campaign:save-character', { campaignId, playerName, characterData });
+    },
+
+    setGoogleDocs: async (campaignId, url) => {
+      return emit('campaign:set-docs', { campaignId, url });
+    },
+
+    // System management
+    getSystemData: async (campaignId) => {
+      return emit('system:get', { campaignId });
+    },
+
+    uploadSystemText: async (text, filename) => {
+      return emit('system:upload-text', { text, filename });
     },
 
     // Tokens

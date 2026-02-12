@@ -5,10 +5,30 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 // Import our modules
-const { initDatabase, saveRoomState, loadRoomState } = require('./db');
+const { 
+  initDatabase, 
+  saveRoomState, 
+  loadRoomState,
+  createCampaign,
+  getCampaign,
+  updateCampaignLastActive,
+  saveCharacter,
+  getCharacter,
+  getChatHistory,
+  updateCampaignDocs,
+  generateCampaignId,
+  saveChatMessage,
+  saveSystemData,
+  getSystemData
+} = require('./db');
 const roomManager = require('./rooms');
 const { TokenManager, MapManager, FogManager, AmbianceManager, getGameState } = require('./game-state');
 const { rollDice, formatRollResult, getRollType } = require('./dice');
+const crypto = require('crypto');
+const multer = require('multer');
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const OpenAI = require('openai');
 
 // Initialize Express app
 const app = express();
@@ -51,6 +71,174 @@ app.post('/api/upload-token', express.raw({ type: 'image/*', limit: '2mb' }), (r
     const filename = `token-${Date.now()}.${ext}`;
     fs.writeFileSync(path.join(tokensDir, filename), req.body);
     res.json({ success: true, url: `/public/tokens/${filename}` });
+});
+
+// Configure multer for file uploads
+const upload = multer({ 
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['text/plain', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        const allowedExts = ['.txt', '.md', '.pdf', '.docx'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        
+        if (allowedTypes.includes(file.mimetype) || allowedExts.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Tipo de arquivo não suportado. Use .txt, .md, .pdf, ou .docx'));
+        }
+    }
+});
+
+// Initialize OpenAI (lazy — only when API key is available)
+let openai = null;
+function getOpenAI() {
+    if (!openai && process.env.OPENAI_API_KEY) {
+        openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return openai;
+}
+
+// Document upload endpoint
+app.post('/api/upload-system-doc', upload.single('document'), async (req, res) => {
+    try {
+        let extractedText = '';
+        
+        if (req.file) {
+            // File upload
+            const file = req.file;
+            const ext = path.extname(file.originalname).toLowerCase();
+            
+            switch (ext) {
+                case '.txt':
+                case '.md':
+                    extractedText = file.buffer.toString('utf-8');
+                    break;
+                    
+                case '.pdf':
+                    const pdfData = await pdfParse(file.buffer);
+                    extractedText = pdfData.text;
+                    break;
+                    
+                case '.docx':
+                    const docxResult = await mammoth.extractRawText({ buffer: file.buffer });
+                    extractedText = docxResult.value;
+                    break;
+                    
+                default:
+                    throw new Error('Tipo de arquivo não suportado');
+            }
+        } else if (req.body.text) {
+            // Raw text upload (from paste area)
+            extractedText = req.body.text;
+        } else {
+            throw new Error('Nenhum arquivo ou texto fornecido');
+        }
+        
+        res.json({
+            success: true,
+            text: extractedText,
+            filename: req.file ? req.file.originalname : 'texto-colado.txt'
+        });
+        
+    } catch (error) {
+        console.error('Error processing document:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// System parsing endpoint
+app.post('/api/parse-system', async (req, res) => {
+    try {
+        const { campaignId, documents } = req.body;
+        
+        if (!campaignId || !documents || !Array.isArray(documents) || documents.length === 0) {
+            throw new Error('campaignId e documentos são obrigatórios');
+        }
+        
+        if (!process.env.OPENAI_API_KEY) {
+            throw new Error('Chave da OpenAI não configurada no servidor');
+        }
+        
+        // Combine all documents into a single text
+        const combinedText = documents.map(doc => `=== ${doc.name} ===\n${doc.text}`).join('\n\n');
+        
+        // Create prompt for OpenAI
+        const prompt = `Você é um parser de sistemas de RPG. Dados estes documentos descrevendo um sistema de RPG customizado, extraia e estruture TODAS as mecânicas do jogo em JSON.
+
+Formato de saída:
+{
+  "systemName": "Nome do sistema",
+  "description": "Breve descrição",
+  "races": [
+    { "name": "...", "description": "...", "traits": ["..."], "statModifiers": { "str": 1, ... } }
+  ],
+  "classes": [
+    { "name": "...", "description": "...", "hitDie": "d8", "primaryStats": ["str"], "features": [{ "name": "...", "level": 1, "description": "..." }], "proficiencies": ["..."] }
+  ],
+  "stats": [
+    { "key": "str", "name": "Força", "description": "..." }
+  ],
+  "skills": [
+    { "name": "...", "linkedStat": "str", "description": "..." }
+  ],
+  "equipment": [
+    { "name": "...", "type": "weapon|armor|item", "description": "...", "damage": "1d8", "properties": ["..."] }
+  ],
+  "spells": [
+    { "name": "...", "level": 0, "school": "...", "description": "...", "damage": "...", "range": "..." }
+  ],
+  "rules": [
+    { "name": "...", "description": "..." }
+  ],
+  "customMechanics": [
+    { "name": "...", "description": "...", "diceFormula": "..." }
+  ]
+}
+
+Inclua apenas seções que estão presentes nos documentos. Se uma seção não for descrita, omita-a.
+Parse no mesmo idioma dos documentos.
+
+Documentos:
+${combinedText}`;
+
+        // Call OpenAI API
+        const ai = getOpenAI();
+        if (!ai) throw new Error('Chave da OpenAI não configurada no servidor');
+        const response = await ai.chat.completions.create({
+            model: 'gpt-4-turbo-preview',
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 4000,
+            temperature: 0.3
+        });
+        
+        const parsedSystem = JSON.parse(response.choices[0].message.content);
+        
+        // Save to database
+        await saveSystemData(campaignId, parsedSystem, documents);
+        
+        console.log(`🤖 System parsed for campaign ${campaignId}: ${parsedSystem.systemName || 'Sistema Customizado'}`);
+        
+        res.json({
+            success: true,
+            systemData: parsedSystem
+        });
+        
+    } catch (error) {
+        console.error('Error parsing system:', error);
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
 
 // Health check endpoints
@@ -96,8 +284,8 @@ io.on('connection', (socket) => {
     // Create room
     socket.on('room:create', async (data, callback) => {
         try {
-            const { dmName } = data;
-            const room = await roomManager.createRoom(dmName);
+            const { dmName, system = 'dnd5e' } = data;
+            const room = await roomManager.createRoom(dmName, system);
             
             // Join socket room
             socket.join(room.id);
@@ -210,6 +398,318 @@ io.on('connection', (socket) => {
                 success: false,
                 error: error.message
             });
+        }
+    });
+
+    // ── Campaign Management ──
+    
+    // Create campaign
+    socket.on('campaign:create', async (data, callback) => {
+        try {
+            const { name, dmPassword, system = 'dnd5e', customRules } = data;
+            
+            // Generate unique 8-char campaign ID
+            let campaignId;
+            let attempts = 0;
+            
+            while (attempts < 10) {
+                campaignId = generateCampaignId();
+                const existing = await getCampaign(campaignId);
+                if (!existing) break;
+                attempts++;
+            }
+            
+            if (attempts >= 10) {
+                throw new Error('Failed to generate unique campaign ID');
+            }
+            
+            // Create campaign in database
+            await createCampaign(campaignId, name, dmPassword, system, customRules);
+            
+            // Create a room for the campaign with the campaign ID as the code
+            const dmName = data.dmName || 'Mestre';
+            const room = await roomManager.createRoomWithCode(dmName, system, campaignId);
+            
+            // Auto-join the DM into the socket room
+            socket.join(room.id);
+            await roomManager.updatePlayerSocket(room.dm_id, socket.id);
+            connectedPlayers.set(socket.id, {
+                id: room.dm_id,
+                roomId: room.id,
+                name: dmName,
+                isDM: true,
+                campaignId: campaignId
+            });
+            
+            // Initialize initiative tracker
+            initiativeTrackers.set(room.id, { players: [], currentTurn: 0, active: false });
+            
+            console.log(`📚 Campaign created: ${campaignId} - ${name}`);
+            
+            const roomDetails = await roomManager.getRoomDetails(room.id);
+            const gameState = await getGameState(room.id);
+            const campaign_obj = await getCampaign(campaignId);
+            
+            callback({
+                success: true,
+                campaignId,
+                isDM: true,
+                campaign: {
+                    id: campaignId,
+                    name: name,
+                    system: system,
+                    googleDocsUrl: null
+                },
+                room: {
+                    ...roomDetails,
+                    code: campaignId,
+                    gameState
+                },
+                character: null,
+                chatHistory: []
+            });
+            
+        } catch (error) {
+            console.error('Error creating campaign:', error);
+            callback({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+    
+    // Join campaign
+    socket.on('campaign:join', async (data, callback) => {
+        try {
+            const { campaignId, playerName, dmPassword } = data;
+            
+            // Get campaign
+            const campaign = await getCampaign(campaignId);
+            if (!campaign) {
+                throw new Error('Campanha não encontrada');
+            }
+            
+            let isDM = false;
+            
+            // Check if DM password provided
+            if (dmPassword) {
+                const hashedPassword = crypto.createHash('sha256').update(dmPassword).digest('hex');
+                if (hashedPassword === campaign.dm_password) {
+                    isDM = true;
+                } else {
+                    throw new Error('Senha do mestre incorreta');
+                }
+            }
+            
+            // Join the room using campaign ID as room code
+            const joinResult = await roomManager.joinRoom(campaignId, playerName);
+            
+            // Join socket room
+            socket.join(joinResult.room_id);
+            
+            // Update player socket
+            await roomManager.updatePlayerSocket(joinResult.player_id, socket.id);
+            connectedPlayers.set(socket.id, {
+                id: joinResult.player_id,
+                roomId: joinResult.room_id,
+                name: playerName,
+                isDM: isDM,
+                campaignId: campaignId
+            });
+            
+            // Load persisted room state
+            const persistedState = await loadRoomState(joinResult.room_id);
+            
+            // Load initiative tracker
+            if (!initiativeTrackers.has(joinResult.room_id)) {
+                initiativeTrackers.set(joinResult.room_id, persistedState.initiative || {
+                    players: [],
+                    currentTurn: 0,
+                    active: false
+                });
+            }
+            
+            // Load player's character if exists
+            const character = await getCharacter(campaignId, playerName);
+            
+            // Load chat history
+            const chatHistory = await getChatHistory(campaignId, 100);
+            
+            // Load system data if campaign uses custom system
+            let systemData = null;
+            if (campaign.system === 'custom') {
+                const systemResult = await getSystemData(campaignId);
+                systemData = systemResult?.systemData || null;
+            }
+            
+            // Update campaign last active
+            await updateCampaignLastActive(campaignId);
+            
+            console.log(`📚 ${playerName} joined campaign ${campaignId} ${isDM ? '(DM)' : '(Player)'}`);
+            
+            // Get room state
+            const roomDetails = await roomManager.getRoomDetails(joinResult.room_id);
+            const gameState = await getGameState(joinResult.room_id);
+            
+            callback({
+                success: true,
+                campaign: {
+                    id: campaign.id,
+                    name: campaign.name,
+                    system: campaign.system,
+                    customRules: campaign.custom_rules,
+                    googleDocsUrl: campaign.google_docs_url,
+                    systemData: systemData
+                },
+                room: {
+                    ...roomDetails,
+                    gameState,
+                    playerId: joinResult.player_id
+                },
+                character,
+                chatHistory,
+                isDM
+            });
+            
+            // Broadcast player joined to others
+            socket.to(joinResult.room_id).emit('room:joined', {
+                playerId: joinResult.player_id,
+                playerName,
+                isDM
+            });
+            
+            // Send updated room state to all
+            io.to(joinResult.room_id).emit('room:state', {
+                ...roomDetails,
+                gameState
+            });
+            
+        } catch (error) {
+            console.error('Error joining campaign:', error);
+            callback({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+    
+    // Save character
+    socket.on('campaign:save-character', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.campaignId) throw new Error('Not in a campaign');
+            
+            const { campaignId, playerName, characterData } = data;
+            
+            // Verify campaign access
+            if (campaignId !== player.campaignId) {
+                throw new Error('Access denied');
+            }
+            
+            await saveCharacter(campaignId, playerName, characterData);
+            
+            console.log(`💾 Character saved: ${playerName} in campaign ${campaignId}`);
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error saving character:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+    
+    // Set Google Docs URL
+    socket.on('campaign:set-docs', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM || !player.campaignId) {
+                throw new Error('Only DM can set docs URL');
+            }
+            
+            const { campaignId, url } = data;
+            
+            // Verify campaign access
+            if (campaignId !== player.campaignId) {
+                throw new Error('Access denied');
+            }
+            
+            await updateCampaignDocs(campaignId, url);
+            
+            console.log(`📄 Google Docs updated: ${campaignId} -> ${url}`);
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('campaign:docs-updated', { url });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error setting docs URL:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+    
+    // System management
+    socket.on('system:upload-text', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM || !player.campaignId) {
+                throw new Error('Only DM can upload system documents');
+            }
+            
+            const { text, filename } = data;
+            
+            if (callback) callback({
+                success: true,
+                text: text,
+                filename: filename || 'documento-texto.txt'
+            });
+        } catch (error) {
+            console.error('Error uploading text:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+    
+    socket.on('system:get', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.campaignId) {
+                throw new Error('Not in a campaign');
+            }
+            
+            const { campaignId } = data;
+            
+            // Verify campaign access
+            if (campaignId !== player.campaignId) {
+                throw new Error('Access denied');
+            }
+            
+            const systemData = await getSystemData(campaignId);
+            
+            if (callback) callback({
+                success: true,
+                systemData: systemData?.systemData || null,
+                parsedAt: systemData?.parsedAt || null
+            });
+        } catch (error) {
+            console.error('Error getting system:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+    
+    // Broadcast system parsed event (called from HTTP endpoint)
+    socket.on('system:broadcast-parsed', async (data) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM || !player.campaignId) {
+                throw new Error('Only DM can broadcast system updates');
+            }
+            
+            const { systemData } = data;
+            
+            // Broadcast to all players in room
+            io.to(player.roomId).emit('system:parsed', { systemData });
+            
+            console.log(`📖 System broadcasted to room ${player.roomId}`);
+        } catch (error) {
+            console.error('Error broadcasting system:', error);
         }
     });
     
@@ -358,6 +858,16 @@ io.on('connection', (socket) => {
             
             console.log(`🎲 ${player.name} rolled: ${notation} = ${rollResult.total}`);
             
+            // Save to campaign chat history if in a campaign and not secret
+            if (player.campaignId && !isSecret) {
+                try {
+                    const diceContent = `🎲 ${notation} = ${rollResult.total}`;
+                    await saveChatMessage(player.campaignId, player.name, diceContent, 'dice');
+                } catch (err) {
+                    console.error('Error saving dice roll to campaign:', err);
+                }
+            }
+            
             if (isSecret && player.isDM) {
                 // Send only to DM
                 socket.emit('dice:result', rollResult);
@@ -365,9 +875,6 @@ io.on('connection', (socket) => {
                 // Broadcast to entire room
                 io.to(player.roomId).emit('dice:result', rollResult);
             }
-            
-            // Save to chat as system message
-            // TODO: Implement chat message storage
             
             if (callback) callback({ success: true, result: rollResult });
         } catch (error) {
@@ -395,6 +902,15 @@ io.on('connection', (socket) => {
             };
             
             console.log(`💬 ${player.name}: ${message}`);
+            
+            // Save to campaign chat history if in a campaign
+            if (player.campaignId && !isWhisper) {
+                try {
+                    await saveChatMessage(player.campaignId, player.name, message, 'message');
+                } catch (err) {
+                    console.error('Error saving chat to campaign:', err);
+                }
+            }
             
             if (isWhisper && targetPlayer) {
                 // Send to target and sender only

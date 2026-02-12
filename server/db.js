@@ -26,6 +26,7 @@ async function initDatabase() {
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
       dm_name TEXT NOT NULL,
+      system TEXT DEFAULT 'dnd5e',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       is_active INTEGER DEFAULT 1,
       current_map TEXT DEFAULT NULL,
@@ -103,6 +104,41 @@ async function initDatabase() {
       ambiance TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (room_id) REFERENCES rooms (id)
+    );
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id TEXT PRIMARY KEY,          -- 8-char unique code (permanent link)
+      name TEXT NOT NULL,            -- "A Maldição de Strahd"
+      dm_password TEXT NOT NULL,     -- hashed password for DM access
+      system TEXT DEFAULT 'dnd5e',   -- dnd5e | generic | custom
+      custom_rules TEXT,             -- for "custom" system
+      google_docs_url TEXT,          -- optional Google Docs link
+      created_at TEXT DEFAULT (datetime('now')),
+      last_active TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS campaign_characters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id TEXT NOT NULL,
+      player_name TEXT NOT NULL,     -- how the player identifies themselves
+      character_data TEXT NOT NULL,  -- JSON blob of the full character sheet
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+      UNIQUE(campaign_id, player_name)
+    );
+    CREATE TABLE IF NOT EXISTS campaign_chat_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id TEXT NOT NULL,
+      author TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'message',   -- message | dice | system
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    );
+    CREATE TABLE IF NOT EXISTS campaign_system (
+      campaign_id TEXT PRIMARY KEY,
+      system_data TEXT NOT NULL,      -- JSON: parsed system (races, classes, equipment, etc)
+      raw_documents TEXT,             -- JSON array of original document texts (for re-parsing)
+      parsed_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
     );
   `);
 
@@ -217,8 +253,243 @@ async function loadRoomState(roomId) {
   }
 }
 
+// ── Campaign helper functions ──
+
+// Create campaign
+async function createCampaign(id, name, dmPassword, system = 'dnd5e', customRules = null) {
+  try {
+    const crypto = require('crypto');
+    const hashedPassword = crypto.createHash('sha256').update(dmPassword).digest('hex');
+    
+    await run(`
+      INSERT INTO campaigns (id, name, dm_password, system, custom_rules, created_at, last_active)
+      VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `, [id, name, hashedPassword, system, customRules]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error creating campaign:', error);
+    throw error;
+  }
+}
+
+// Get campaign by ID
+async function getCampaign(id) {
+  try {
+    const campaign = await get(`
+      SELECT * FROM campaigns WHERE id = ?
+    `, [id]);
+    
+    return campaign;
+  } catch (error) {
+    console.error('Error getting campaign:', error);
+    throw error;
+  }
+}
+
+// Update campaign last active timestamp
+async function updateCampaignLastActive(id) {
+  try {
+    await run(`
+      UPDATE campaigns 
+      SET last_active = datetime('now')
+      WHERE id = ?
+    `, [id]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating campaign last active:', error);
+    throw error;
+  }
+}
+
+// Save character (UPSERT)
+async function saveCharacter(campaignId, playerName, characterData) {
+  try {
+    const jsonData = JSON.stringify(characterData);
+    
+    await run(`
+      INSERT INTO campaign_characters (campaign_id, player_name, character_data, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(campaign_id, player_name) DO UPDATE SET 
+        character_data = ?,
+        updated_at = datetime('now')
+    `, [campaignId, playerName, jsonData, jsonData]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving character:', error);
+    throw error;
+  }
+}
+
+// Get character
+async function getCharacter(campaignId, playerName) {
+  try {
+    const row = await get(`
+      SELECT character_data FROM campaign_characters 
+      WHERE campaign_id = ? AND player_name = ?
+    `, [campaignId, playerName]);
+    
+    if (!row) return null;
+    
+    return JSON.parse(row.character_data);
+  } catch (error) {
+    console.error('Error getting character:', error);
+    throw error;
+  }
+}
+
+// Get all characters in campaign
+async function getCampaignCharacters(campaignId) {
+  try {
+    const rows = await query(`
+      SELECT player_name, character_data, updated_at 
+      FROM campaign_characters 
+      WHERE campaign_id = ?
+      ORDER BY updated_at DESC
+    `, [campaignId]);
+    
+    return rows.map(row => ({
+      playerName: row.player_name,
+      character: JSON.parse(row.character_data),
+      updatedAt: row.updated_at
+    }));
+  } catch (error) {
+    console.error('Error getting campaign characters:', error);
+    throw error;
+  }
+}
+
+// Save chat message
+async function saveChatMessage(campaignId, author, content, type = 'message') {
+  try {
+    await run(`
+      INSERT INTO campaign_chat_history (campaign_id, author, content, type, created_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `, [campaignId, author, content, type]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving chat message:', error);
+    throw error;
+  }
+}
+
+// Get chat history
+async function getChatHistory(campaignId, limit = 100) {
+  try {
+    const rows = await query(`
+      SELECT author, content, type, created_at 
+      FROM campaign_chat_history 
+      WHERE campaign_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `, [campaignId, limit]);
+    
+    return rows.reverse(); // Return in chronological order
+  } catch (error) {
+    console.error('Error getting chat history:', error);
+    throw error;
+  }
+}
+
+// Update campaign Google Docs URL
+async function updateCampaignDocs(campaignId, url) {
+  try {
+    await run(`
+      UPDATE campaigns 
+      SET google_docs_url = ?
+      WHERE id = ?
+    `, [url, campaignId]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error updating campaign docs:', error);
+    throw error;
+  }
+}
+
+// Generate 8-character campaign ID
+function generateCampaignId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 // Save on process exit
 process.on('exit', () => saveDb());
 process.on('SIGINT', () => { saveDb(); process.exit(0); });
 
-module.exports = { db: null, initDatabase, query, run, get, saveRoomState, loadRoomState };
+// ── Campaign System helper functions ──
+
+// Save system data for a campaign
+async function saveSystemData(campaignId, systemData, rawDocuments = []) {
+  try {
+    const jsonSystemData = JSON.stringify(systemData);
+    const jsonRawDocuments = JSON.stringify(rawDocuments);
+    
+    await run(`
+      INSERT INTO campaign_system (campaign_id, system_data, raw_documents, parsed_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(campaign_id) DO UPDATE SET 
+        system_data = ?,
+        raw_documents = ?,
+        parsed_at = datetime('now')
+    `, [campaignId, jsonSystemData, jsonRawDocuments, jsonSystemData, jsonRawDocuments]);
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving system data:', error);
+    throw error;
+  }
+}
+
+// Get system data for a campaign
+async function getSystemData(campaignId) {
+  try {
+    const row = await get(`
+      SELECT system_data, raw_documents, parsed_at 
+      FROM campaign_system 
+      WHERE campaign_id = ?
+    `, [campaignId]);
+    
+    if (!row) return null;
+    
+    return {
+      systemData: JSON.parse(row.system_data),
+      rawDocuments: row.raw_documents ? JSON.parse(row.raw_documents) : [],
+      parsedAt: row.parsed_at
+    };
+  } catch (error) {
+    console.error('Error getting system data:', error);
+    throw error;
+  }
+}
+
+module.exports = { 
+  db: null, 
+  initDatabase, 
+  query, 
+  run, 
+  get, 
+  saveRoomState, 
+  loadRoomState,
+  // Campaign functions
+  createCampaign,
+  getCampaign,
+  updateCampaignLastActive,
+  saveCharacter,
+  getCharacter,
+  getCampaignCharacters,
+  saveChatMessage,
+  getChatHistory,
+  updateCampaignDocs,
+  generateCampaignId,
+  // Campaign System functions
+  saveSystemData,
+  getSystemData
+};
