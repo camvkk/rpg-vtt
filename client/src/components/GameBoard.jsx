@@ -1308,18 +1308,27 @@ function isValidGoogleUrl(url) {
 // ── Toolbar Dropdown Menu ──
 function ToolbarMenu({ id, icon, label, items, openMenu, setOpenMenu, hasActive }) {
   const isOpen = openMenu === id;
-  const toggle = () => setOpenMenu(isOpen ? null : id);
+  const btnRef = React.useRef(null);
+  const [dropdownPos, setDropdownPos] = React.useState({ top: 0, left: 0 });
+  const toggle = () => {
+    if (!isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 6, left: rect.left });
+    }
+    setOpenMenu(isOpen ? null : id);
+  };
 
   return (
     <div className="gb-menu-container">
       <button
+        ref={btnRef}
         className={`btn btn-ghost gb-toolbar-btn gb-menu-trigger ${isOpen ? 'gb-menu-open' : ''} ${hasActive ? 'gb-menu-has-active' : ''}`}
         onClick={toggle}
       >
         {icon} {label} <span className="gb-menu-arrow">{isOpen ? '▴' : '▾'}</span>
       </button>
       {isOpen && (
-        <div className="gb-dropdown">
+        <div className="gb-dropdown" style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}>
           {items.map((item, i) => {
             if (item.type === 'divider') return <div key={i} className="gb-dropdown-divider" />;
             return (
