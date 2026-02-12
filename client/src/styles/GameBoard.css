@@ -18,7 +18,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--spacing-md);
-  z-index: 50;
+  z-index: 100;
+  overflow: visible;
+  position: relative;
 }
 .gb-toolbar-left,
 .gb-toolbar-right {
@@ -465,5 +467,6 @@
     transform: translateY(0);
   }
 }
-/ *   r e b u i l d   * /  
+/ *   r e b u i l d   * / 
+ 
  
