@@ -156,7 +156,7 @@ async function callKimiK2(systemPrompt, userPrompt) {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ],
-            max_tokens: 8000,
+            max_tokens: 16000,
             temperature: 1
         })
     });
@@ -172,7 +172,53 @@ async function callKimiK2(systemPrompt, userPrompt) {
     
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, content];
-    return JSON.parse(jsonMatch[1].trim());
+    let jsonStr = jsonMatch[1].trim();
+    
+    // Try to repair common JSON issues from LLM output
+    try {
+        return JSON.parse(jsonStr);
+    } catch (e) {
+        // Try to find the outermost { ... } or [ ... ]
+        const firstBrace = jsonStr.indexOf('{');
+        const firstBracket = jsonStr.indexOf('[');
+        const start = (firstBrace >= 0 && (firstBracket < 0 || firstBrace < firstBracket)) ? firstBrace : firstBracket;
+        if (start > 0) jsonStr = jsonStr.substring(start);
+        
+        // Remove trailing garbage after last } or ]
+        const lastBrace = jsonStr.lastIndexOf('}');
+        const lastBracket = jsonStr.lastIndexOf(']');
+        const end = Math.max(lastBrace, lastBracket);
+        if (end > 0) jsonStr = jsonStr.substring(0, end + 1);
+        
+        // Fix truncated JSON: close unclosed brackets/braces
+        let openBraces = 0, openBrackets = 0;
+        let inString = false, escaped = false;
+        for (let i = 0; i < jsonStr.length; i++) {
+            const c = jsonStr[i];
+            if (escaped) { escaped = false; continue; }
+            if (c === '\\') { escaped = true; continue; }
+            if (c === '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c === '{') openBraces++;
+            else if (c === '}') openBraces--;
+            else if (c === '[') openBrackets++;
+            else if (c === ']') openBrackets--;
+        }
+        
+        // Remove trailing comma before closing
+        jsonStr = jsonStr.replace(/,\s*$/, '');
+        
+        // Close unclosed structures
+        for (let i = 0; i < openBrackets; i++) jsonStr += ']';
+        for (let i = 0; i < openBraces; i++) jsonStr += '}';
+        
+        try {
+            return JSON.parse(jsonStr);
+        } catch (e2) {
+            console.error('JSON repair failed. Raw content:', content.substring(0, 500));
+            throw new Error('Erro ao processar resposta da IA. O sistema é muito extenso — tente importar menos documentos por vez.');
+        }
+    }
 }
 
 // Document upload endpoint
@@ -441,8 +487,13 @@ app.post('/api/parse-system', async (req, res) => {
             throw new Error('Documentos são obrigatórios');
         }
         
-        // Combine all documents into a single text
-        const combinedText = documents.map(doc => `=== ${doc.name} ===\n${doc.text}`).join('\n\n');
+        // Combine all documents into a single text (truncate to ~100k chars to fit in context window)
+        let combinedText = documents.map(doc => `=== ${doc.name} ===\n${doc.text}`).join('\n\n');
+        const MAX_CHARS = 100000;
+        if (combinedText.length > MAX_CHARS) {
+            console.warn(`Input text too long (${combinedText.length} chars), truncating to ${MAX_CHARS}`);
+            combinedText = combinedText.substring(0, MAX_CHARS) + '\n\n[... texto truncado por limite de tamanho ...]';
+        }
         
         // System prompt with full schema based on dnd5e.js format
         const systemPrompt = `Você é um parser especializado em sistemas de RPG de mesa. Extraia regras de texto livre e converta em JSON estruturado.
