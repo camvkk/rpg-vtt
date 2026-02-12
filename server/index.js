@@ -884,7 +884,8 @@ io.on('connection', (socket) => {
                     id: campaignId,
                     name: name,
                     system: system,
-                    googleDocsUrl: null
+                    googleDocsUrl: null,
+                    systemData: (system === 'custom' && systemData?.systemName) ? systemData : null
                 },
                 room: {
                     ...roomDetails,
