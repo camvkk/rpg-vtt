@@ -84,8 +84,8 @@
 .gb-canvas-area {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   background: var(--bg-primary);
   position: relative;
   overflow: hidden;

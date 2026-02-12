@@ -339,7 +339,7 @@ export default function GameBoard({ onLeaveRoom }) {
           display: 'flex', 
           flexDirection: showGoogleDocs ? 'row' : 'column' 
         }}>
-          <div style={{ flex: showGoogleDocs ? '1' : '1 1 100%' }}>
+          <div style={{ flex: 1, width: '100%', height: '100%', minHeight: 0 }}>
             <CanvasErrorBoundary>
               <MapCanvas 
                 isDM={isDM} 
