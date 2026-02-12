@@ -8,6 +8,18 @@ import CharSheet from './CharSheet';
 import Ambiance from './Ambiance';
 import '../styles/GameBoard.css';
 
+// Error boundary to catch MapCanvas crashes
+import { Component } from 'react';
+class CanvasErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('CANVAS CRASH:', error, info.componentStack); }
+  render() {
+    if (this.state.error) return <div style={{color:'red',padding:20}}>Canvas Error: {this.state.error.message}</div>;
+    return this.props.children;
+  }
+}
+
 export default function GameBoard({ onLeaveRoom }) {
   const { state, actions } = useGame();
   const { room, player, players, tokens, initiative, chat, ui, connected } = state;
@@ -212,11 +224,13 @@ export default function GameBoard({ onLeaveRoom }) {
 
         {/* Center — Map Canvas */}
         <div className="gb-canvas-area">
-          <MapCanvas 
-            isDM={isDM} 
-            tokenAwaitingPlacement={tokenAwaitingPlacement}
-            onTokenPlaced={() => setTokenAwaitingPlacement(null)}
-          />
+          <CanvasErrorBoundary>
+            <MapCanvas 
+              isDM={isDM} 
+              tokenAwaitingPlacement={tokenAwaitingPlacement}
+              onTokenPlaced={() => setTokenAwaitingPlacement(null)}
+            />
+          </CanvasErrorBoundary>
         </div>
 
         {/* Right panel */}

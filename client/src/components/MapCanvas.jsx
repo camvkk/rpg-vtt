@@ -40,6 +40,7 @@ export default function MapCanvas({
     let destroyed = false;
 
     (async () => {
+      try {
       app = new Application();
       const container = containerRef.current;
       const { width, height } = container.getBoundingClientRect();
@@ -78,6 +79,9 @@ export default function MapCanvas({
 
       drawGrid(gridLayer, app.screen.width, app.screen.height);
       setupInteractions(app);
+      } catch (err) {
+        console.error('PIXI INIT ERROR:', err);
+      }
     })();
 
     return () => {
