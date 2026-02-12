@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 
 // ── State shape ──
@@ -248,9 +248,11 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
                 dispatch({ type: 'SET_ERROR', payload: 'Sessão anterior expirou. Crie uma nova sala.' });
               } else {
                 // For players, try to rejoin
-                const res = await emit('room:join', { 
-                  code: sessionData.roomCode, 
-                  playerName: sessionData.playerName 
+                const res = await new Promise((resolve, reject) => {
+                  socket.timeout(8000).emit('room:join', { 
+                    code: sessionData.roomCode, 
+                    playerName: sessionData.playerName 
+                  }, (err, response) => err ? reject(err) : resolve(response));
                 });
                 
                 if (res.success) {

@@ -23,6 +23,14 @@ export default function MapCanvas({
 
   const { state, actions } = useGame();
   const { tokens, fogAreas, drawings, map, ui } = state;
+  
+  // Refs for values accessed in event handlers (avoid stale closures)
+  const activeToolRef = useRef(ui.activeTool);
+  const isDMRef = useRef(isDM);
+  const tokenPlacementRef = useRef(tokenAwaitingPlacement);
+  activeToolRef.current = ui.activeTool;
+  isDMRef.current = isDM;
+  tokenPlacementRef.current = tokenAwaitingPlacement;
 
   // ── Init Pixi (v8 async API) ──
   useEffect(() => {
@@ -372,7 +380,7 @@ export default function MapCanvas({
         viewRef.current.isPanning = true;
         viewRef.current.lastPan = { x: e.clientX, y: e.clientY };
         canvas.style.cursor = 'grabbing';
-      } else if (e.button === 0 && ui.activeTool === 'fog' && isDM) {
+      } else if (e.button === 0 && activeToolRef.current === 'fog' && isDMRef.current) {
         // Fog reveal mode
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -384,7 +392,7 @@ export default function MapCanvas({
         
         revealFogAt(worldX, worldY);
         isRevealingFogRef.current = true;
-      } else if (e.button === 0 && ui.activeTool === 'add-token' && tokenAwaitingPlacement && isDM) {
+      } else if (e.button === 0 && activeToolRef.current === 'add-token' && tokenPlacementRef.current && isDMRef.current) {
         // Token placement mode
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -404,7 +412,7 @@ export default function MapCanvas({
         actions.addToken(newToken);
         onTokenPlaced();
         actions.setActiveTool('select');
-      } else if (e.button === 0 && ui.activeTool === 'measure' && isDM) {
+      } else if (e.button === 0 && activeToolRef.current === 'measure' && isDMRef.current) {
         // Ruler/measure mode
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -420,7 +428,7 @@ export default function MapCanvas({
         rulerRef.current.endPoint = { x: worldX, y: worldY };
         
         drawRuler(rulerRef.current.startPoint, rulerRef.current.endPoint);
-      } else if (e.button === 0 && ui.activeTool === 'draw' && isDM) {
+      } else if (e.button === 0 && activeToolRef.current === 'draw' && isDMRef.current) {
         // Drawing mode
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -442,7 +450,7 @@ export default function MapCanvas({
         v.lastPan = { x: e.clientX, y: e.clientY };
         applyTransform();
         if (layersRef.current.grid) drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
-      } else if (isRevealingFogRef.current && ui.activeTool === 'fog' && isDM) {
+      } else if (isRevealingFogRef.current && activeToolRef.current === 'fog' && isDMRef.current) {
         // Continue revealing fog while dragging
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
@@ -451,7 +459,7 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         
         revealFogAt(worldX, worldY);
-      } else if (rulerRef.current.isActive && ui.activeTool === 'measure' && isDM) {
+      } else if (rulerRef.current.isActive && activeToolRef.current === 'measure' && isDMRef.current) {
         // Update ruler end point while dragging
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
@@ -461,7 +469,7 @@ export default function MapCanvas({
         
         rulerRef.current.endPoint = { x: worldX, y: worldY };
         drawRuler(rulerRef.current.startPoint, rulerRef.current.endPoint);
-      } else if (drawingRef.current.isDrawing && ui.activeTool === 'draw' && isDM) {
+      } else if (drawingRef.current.isDrawing && activeToolRef.current === 'draw' && isDMRef.current) {
         // Continue drawing while dragging
         const rect = canvas.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
@@ -483,7 +491,7 @@ export default function MapCanvas({
       }
       
       // Finish ruler measurement
-      if (rulerRef.current.isActive && ui.activeTool === 'measure' && isDM) {
+      if (rulerRef.current.isActive && activeToolRef.current === 'measure' && isDMRef.current) {
         // Keep the ruler visible for a bit, then clear it
         setTimeout(() => {
           if (ui.activeTool !== 'measure') {
@@ -494,7 +502,7 @@ export default function MapCanvas({
       }
       
       // Finish drawing
-      if (drawingRef.current.isDrawing && ui.activeTool === 'draw' && isDM) {
+      if (drawingRef.current.isDrawing && activeToolRef.current === 'draw' && isDMRef.current) {
         finishDrawing();
       }
     });

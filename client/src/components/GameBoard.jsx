@@ -373,7 +373,7 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
             placeholder="Ex: Goblin, Orc Capitão..."
             value={tokenName}
             onChange={(e) => setTokenName(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
+            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             autoFocus
           />
         </div>

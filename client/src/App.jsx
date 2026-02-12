@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { GameProvider, useGame } from './contexts/GameContext';
 import Lobby from './components/Lobby';
 import GameBoard from './components/GameBoard';
-import './styles/theme.css';
 
 function AppInner() {
   const { state, actions } = useGame();
