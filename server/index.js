@@ -122,21 +122,36 @@ const upload = multer({
     }
 });
 
-// OpenRouter API helper for Kimi K2.5
+// Moonshot API helper for Kimi K2.5
 async function callKimiK2(systemPrompt, userPrompt) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY não configurada no servidor');
+    // Support both Moonshot direct API and OpenRouter
+    const moonshotKey = process.env.MOONSHOT_API_KEY;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
     
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    let apiUrl, apiKey, model, extraHeaders = {};
+    
+    if (moonshotKey) {
+        apiUrl = 'https://api.moonshot.ai/v1/chat/completions';
+        apiKey = moonshotKey;
+        model = 'kimi-k2.5';
+    } else if (openrouterKey) {
+        apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+        apiKey = openrouterKey;
+        model = 'moonshotai/kimi-k2.5';
+        extraHeaders = { 'HTTP-Referer': 'https://rpg-vtt.vercel.app', 'X-Title': 'RPG VTT System Importer' };
+    } else {
+        throw new Error('MOONSHOT_API_KEY ou OPENROUTER_API_KEY não configurada no servidor');
+    }
+    
+    const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'https://rpg-vtt.vercel.app',
-            'X-Title': 'RPG VTT System Importer'
+            ...extraHeaders
         },
         body: JSON.stringify({
-            model: 'moonshotai/kimi-k2.5',
+            model,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
@@ -148,7 +163,7 @@ async function callKimiK2(systemPrompt, userPrompt) {
     
     if (!response.ok) {
         const err = await response.text();
-        throw new Error(`OpenRouter API error: ${response.status} - ${err}`);
+        throw new Error(`Kimi API error: ${response.status} - ${err}`);
     }
     
     const data = await response.json();
