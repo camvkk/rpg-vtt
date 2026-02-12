@@ -213,15 +213,143 @@ app.post('/api/upload-system-doc', upload.single('document'), async (req, res) =
     }
 });
 
+// Helper: fetch a single Google Drive file by ID
+async function fetchGdriveFile(fileId, isGoogleDoc = false, isSpreadsheet = false, isPresentation = false) {
+    let fetchUrl;
+    if (isGoogleDoc) {
+        fetchUrl = `https://docs.google.com/document/d/${fileId}/export?format=txt`;
+    } else if (isSpreadsheet) {
+        fetchUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
+    } else if (isPresentation) {
+        fetchUrl = `https://docs.google.com/presentation/d/${fileId}/export?format=txt`;
+    } else {
+        fetchUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+
+    const response = await fetch(fetchUrl, { redirect: 'follow' });
+    if (response.status === 401 || response.status === 403) {
+        throw new Error('Arquivo não está compartilhado publicamente. Selecione "Qualquer pessoa com o link".');
+    }
+    if (!response.ok) {
+        throw new Error(`Erro ao buscar arquivo: ${response.status}`);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf')) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const pdfData = await pdfParse(buffer);
+        return pdfData.text;
+    }
+    return await response.text();
+}
+
+// Helper: list files in a public Google Drive folder
+async function listGdriveFolder(folderId) {
+    // Use Google Drive API v3 (no auth needed for public folders with API key-less listing)
+    const listUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType)&key=AIzaSyC1Nk2x3kVrOFn2VqJE6kbg7bQcJ6R4Ng4`;
+    const response = await fetch(listUrl);
+    
+    if (!response.ok) {
+        // Fallback: scrape the folder page for file links
+        const folderPageUrl = `https://drive.google.com/drive/folders/${folderId}`;
+        const pageResp = await fetch(folderPageUrl, { 
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            redirect: 'follow' 
+        });
+        const html = await pageResp.text();
+        
+        // Extract file IDs from the HTML
+        const fileIdRegex = /\/file\/d\/([a-zA-Z0-9_-]+)/g;
+        const docIdRegex = /\/document\/d\/([a-zA-Z0-9_-]+)/g;
+        const sheetIdRegex = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/g;
+        
+        const files = [];
+        const seenIds = new Set();
+        let m;
+        
+        while ((m = docIdRegex.exec(html)) !== null) {
+            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/vnd.google-apps.document', name: `doc-${m[1].slice(0,8)}` }); }
+        }
+        while ((m = sheetIdRegex.exec(html)) !== null) {
+            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/vnd.google-apps.spreadsheet', name: `sheet-${m[1].slice(0,8)}` }); }
+        }
+        while ((m = fileIdRegex.exec(html)) !== null) {
+            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/octet-stream', name: `file-${m[1].slice(0,8)}` }); }
+        }
+        
+        if (files.length === 0) {
+            throw new Error('Pasta vazia ou não está compartilhada publicamente.');
+        }
+        return files;
+    }
+    
+    const data = await response.json();
+    if (!data.files || data.files.length === 0) {
+        throw new Error('Pasta vazia ou não está compartilhada publicamente.');
+    }
+    return data.files;
+}
+
 // Google Drive fetch endpoint
 app.post('/api/fetch-gdrive', express.json(), async (req, res) => {
     try {
         const { url } = req.body;
         if (!url) throw new Error('URL não fornecida');
 
-        // Extract file ID from various Google Drive/Docs URL formats
+        // Check if it's a folder link
+        const folderMatch = url.match(/drive\.google\.com\/drive\/folders\/([a-zA-Z0-9_-]+)/);
+        if (folderMatch) {
+            const folderId = folderMatch[1];
+            const files = await listGdriveFolder(folderId);
+            
+            // Fetch each file's content
+            const results = [];
+            for (const file of files) {
+                try {
+                    const isDoc = file.mimeType === 'application/vnd.google-apps.document';
+                    const isSheet = file.mimeType === 'application/vnd.google-apps.spreadsheet';
+                    const isPres = file.mimeType === 'application/vnd.google-apps.presentation';
+                    
+                    let text;
+                    if (isDoc) {
+                        text = await fetchGdriveFile(file.id, true, false, false);
+                    } else if (isSheet) {
+                        text = await fetchGdriveFile(file.id, false, true, false);
+                    } else if (isPres) {
+                        text = await fetchGdriveFile(file.id, false, false, true);
+                    } else {
+                        // Try as generic file (PDF, txt, etc.)
+                        text = await fetchGdriveFile(file.id);
+                    }
+                    
+                    if (text && text.trim().length > 0) {
+                        results.push({ name: file.name || `arquivo-${file.id.slice(0,8)}`, text });
+                    }
+                } catch (err) {
+                    console.warn(`Skipping file ${file.name}: ${err.message}`);
+                }
+            }
+            
+            if (results.length === 0) {
+                throw new Error('Nenhum arquivo com texto encontrado na pasta.');
+            }
+            
+            // Return all files combined
+            const combinedText = results.map(r => `=== ${r.name} ===\n${r.text}`).join('\n\n');
+            return res.json({
+                success: true,
+                text: combinedText,
+                filename: `pasta-drive-${results.length}-arquivos.txt`,
+                fileCount: results.length,
+                files: results.map(r => r.name)
+            });
+        }
+
+        // Single file handling
         let fileId = null;
         let isGoogleDoc = false;
+        let isSpreadsheet = false;
+        let isPresentation = false;
 
         const docMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
         const spreadsheetMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -229,65 +357,20 @@ app.post('/api/fetch-gdrive', express.json(), async (req, res) => {
         const fileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
         const openMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
         const idParamMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-        let isSpreadsheet = false;
-        let isPresentation = false;
 
-        if (docMatch) {
-            fileId = docMatch[1];
-            isGoogleDoc = true;
-        } else if (spreadsheetMatch) {
-            fileId = spreadsheetMatch[1];
-            isSpreadsheet = true;
-        } else if (presentationMatch) {
-            fileId = presentationMatch[1];
-            isPresentation = true;
-        } else if (fileMatch) {
-            fileId = fileMatch[1];
-        } else if (openMatch) {
-            fileId = openMatch[1];
-        } else if (idParamMatch) {
-            fileId = idParamMatch[1];
-        } else {
-            // Try to extract any long alphanumeric ID from the URL
+        if (docMatch) { fileId = docMatch[1]; isGoogleDoc = true; }
+        else if (spreadsheetMatch) { fileId = spreadsheetMatch[1]; isSpreadsheet = true; }
+        else if (presentationMatch) { fileId = presentationMatch[1]; isPresentation = true; }
+        else if (fileMatch) { fileId = fileMatch[1]; }
+        else if (openMatch) { fileId = openMatch[1]; }
+        else if (idParamMatch) { fileId = idParamMatch[1]; }
+        else {
             const genericMatch = url.match(/\/([a-zA-Z0-9_-]{20,})/);
-            if (genericMatch) {
-                fileId = genericMatch[1];
-            } else {
-                throw new Error('URL do Google Drive não reconhecida. Use um link de Google Docs, Sheets, ou arquivo do Drive.');
-            }
+            if (genericMatch) { fileId = genericMatch[1]; }
+            else { throw new Error('URL do Google Drive não reconhecida.'); }
         }
 
-        // Fetch the content
-        let fetchUrl;
-        if (isGoogleDoc) {
-            fetchUrl = `https://docs.google.com/document/d/${fileId}/export?format=txt`;
-        } else if (isSpreadsheet) {
-            fetchUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
-        } else if (isPresentation) {
-            fetchUrl = `https://docs.google.com/presentation/d/${fileId}/export?format=txt`;
-        } else {
-            fetchUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-        }
-
-        const response = await fetch(fetchUrl, { redirect: 'follow' });
-
-        if (response.status === 401 || response.status === 403) {
-            throw new Error('Arquivo não está compartilhado publicamente. Abra as configurações de compartilhamento e selecione "Qualquer pessoa com o link".');
-        }
-        if (!response.ok) {
-            throw new Error(`Erro ao buscar arquivo: ${response.status} ${response.statusText}`);
-        }
-
-        const contentType = response.headers.get('content-type') || '';
-        let extractedText;
-
-        if (contentType.includes('application/pdf')) {
-            const buffer = Buffer.from(await response.arrayBuffer());
-            const pdfData = await pdfParse(buffer);
-            extractedText = pdfData.text;
-        } else {
-            extractedText = await response.text();
-        }
+        const extractedText = await fetchGdriveFile(fileId, isGoogleDoc, isSpreadsheet, isPresentation);
 
         if (!extractedText || extractedText.trim().length === 0) {
             throw new Error('Arquivo vazio ou não foi possível extrair texto.');
