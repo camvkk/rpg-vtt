@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { Application, Graphics, Container, Text, TextStyle } from 'pixi.js';
+import { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } from 'pixi.js';
 import { useGame } from '../contexts/GameContext';
 import { snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS } from '../utils/gridUtils';
 
@@ -231,7 +231,7 @@ export default function MapCanvas({
     let cancelled = false;
     (async () => {
       try {
-        const { Assets, Sprite } = await import('pixi.js');
+        // Assets and Sprite already imported statically
         // Resolve URL (could be relative like /public/maps/...)
         const fullUrl = map.url.startsWith('http') ? map.url : 
           (import.meta.env.VITE_SERVER_URL || window.location.origin) + map.url;
@@ -1274,7 +1274,7 @@ export default function MapCanvas({
     if (token.imageUrl) {
       (async () => {
         try {
-          const { Assets, Sprite, Graphics: GraphicsMask } = await import('pixi.js');
+          const GraphicsMask = Graphics;
           // Resolve URL (could be relative like /public/tokens/...)
           const fullUrl = token.imageUrl.startsWith('http') ? token.imageUrl : 
             (import.meta.env.VITE_SERVER_URL || window.location.origin) + token.imageUrl;
