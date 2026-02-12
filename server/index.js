@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 // Import our modules
@@ -47,11 +49,9 @@ const io = socketIo(server, {
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use('/public', express.static('public'));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // Map upload endpoint (HTTP — more reliable than socket for large files)
-const fs = require('fs');
-const path = require('path');
 const mapsDir = path.join(__dirname, 'public', 'maps');
 if (!fs.existsSync(mapsDir)) fs.mkdirSync(mapsDir, { recursive: true });
 
