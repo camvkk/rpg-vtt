@@ -243,51 +243,67 @@ async function fetchGdriveFile(fileId, isGoogleDoc = false, isSpreadsheet = fals
     return await response.text();
 }
 
-// Helper: list files in a public Google Drive folder
-async function listGdriveFolder(folderId) {
-    // Use Google Drive API v3 (no auth needed for public folders with API key-less listing)
-    const listUrl = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType)&key=AIzaSyC1Nk2x3kVrOFn2VqJE6kbg7bQcJ6R4Ng4`;
-    const response = await fetch(listUrl);
+// Helper: scrape a public Google Drive folder page for items (files + subfolders)
+async function scrapeGdriveFolder(folderId) {
+    const folderPageUrl = `https://drive.google.com/drive/folders/${folderId}`;
+    const pageResp = await fetch(folderPageUrl, { 
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        redirect: 'follow' 
+    });
+    const html = await pageResp.text();
     
-    if (!response.ok) {
-        // Fallback: scrape the folder page for file links
-        const folderPageUrl = `https://drive.google.com/drive/folders/${folderId}`;
-        const pageResp = await fetch(folderPageUrl, { 
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            redirect: 'follow' 
-        });
-        const html = await pageResp.text();
-        
-        // Extract file IDs from the HTML
-        const fileIdRegex = /\/file\/d\/([a-zA-Z0-9_-]+)/g;
-        const docIdRegex = /\/document\/d\/([a-zA-Z0-9_-]+)/g;
-        const sheetIdRegex = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/g;
-        
-        const files = [];
-        const seenIds = new Set();
-        let m;
-        
-        while ((m = docIdRegex.exec(html)) !== null) {
-            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/vnd.google-apps.document', name: `doc-${m[1].slice(0,8)}` }); }
+    const items = [];
+    const seenIds = new Set();
+    let m;
+    
+    // Find subfolders
+    const folderRegex = /drive\/folders\/([a-zA-Z0-9_-]{20,})/g;
+    while ((m = folderRegex.exec(html)) !== null) {
+        if (m[1] !== folderId && !seenIds.has(m[1])) {
+            seenIds.add(m[1]);
+            items.push({ id: m[1], mimeType: 'application/vnd.google-apps.folder', name: `folder-${m[1].slice(0,8)}` });
         }
-        while ((m = sheetIdRegex.exec(html)) !== null) {
-            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/vnd.google-apps.spreadsheet', name: `sheet-${m[1].slice(0,8)}` }); }
-        }
-        while ((m = fileIdRegex.exec(html)) !== null) {
-            if (!seenIds.has(m[1])) { seenIds.add(m[1]); files.push({ id: m[1], mimeType: 'application/octet-stream', name: `file-${m[1].slice(0,8)}` }); }
-        }
-        
-        if (files.length === 0) {
-            throw new Error('Pasta vazia ou não está compartilhada publicamente.');
-        }
-        return files;
     }
     
-    const data = await response.json();
-    if (!data.files || data.files.length === 0) {
-        throw new Error('Pasta vazia ou não está compartilhada publicamente.');
+    // Find Google Docs
+    const docRegex = /document\/d\/([a-zA-Z0-9_-]{20,})/g;
+    while ((m = docRegex.exec(html)) !== null) {
+        if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/vnd.google-apps.document', name: `doc-${m[1].slice(0,8)}` }); }
     }
-    return data.files;
+    
+    // Find Sheets
+    const sheetRegex = /spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/g;
+    while ((m = sheetRegex.exec(html)) !== null) {
+        if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/vnd.google-apps.spreadsheet', name: `sheet-${m[1].slice(0,8)}` }); }
+    }
+    
+    // Find regular files
+    const fileRegex = /file\/d\/([a-zA-Z0-9_-]{20,})/g;
+    while ((m = fileRegex.exec(html)) !== null) {
+        if (!seenIds.has(m[1])) { seenIds.add(m[1]); items.push({ id: m[1], mimeType: 'application/octet-stream', name: `file-${m[1].slice(0,8)}` }); }
+    }
+    
+    return items;
+}
+
+// Helper: recursively list all files in a Google Drive folder (max depth 3)
+async function listGdriveFolder(folderId, depth = 0) {
+    if (depth > 3) return []; // safety limit
+    
+    const items = await scrapeGdriveFolder(folderId);
+    const files = [];
+    
+    for (const item of items) {
+        if (item.mimeType === 'application/vnd.google-apps.folder') {
+            // Recurse into subfolder
+            const subFiles = await listGdriveFolder(item.id, depth + 1);
+            files.push(...subFiles);
+        } else {
+            files.push(item);
+        }
+    }
+    
+    return files;
 }
 
 // Google Drive fetch endpoint
