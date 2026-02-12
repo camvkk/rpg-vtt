@@ -224,24 +224,50 @@ app.post('/api/fetch-gdrive', express.json(), async (req, res) => {
         let isGoogleDoc = false;
 
         const docMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+        const spreadsheetMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+        const presentationMatch = url.match(/docs\.google\.com\/presentation\/d\/([a-zA-Z0-9_-]+)/);
         const fileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
         const openMatch = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+        const idParamMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        let isSpreadsheet = false;
+        let isPresentation = false;
 
         if (docMatch) {
             fileId = docMatch[1];
             isGoogleDoc = true;
+        } else if (spreadsheetMatch) {
+            fileId = spreadsheetMatch[1];
+            isSpreadsheet = true;
+        } else if (presentationMatch) {
+            fileId = presentationMatch[1];
+            isPresentation = true;
         } else if (fileMatch) {
             fileId = fileMatch[1];
         } else if (openMatch) {
             fileId = openMatch[1];
+        } else if (idParamMatch) {
+            fileId = idParamMatch[1];
         } else {
-            throw new Error('URL do Google Drive não reconhecida. Use um link de Google Docs ou Google Drive.');
+            // Try to extract any long alphanumeric ID from the URL
+            const genericMatch = url.match(/\/([a-zA-Z0-9_-]{20,})/);
+            if (genericMatch) {
+                fileId = genericMatch[1];
+            } else {
+                throw new Error('URL do Google Drive não reconhecida. Use um link de Google Docs, Sheets, ou arquivo do Drive.');
+            }
         }
 
         // Fetch the content
-        const fetchUrl = isGoogleDoc
-            ? `https://docs.google.com/document/d/${fileId}/export?format=txt`
-            : `https://drive.google.com/uc?export=download&id=${fileId}`;
+        let fetchUrl;
+        if (isGoogleDoc) {
+            fetchUrl = `https://docs.google.com/document/d/${fileId}/export?format=txt`;
+        } else if (isSpreadsheet) {
+            fetchUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=csv`;
+        } else if (isPresentation) {
+            fetchUrl = `https://docs.google.com/presentation/d/${fileId}/export?format=txt`;
+        } else {
+            fetchUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        }
 
         const response = await fetch(fetchUrl, { redirect: 'follow' });
 
@@ -270,7 +296,7 @@ app.post('/api/fetch-gdrive', express.json(), async (req, res) => {
         res.json({
             success: true,
             text: extractedText,
-            filename: isGoogleDoc ? 'google-docs.txt' : 'google-drive-file.txt'
+            filename: isGoogleDoc ? 'google-docs.txt' : isSpreadsheet ? 'google-sheets.csv' : isPresentation ? 'google-slides.txt' : 'google-drive-file.txt'
         });
 
     } catch (error) {
