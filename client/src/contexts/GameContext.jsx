@@ -573,7 +573,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     } }));
     socket.on('dice:result', (data) => {
       // Parse rollContext from notation if it contains description text
-      let formula = data.notation || data.formula || '';
+      let formula = data.originalNotation || data.notation || data.formula || '';
       let rollContext = data.rollContext || '';
       
       // Check if formula contains context (e.g., "1d20+5 Ataque: Espada Longa")
@@ -585,6 +585,24 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
         }
       }
       
+      // Extract individual dice results from server's rollDetails
+      // Server format: rollDetails[].results (all rolls), rollDetails[].keptResults (kept after modifiers)
+      const serverRollDetails = data.rollDetails || [];
+      const individualRolls = [];
+      
+      serverRollDetails.forEach(detail => {
+        // Get the actual rolled values (keptResults has the final values to count)
+        const keptValues = detail.keptResults || detail.results || [];
+        const droppedValues = detail.droppedResults || [];
+        
+        keptValues.forEach(val => {
+          individualRolls.push({ value: val, roll: val, kept: true, dropped: false });
+        });
+        droppedValues.forEach(val => {
+          individualRolls.push({ value: val, roll: val, kept: false, dropped: true });
+        });
+      });
+      
       dispatch({ type: 'DICE_RESULT', payload: {
         id: data.id || Date.now().toString(),
         author: data.playerName,
@@ -593,23 +611,13 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
         formula: formula,
         total: data.total,
         rollContext: rollContext,
-        breakdown: data.breakdown || { 
-          individual: (data.rolls || []).map(r => ({ 
-            roll: r, 
-            value: r,
-            kept: true, 
-            dropped: false 
-          })),
-          modifier: data.modifier || 0
+        breakdown: { 
+          individual: individualRolls,
+          modifier: data.standaloneModifier || 0
         },
-        rollDetails: data.rollDetails || {
-          individual: (data.rolls || []).map(r => ({ 
-            roll: r, 
-            value: r,
-            kept: true, 
-            dropped: false 
-          })),
-          modifier: data.modifier || 0,
+        rollDetails: {
+          individual: individualRolls,
+          modifier: data.standaloneModifier || 0,
           formula: formula
         },
         timestamp: data.timestamp || new Date().toISOString(),

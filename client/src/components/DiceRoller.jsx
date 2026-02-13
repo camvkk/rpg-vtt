@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
 import '../styles/DiceRoller.css';
 
@@ -39,7 +39,7 @@ function buildFormula(tray, modifier) {
 }
 
 export default function DiceRoller() {
-  const { actions } = useGame();
+  const { state, actions } = useGame();
   const [tray, setTray] = useState([]); // [{id, sides, label, color, icon}]
   const [modifier, setModifier] = useState(0);
   const [rolling, setRolling] = useState(false);
@@ -48,7 +48,77 @@ export default function DiceRoller() {
   const [showHistory, setShowHistory] = useState(false);
   const [rollContext, setRollContext] = useState(''); // e.g., "Ataque com Espada Longa"
   const [contextType, setContextType] = useState('other'); // attack, damage, skill, save, other
+  const [pendingRoll, setPendingRoll] = useState(null); // formula we're waiting for
   const trayIdRef = useRef(0);
+
+  // Listen for dice results from server to sync with our pending roll
+  useEffect(() => {
+    if (!pendingRoll || !state.chat?.length) return;
+    
+    // Find the most recent dice result that matches our pending roll
+    const recentDiceResult = state.chat
+      .filter(msg => msg.type === 'dice_result')
+      .find(msg => {
+        // Match if it's our roll (same formula base, ignoring spaces)
+        const msgFormula = (msg.formula || '').replace(/\s/g, '').toLowerCase();
+        const pendingFormula = pendingRoll.replace(/\s/g, '').toLowerCase();
+        // Simple check: both should have same dice notation at the start
+        return msgFormula === pendingFormula || 
+               msgFormula.includes(pendingFormula) || 
+               pendingFormula.includes(msgFormula);
+      });
+
+    if (recentDiceResult && rolling) {
+      // Parse the server result into our display format
+      // Server sends rollDetails array with {results, keptResults, droppedResults}
+      const serverRollDetails = recentDiceResult.rollDetails?.individual || 
+                                recentDiceResult.breakdown?.individual || 
+                                [];
+      
+      // Flatten all individual dice results from server
+      // Each tray die corresponds to a result
+      const diceResults = tray.map((dieInfo, i) => {
+        // Try to find the corresponding server roll value
+        let value = 0;
+        
+        if (Array.isArray(serverRollDetails) && serverRollDetails[i] !== undefined) {
+          const serverRoll = serverRollDetails[i];
+          value = serverRoll.value || serverRoll.roll || serverRoll || 0;
+        }
+        
+        // Fallback: if we don't have individual values, calculate from total
+        if (value === 0 && recentDiceResult.total && tray.length === 1) {
+          value = recentDiceResult.total - modifier;
+        }
+        
+        return {
+          sides: dieInfo.sides,
+          value: value,
+          roll: value,
+          color: dieInfo.color,
+          icon: dieInfo.icon,
+          label: dieInfo.label,
+          isCrit: dieInfo.sides === 20 && value === 20,
+          isFumble: dieInfo.sides === 20 && value === 1,
+          kept: true,
+          dropped: false,
+        };
+      });
+
+      const rollData = { 
+        dice: diceResults, 
+        total: recentDiceResult.total, 
+        formula: recentDiceResult.formula || pendingRoll,
+        rollContext: recentDiceResult.rollContext || '',
+        timestamp: new Date().toISOString() 
+      };
+      
+      setResults(rollData);
+      setRolling(false);
+      setPendingRoll(null);
+      setHistory(prev => [rollData, ...prev].slice(0, 10));
+    }
+  }, [state.chat, pendingRoll, rolling, tray, modifier]);
 
   const addDie = useCallback((diceType) => {
     setTray(prev => [...prev, { ...diceType, id: ++trayIdRef.current }]);
@@ -72,26 +142,6 @@ export default function DiceRoller() {
     setRolling(true);
     setResults(null);
 
-    // Wait for animation
-    await new Promise(r => setTimeout(r, 1500));
-
-    const diceResults = tray.map(d => {
-      const value = rollSingleDie(d.sides);
-      return {
-        sides: d.sides,
-        value,
-        roll: value,
-        color: d.color,
-        icon: d.icon,
-        label: d.label,
-        isCrit: d.sides === 20 && value === 20,
-        isFumble: d.sides === 20 && value === 1,
-        kept: true,
-        dropped: false,
-      };
-    });
-
-    const total = diceResults.reduce((sum, d) => sum + d.value, 0) + modifier;
     const formula = buildFormula(tray, modifier);
 
     // Build roll context string
@@ -100,33 +150,33 @@ export default function DiceRoller() {
       ? `${contextLabel?.label || ''}: ${rollContext}`.trim()
       : (contextType !== 'other' ? contextLabel?.label : '');
 
-    const rollData = { 
-      dice: diceResults, 
-      total, 
-      formula, 
-      rollContext: fullContext,
-      rollDetails: {
-        individual: diceResults,
-        modifier: modifier,
-        formula: formula
-      },
-      timestamp: new Date().toISOString() 
-    };
-    setResults(rollData);
-    setRolling(false);
+    const notationWithContext = fullContext 
+      ? `${formula} ${fullContext}`
+      : formula;
 
-    // Add to history (keep last 10)
-    setHistory(prev => [rollData, ...prev].slice(0, 10));
+    // Set pending roll so we can match the server response
+    setPendingRoll(formula);
 
-    // Broadcast via socket with context
+    // Send to server - the server will roll and broadcast the result
+    // Our useEffect will catch the result and update the UI
     try {
-      const notationWithContext = fullContext 
-        ? `${formula} ${fullContext}`
-        : formula;
       actions.rollDice(notationWithContext);
     } catch (e) {
-      console.error('Failed to broadcast dice roll:', e);
+      console.error('Failed to send dice roll:', e);
+      setRolling(false);
+      setPendingRoll(null);
     }
+
+    // Timeout fallback - if server doesn't respond in 5s, stop rolling animation
+    setTimeout(() => {
+      setRolling(prev => {
+        if (prev) {
+          setPendingRoll(null);
+          return false;
+        }
+        return prev;
+      });
+    }, 5000);
 
     // Clear context after roll
     setRollContext('');
