@@ -43,7 +43,9 @@ export default function FloatingWindow({
   const dragOffset = useRef({ x: 0, y: 0 });
   const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 });
 
-  const windowState = windows[windowId];
+  const windowState = windows?.[windowId];
+  
+  // Early return AFTER all hooks - this is safe as long as hooks are always called in same order
   if (!windowState || !windowState.isOpen || windowState.isMinimized) {
     return null;
   }
