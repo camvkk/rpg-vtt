@@ -27,8 +27,8 @@
 
 .gb-dropdown {
   min-width: 220px;
-  background: linear-gradient(135deg, #1a1520 0%, #0f0d13 100%);
-  border: 1px solid #d4af37;
+  background: linear-gradient(135deg, #1a1520 0%, #0f0d13 100%) !important;
+  border: 1px solid #d4af37 !important;
   border-radius: 8px;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.6),

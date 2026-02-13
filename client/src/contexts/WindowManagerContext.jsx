@@ -48,6 +48,9 @@ const DEFAULT_WINDOWS = {
   },
 };
 
+// Windows that should always start closed (regardless of localStorage)
+const ALWAYS_START_CLOSED = ['initiative', 'dmDashboard'];
+
 export function WindowManagerProvider({ children }) {
   const [windows, setWindows] = useState(() => {
     // Load from localStorage or use defaults
@@ -56,7 +59,20 @@ export function WindowManagerProvider({ children }) {
       if (saved) {
         const parsed = JSON.parse(saved);
         // Merge with defaults to handle new windows
-        return { ...DEFAULT_WINDOWS, ...parsed };
+        const merged = { ...DEFAULT_WINDOWS, ...parsed };
+        
+        // Force certain windows to start closed (keep position/size from localStorage)
+        ALWAYS_START_CLOSED.forEach(windowId => {
+          if (merged[windowId]) {
+            merged[windowId] = {
+              ...merged[windowId],
+              isOpen: false,
+              isMinimized: false,
+            };
+          }
+        });
+        
+        return merged;
       }
     } catch (e) {
       console.warn('Failed to load window state:', e);
