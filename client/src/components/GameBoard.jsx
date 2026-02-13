@@ -220,7 +220,10 @@ function GameBoardInner({ onLeaveRoom }) {
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+      // Check if click is inside menu toolbar OR inside a dropdown (rendered via portal)
+      const isInsideMenu = menuRef.current && menuRef.current.contains(e.target);
+      const isInsideDropdown = e.target.closest('.gb-dropdown');
+      if (!isInsideMenu && !isInsideDropdown) {
         setOpenMenu(null);
       }
     };
