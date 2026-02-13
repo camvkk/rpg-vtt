@@ -172,6 +172,7 @@ export default function MapCanvas({
   const tokenPlacementRef = useRef(tokenAwaitingPlacement);
   const gridSizeRef = useRef(GRID_SIZE);
   const gridTypeRef = useRef(GRID_TYPE);
+  const mapOffsetRef = useRef({ x: map.offsetX || 0, y: map.offsetY || 0 });
   const snapEnabledRef = useRef(SNAP_ENABLED);
   const gridVisibleRef = useRef(GRID_VISIBLE);
   activeToolRef.current = ui.activeTool;
@@ -181,6 +182,7 @@ export default function MapCanvas({
   gridTypeRef.current = GRID_TYPE;
   snapEnabledRef.current = SNAP_ENABLED;
   gridVisibleRef.current = GRID_VISIBLE;
+  mapOffsetRef.current = { x: map.offsetX || 0, y: map.offsetY || 0 };
 
   // ── Init Pixi (v8 async API) ──
   useEffect(() => {
@@ -1391,7 +1393,8 @@ export default function MapCanvas({
         canvas.style.cursor = 'move';
         mapDragRef.current.isDragging = true;
         mapDragRef.current.startMouse = { x: e.clientX, y: e.clientY };
-        mapDragRef.current.startOffset = { x: map.offsetX || 0, y: map.offsetY || 0 };
+        // Use ref to get current offset (avoids stale closure)
+        mapDragRef.current.startOffset = { x: mapOffsetRef.current.x, y: mapOffsetRef.current.y };
       }
     });
     canvas.addEventListener('pointermove', (e) => {
