@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { 
   RACES, 
   CLASSES, 
@@ -16,6 +16,141 @@ import {
   calculateLevel1HP,
   calculateAC
 } from '../data/dnd5e.js';
+
+// Step 1 - Identity (extracted to prevent re-mounting on parent re-render)
+const Step1Identity = memo(({ wizardData, updateWizardData, fileInputRef, isUploading, handleImageUpload }) => (
+  <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+    <div style={{ textAlign: 'center' }}>
+      <h2 style={{ 
+        fontFamily: 'var(--font-fantasy)', 
+        color: 'var(--color-primary)', 
+        fontSize: '1.5rem',
+        marginBottom: 'var(--spacing-sm)'
+      }}>
+        👤 Identidade do Personagem
+      </h2>
+      <p style={{ color: 'var(--text-dim)' }}>
+        Defina o nome e aparência do seu personagem.
+      </p>
+    </div>
+
+    {/* Character Name */}
+    <div>
+      <label style={{ 
+        display: 'block', 
+        fontWeight: '600', 
+        marginBottom: 'var(--spacing-sm)',
+        color: 'var(--text-primary)'
+      }}>
+        Nome do Personagem *
+      </label>
+      <input
+        type="text"
+        className="input"
+        value={wizardData.name}
+        onChange={(e) => updateWizardData({ name: e.target.value })}
+        placeholder="Digite o nome do seu personagem..."
+        style={{ fontSize: '1.1rem' }}
+      />
+    </div>
+
+    {/* Token Color */}
+    <div>
+      <label style={{ 
+        display: 'block', 
+        fontWeight: '600', 
+        marginBottom: 'var(--spacing-sm)',
+        color: 'var(--text-primary)'
+      }}>
+        Cor do Token
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+        <input
+          type="color"
+          value={wizardData.tokenColor}
+          onChange={(e) => updateWizardData({ tokenColor: e.target.value })}
+          style={{
+            width: '60px',
+            height: '60px',
+            border: '2px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            cursor: 'pointer'
+          }}
+        />
+        <div style={{
+          width: '60px',
+          height: '60px',
+          borderRadius: '50%',
+          backgroundColor: wizardData.tokenColor,
+          border: '2px solid #ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '1.2rem',
+          boxShadow: 'var(--shadow-md)'
+        }}>
+          {wizardData.name?.[0]?.toUpperCase() || '?'}
+        </div>
+      </div>
+    </div>
+
+    {/* Avatar Upload */}
+    <div>
+      <label style={{ 
+        display: 'block', 
+        fontWeight: '600', 
+        marginBottom: 'var(--spacing-sm)',
+        color: 'var(--text-primary)'
+      }}>
+        Avatar (Opcional)
+      </label>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+        style={{ display: 'none' }}
+      />
+      <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+        >
+          {isUploading ? '⏳ Enviando...' : '📁 Escolher Imagem'}
+        </button>
+        {wizardData.imageUrl && (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => updateWizardData({ imageUrl: null })}
+            style={{ color: 'var(--color-accent)' }}
+          >
+            🗑️ Remover
+          </button>
+        )}
+      </div>
+      {wizardData.imageUrl && (
+        <div style={{ marginTop: 'var(--spacing-sm)' }}>
+          <img
+            src={wizardData.imageUrl}
+            alt="Avatar"
+            style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '2px solid var(--border-color)'
+            }}
+          />
+        </div>
+      )}
+    </div>
+  </div>
+));
 
 const CharacterWizard = ({ 
   isOpen, 
@@ -551,141 +686,6 @@ const CharacterWizard = ({
     
     return <div style={{ padding: 'var(--spacing-lg)', color: 'var(--text-dim)', textAlign: 'center' }}>Passo não reconhecido</div>;
   };
-
-  // Step 1 - Identity
-  const Step1Identity = () => (
-    <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <h2 style={{ 
-          fontFamily: 'var(--font-fantasy)', 
-          color: 'var(--color-primary)', 
-          fontSize: '1.5rem',
-          marginBottom: 'var(--spacing-sm)'
-        }}>
-          👤 Identidade do Personagem
-        </h2>
-        <p style={{ color: 'var(--text-dim)' }}>
-          Defina o nome e aparência do seu personagem.
-        </p>
-      </div>
-
-      {/* Character Name */}
-      <div>
-        <label style={{ 
-          display: 'block', 
-          fontWeight: '600', 
-          marginBottom: 'var(--spacing-sm)',
-          color: 'var(--text-primary)'
-        }}>
-          Nome do Personagem *
-        </label>
-        <input
-          type="text"
-          className="input"
-          value={wizardData.name}
-          onChange={(e) => updateWizardData({ name: e.target.value })}
-          placeholder="Digite o nome do seu personagem..."
-          style={{ fontSize: '1.1rem' }}
-        />
-      </div>
-
-      {/* Token Color */}
-      <div>
-        <label style={{ 
-          display: 'block', 
-          fontWeight: '600', 
-          marginBottom: 'var(--spacing-sm)',
-          color: 'var(--text-primary)'
-        }}>
-          Cor do Token
-        </label>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-          <input
-            type="color"
-            value={wizardData.tokenColor}
-            onChange={(e) => updateWizardData({ tokenColor: e.target.value })}
-            style={{
-              width: '60px',
-              height: '60px',
-              border: '2px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer'
-            }}
-          />
-          <div style={{
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            backgroundColor: wizardData.tokenColor,
-            border: '2px solid #ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: 'bold',
-            fontSize: '1.2rem',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            {wizardData.name?.[0]?.toUpperCase() || '?'}
-          </div>
-        </div>
-      </div>
-
-      {/* Avatar Upload */}
-      <div>
-        <label style={{ 
-          display: 'block', 
-          fontWeight: '600', 
-          marginBottom: 'var(--spacing-sm)',
-          color: 'var(--text-primary)'
-        }}>
-          Avatar (Opcional)
-        </label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
-          style={{ display: 'none' }}
-        />
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? '⏳ Enviando...' : '📁 Escolher Imagem'}
-          </button>
-          {wizardData.imageUrl && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => updateWizardData({ imageUrl: null })}
-              style={{ color: 'var(--color-accent)' }}
-            >
-              🗑️ Remover
-            </button>
-          )}
-        </div>
-        {wizardData.imageUrl && (
-          <div style={{ marginTop: 'var(--spacing-sm)' }}>
-            <img
-              src={wizardData.imageUrl}
-              alt="Avatar"
-              style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: '2px solid var(--border-color)'
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   // Step 2 - Race (D&D 5e only)
   const Step2Race = () => (
@@ -2046,7 +2046,7 @@ const CharacterWizard = ({
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {system === 'dnd5e' ? (
             <>
-              {currentStep === 1 && <Step1Identity />}
+              {currentStep === 1 && <Step1Identity wizardData={wizardData} updateWizardData={updateWizardData} fileInputRef={fileInputRef} isUploading={isUploading} handleImageUpload={handleImageUpload} />}
               {currentStep === 2 && <Step2Race />}
               {currentStep === 3 && <Step3Class />}
               {currentStep === 4 && <Step4Attributes />}
