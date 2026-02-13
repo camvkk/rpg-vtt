@@ -61,8 +61,11 @@ const CharacterWizard = ({
     selectedSkills: [],
     expertiseSkills: [], // For classes that get expertise
     
+    // Step 5.5 - Subclass (if applicable at level 1)
+    subclass: null,
+    
     // Step 6 - Equipment
-    equipmentChoices: {},
+    selectedEquipmentSet: null, // Single set selection (A or B)
     startingGold: false,
     
     // Step 7 - Details
@@ -136,7 +139,13 @@ const CharacterWizard = ({
     switch (currentStep) {
       case 1: return wizardData.name.trim().length > 0;
       case 2: return wizardData.race !== null;
-      case 3: return wizardData.class !== null;
+      case 3: {
+        // Must select class, and subclass if level 1 subclass
+        if (!wizardData.class) return false;
+        const hasLevel1Subclass = wizardData.classData?.subclassLevel === 1;
+        if (hasLevel1Subclass && !wizardData.subclass) return false;
+        return true;
+      }
       case 4: return validateAttributes();
       case 5: return validateSkills();
       case 6: return validateEquipment();
@@ -156,20 +165,18 @@ const CharacterWizard = ({
   const validateSkills = () => {
     if (!wizardData.classData) return false;
     const required = wizardData.classData.skillsAvailable || 0;
-    const backgroundSkills = wizardData.background ? 2 : 0;
-    return wizardData.selectedSkills.length >= required + backgroundSkills;
+    return wizardData.selectedSkills.length >= required;
   };
 
   const validateEquipment = () => {
     if (wizardData.startingGold) return true;
     if (!wizardData.classData) return false;
     
-    const choices = wizardData.classData.startingEquipment;
-    if (!choices) return true;
+    const equipment = wizardData.classData.startingEquipment;
+    if (!equipment || !Array.isArray(equipment)) return true;
     
-    return Object.keys(choices).every(choice => 
-      wizardData.equipmentChoices[choice] !== undefined
-    );
+    // Must select exactly one equipment set
+    return wizardData.selectedEquipmentSet !== null;
   };
 
   // Calculate final attributes with racial bonuses
@@ -278,17 +285,11 @@ const CharacterWizard = ({
     const equipment = [];
     if (wizardData.startingGold) {
       equipment.push('Ouro Inicial: 4d4 × 10 po');
-    } else {
-      Object.entries(wizardData.equipmentChoices).forEach(([choiceKey, selectedOption]) => {
-        const choiceOptions = wizardData.classData.startingEquipment[choiceKey];
-        if (!choiceOptions) return;
-        if (Array.isArray(choiceOptions)) {
-          // Flat array — the whole array is the equipment list for this choice
-          equipment.push(...choiceOptions);
-        } else if (choiceOptions[selectedOption]) {
-          equipment.push(...choiceOptions[selectedOption]);
-        }
-      });
+    } else if (wizardData.selectedEquipmentSet && Array.isArray(wizardData.classData.startingEquipment)) {
+      const selectedSet = wizardData.classData.startingEquipment.find(s => s.set === wizardData.selectedEquipmentSet);
+      if (selectedSet && selectedSet.items) {
+        equipment.push(...selectedSet.items);
+      }
     }
     
     // Calculate AC (basic calculation)
@@ -302,6 +303,7 @@ const CharacterWizard = ({
       raceData: wizardData.raceData,
       class: wizardData.class,
       classData: wizardData.classData,
+      subclass: wizardData.subclass,
       level,
       alignment: wizardData.alignment?.name || wizardData.alignment,
       background: wizardData.background?.name || wizardData.background,
@@ -783,118 +785,188 @@ const CharacterWizard = ({
     </div>
   );
 
-  // Step 3 - Class (D&D 5e only)
-  const Step3Class = () => (
-    <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <h2 style={{ 
-          fontFamily: 'var(--font-fantasy)', 
-          color: 'var(--color-primary)', 
-          fontSize: '1.5rem',
-          marginBottom: 'var(--spacing-sm)'
-        }}>
-          ⚔️ Escolha sua Classe
-        </h2>
-        <p style={{ color: 'var(--text-dim)' }}>
-          Sua classe determina suas habilidades, perícias e estilo de jogo.
-        </p>
-      </div>
+  // Step 3 - Class (D&D 5e only) WITH SUBCLASS SUPPORT
+  const Step3Class = () => {
+    const selectedClassData = wizardData.classData;
+    const hasLevel1Subclass = selectedClassData?.subclassLevel === 1;
+    
+    return (
+      <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <h2 style={{ 
+            fontFamily: 'var(--font-fantasy)', 
+            color: 'var(--color-primary)', 
+            fontSize: '1.5rem',
+            marginBottom: 'var(--spacing-sm)'
+          }}>
+            ⚔️ Escolha sua Classe
+          </h2>
+          <p style={{ color: 'var(--text-dim)' }}>
+            Sua classe determina suas habilidades, perícias e estilo de jogo.
+          </p>
+        </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: 'var(--spacing-md)',
-        maxHeight: '500px',
-        overflowY: 'auto'
-      }}>
-        {CLASSES.map(cls => (
-          <div
-            key={cls.name}
-            onClick={() => updateWizardData({ class: cls.name, classData: cls })}
-            style={{
-              padding: 'var(--spacing-md)',
-              background: wizardData.class === cls.name ? 'var(--color-primary)' : 'var(--surface-light)',
-              color: wizardData.class === cls.name ? 'var(--bg-primary)' : 'var(--text-primary)',
-              border: `2px solid ${wizardData.class === cls.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
-              borderRadius: 'var(--radius-lg)',
-              cursor: 'pointer',
-              transition: 'all var(--transition-fast)'
-            }}
-          >
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--spacing-sm)',
-              marginBottom: 'var(--spacing-sm)'
-            }}>
-              <span style={{ fontSize: '2rem' }}>{cls.icon}</span>
-              <div>
-                <h3 style={{ 
-                  margin: 0, 
-                  fontFamily: 'var(--font-fantasy)',
-                  fontSize: '1.2rem'
-                }}>
-                  {cls.name}
-                </h3>
-                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
-                  Dados de Vida: {cls.hitDie}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 'var(--spacing-md)',
+          maxHeight: hasLevel1Subclass ? '350px' : '500px',
+          overflowY: 'auto'
+        }}>
+          {CLASSES.map(cls => (
+            <div
+              key={cls.name}
+              onClick={() => updateWizardData({ 
+                class: cls.name, 
+                classData: cls,
+                subclass: null, // Reset subclass when changing class
+                selectedSkills: [] // Reset skills when changing class
+              })}
+              style={{
+                padding: 'var(--spacing-md)',
+                background: wizardData.class === cls.name ? 'var(--color-primary)' : 'var(--surface-light)',
+                color: wizardData.class === cls.name ? 'var(--bg-primary)' : 'var(--text-primary)',
+                border: `2px solid ${wizardData.class === cls.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-lg)',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--spacing-sm)',
+                marginBottom: 'var(--spacing-sm)'
+              }}>
+                <span style={{ fontSize: '2rem' }}>{cls.icon}</span>
+                <div>
+                  <h3 style={{ 
+                    margin: 0, 
+                    fontFamily: 'var(--font-fantasy)',
+                    fontSize: '1.2rem'
+                  }}>
+                    {cls.name}
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                    Dados de Vida: {cls.hitDie}
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <p style={{
-              fontSize: '0.9rem',
-              marginBottom: 'var(--spacing-md)',
-              opacity: 0.9,
-              lineHeight: 1.4
-            }}>
-              {cls.description}
-            </p>
-
-            <div style={{ marginBottom: 'var(--spacing-sm)' }}>
-              <strong>Atributos Primários:</strong>
-              <div style={{ fontSize: '0.8rem', marginTop: 'var(--spacing-xs)' }}>
-                {cls.primaryStats.join(', ')}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 'var(--spacing-sm)' }}>
-              <strong>Salvaguardas:</strong>
-              <div>
-                {cls.savingThrows.map(save => (
-                  <span key={save} style={{
-                    display: 'inline-block',
-                    background: wizardData.class === cls.name ? 'rgba(255,255,255,0.2)' : 'var(--surface-primary)',
-                    padding: '2px 6px',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: '0.8rem',
-                    margin: '2px',
-                    fontWeight: '600'
-                  }}>
-                    {ABILITIES[save].short}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <strong>Habilidades de 1º Nível:</strong>
-              <ul style={{
-                fontSize: '0.8rem',
-                marginTop: 'var(--spacing-xs)',
-                paddingLeft: 'var(--spacing-md)',
-                opacity: 0.9
+              
+              <p style={{
+                fontSize: '0.9rem',
+                marginBottom: 'var(--spacing-md)',
+                opacity: 0.9,
+                lineHeight: 1.4
               }}>
-                {cls.level1Features.slice(0, 2).map((feature, idx) => (
-                  <li key={idx} style={{ marginBottom: '2px' }}>{feature}</li>
-                ))}
-              </ul>
+                {cls.description}
+              </p>
+
+              <div style={{ marginBottom: 'var(--spacing-sm)' }}>
+                <strong>Atributos Primários:</strong>
+                <div style={{ fontSize: '0.8rem', marginTop: 'var(--spacing-xs)' }}>
+                  {cls.primaryStats.join(', ')}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 'var(--spacing-sm)' }}>
+                <strong>Salvaguardas:</strong>
+                <div>
+                  {cls.savingThrows.map(save => (
+                    <span key={save} style={{
+                      display: 'inline-block',
+                      background: wizardData.class === cls.name ? 'rgba(255,255,255,0.2)' : 'var(--surface-primary)',
+                      padding: '2px 6px',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.8rem',
+                      margin: '2px',
+                      fontWeight: '600'
+                    }}>
+                      {ABILITIES[save].short}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Show subclass info if applicable */}
+              {cls.subclasses && (
+                <div style={{ marginBottom: 'var(--spacing-sm)' }}>
+                  <strong>{cls.subclassName}:</strong>
+                  <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                    {cls.subclassLevel === 1 ? 'Escolhe no 1º nível' : `Escolhe no ${cls.subclassLevel}º nível`}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <strong>Habilidades de 1º Nível:</strong>
+                <ul style={{
+                  fontSize: '0.8rem',
+                  marginTop: 'var(--spacing-xs)',
+                  paddingLeft: 'var(--spacing-md)',
+                  opacity: 0.9
+                }}>
+                  {cls.level1Features.slice(0, 2).map((feature, idx) => (
+                    <li key={idx} style={{ marginBottom: '2px' }}>{feature}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Subclass Selection (for classes that choose at level 1) */}
+        {hasLevel1Subclass && selectedClassData?.subclasses && (
+          <div style={{
+            padding: 'var(--spacing-lg)',
+            background: 'var(--surface-light)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-secondary)'
+          }}>
+            <h3 style={{ 
+              fontFamily: 'var(--font-fantasy)', 
+              color: 'var(--color-secondary)', 
+              marginBottom: 'var(--spacing-md)',
+              textAlign: 'center'
+            }}>
+              ✨ {selectedClassData.subclassName}
+            </h3>
+            <p style={{ color: 'var(--text-dim)', textAlign: 'center', marginBottom: 'var(--spacing-md)' }}>
+              Sua classe escolhe {selectedClassData.subclassName?.toLowerCase()} no 1º nível.
+            </p>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: 'var(--spacing-sm)'
+            }}>
+              {selectedClassData.subclasses.map(subclass => (
+                <div
+                  key={subclass.name}
+                  onClick={() => updateWizardData({ subclass: subclass.name })}
+                  style={{
+                    padding: 'var(--spacing-md)',
+                    background: wizardData.subclass === subclass.name ? 'var(--color-secondary)' : 'var(--surface-primary)',
+                    color: wizardData.subclass === subclass.name ? 'var(--bg-primary)' : 'var(--text-primary)',
+                    border: `2px solid ${wizardData.subclass === subclass.name ? 'var(--color-secondary)' : 'var(--border-color)'}`,
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)'
+                  }}
+                >
+                  <div style={{ fontWeight: '600', marginBottom: 'var(--spacing-xs)' }}>
+                    {subclass.name}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>
+                    {subclass.description}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   // Step 4 - Attributes
   const Step4Attributes = () => {
@@ -1124,15 +1196,16 @@ const CharacterWizard = ({
     );
   };
 
-  // Step 5 - Skills
+  // Step 5 - Skills (FILTERED BY CLASS)
   const Step5Skills = () => {
     const classSkillsAvailable = wizardData.classData?.skillsAvailable || 0;
     const backgroundSkills = wizardData.background ? 2 : 0;
     const expertiseCount = wizardData.classData?.expertise || 0;
     
-    const availableSkills = wizardData.classData?.classSkills || Object.keys(SKILLS);
+    // Only show skills available for this class
+    const classSkillKeys = wizardData.classData?.classSkills || [];
     const selectedCount = wizardData.selectedSkills.length;
-    const requiredCount = classSkillsAvailable + backgroundSkills;
+    const requiredCount = classSkillsAvailable;
 
     return (
       <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
@@ -1146,8 +1219,8 @@ const CharacterWizard = ({
             🎯 Perícias
           </h2>
           <p style={{ color: 'var(--text-dim)' }}>
-            Escolha {requiredCount} perícias. Sua classe oferece {classSkillsAvailable} perícias
-            {backgroundSkills > 0 && ` e seu antecedente oferece ${backgroundSkills} perícias adicionais`}.
+            Escolha {requiredCount} perícias da lista disponível para sua classe ({wizardData.classData?.name || 'classe'}).
+            {backgroundSkills > 0 && <><br/>Seu antecedente já concede perícias adicionais automaticamente.</>}
           </p>
           <div style={{ 
             fontSize: '1.1rem', 
@@ -1159,10 +1232,13 @@ const CharacterWizard = ({
           </div>
         </div>
 
-        {/* Skills by Ability */}
+        {/* Skills by Ability - FILTERED BY CLASS */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
           {Object.entries(ABILITIES).map(([abilityKey, ability]) => {
-            const abilitySkills = Object.entries(SKILLS).filter(([, skill]) => skill.ability === abilityKey);
+            // Filter to only show skills available for this class
+            const abilitySkills = Object.entries(SKILLS).filter(([skillKey, skill]) => 
+              skill.ability === abilityKey && classSkillKeys.includes(skillKey)
+            );
             if (abilitySkills.length === 0) return null;
 
             const finalAttributes = getFinalAttributes();
@@ -1187,7 +1263,6 @@ const CharacterWizard = ({
                   {abilitySkills.map(([skillKey, skill]) => {
                     const isSelected = wizardData.selectedSkills.includes(skillKey);
                     const hasExpertise = wizardData.expertiseSkills.includes(skillKey);
-                    const isClassSkill = wizardData.classData?.classSkills?.includes(skillKey) || false;
                     const proficiencyBonus = getProficiencyBonus(1);
                     const totalBonus = modifier + (isSelected ? proficiencyBonus : 0) + (hasExpertise ? proficiencyBonus : 0);
 
@@ -1212,7 +1287,7 @@ const CharacterWizard = ({
                           padding: 'var(--spacing-md)',
                           background: isSelected ? 'var(--color-primary)' : 'var(--surface-light)',
                           color: isSelected ? 'var(--bg-primary)' : 'var(--text-primary)',
-                          border: `2px solid ${isSelected ? 'var(--color-primary)' : (isClassSkill ? 'var(--color-secondary)' : 'var(--border-color)')}`,
+                          border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--border-color)'}`,
                           borderRadius: 'var(--radius-md)',
                           cursor: 'pointer',
                           transition: 'all var(--transition-fast)',
@@ -1223,18 +1298,6 @@ const CharacterWizard = ({
                           <div>
                             <div style={{ fontWeight: '600', fontSize: '0.95rem' }}>
                               {skill.name}
-                              {isClassSkill && (
-                                <span style={{
-                                  fontSize: '0.7rem',
-                                  background: isSelected ? 'rgba(255,255,255,0.2)' : 'var(--color-secondary)',
-                                  color: isSelected ? 'currentColor' : 'white',
-                                  padding: '2px 4px',
-                                  borderRadius: 'var(--radius-sm)',
-                                  marginLeft: 'var(--spacing-xs)'
-                                }}>
-                                  CLASSE
-                                </span>
-                              )}
                             </div>
                             <div style={{ fontSize: '0.8rem', opacity: 0.8, marginTop: '2px' }}>
                               {skill.description}
@@ -1299,9 +1362,9 @@ const CharacterWizard = ({
     );
   };
 
-  // Step 6 - Equipment
+  // Step 6 - Equipment (SELECT ONE SET ONLY)
   const Step6Equipment = () => {
-    const equipment = wizardData.classData?.startingEquipment || {};
+    const equipmentSets = wizardData.classData?.startingEquipment || [];
 
     return (
       <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
@@ -1315,7 +1378,7 @@ const CharacterWizard = ({
             🎒 Equipamento Inicial
           </h2>
           <p style={{ color: 'var(--text-dim)' }}>
-            Escolha seu equipamento inicial ou opte por ouro para comprar seus próprios itens.
+            Escolha <strong>um</strong> conjunto de equipamentos ou opte por ouro.
           </p>
         </div>
 
@@ -1333,7 +1396,7 @@ const CharacterWizard = ({
                 checked={wizardData.startingGold}
                 onChange={(e) => updateWizardData({ 
                   startingGold: e.target.checked, 
-                  equipmentChoices: {} 
+                  selectedEquipmentSet: null 
                 })}
                 style={{ accentColor: 'var(--color-primary)' }}
               />
@@ -1345,95 +1408,54 @@ const CharacterWizard = ({
           </div>
         </div>
 
-        {!wizardData.startingGold && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-            {Object.entries(equipment).map(([choiceKey, options]) => {
-              // options can be an array of items (flat list) or an object of sub-choices
-              const isFlat = Array.isArray(options);
-
+        {!wizardData.startingGold && Array.isArray(equipmentSets) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+            <h3 style={{
+              fontFamily: 'var(--font-fantasy)',
+              color: 'var(--color-primary)',
+              marginBottom: 'var(--spacing-sm)',
+              textAlign: 'center'
+            }}>
+              Escolha um conjunto de equipamentos:
+            </h3>
+            
+            {equipmentSets.map((equipSet, idx) => {
+              const setKey = equipSet.set || String.fromCharCode(65 + idx); // A, B, C...
+              const isSelected = wizardData.selectedEquipmentSet === setKey;
+              
               return (
-                <div key={choiceKey}>
-                  <h3 style={{
-                    fontFamily: 'var(--font-fantasy)',
-                    color: 'var(--color-primary)',
-                    marginBottom: 'var(--spacing-md)'
-                  }}>
-                    {isFlat ? `Pacote ${choiceKey.replace('choice', '').toUpperCase()}` : `Escolha ${choiceKey.replace('choice', '').toUpperCase()}:`}
-                  </h3>
-
-                  {isFlat ? (
-                    /* Flat array: render as a selectable pack */
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 'var(--spacing-sm)',
-                        padding: 'var(--spacing-md)',
-                        background: wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--color-primary)' : 'var(--surface-light)',
-                        color: wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--bg-primary)' : 'var(--text-primary)',
-                        border: `2px solid ${wizardData.equipmentChoices[choiceKey] === choiceKey ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                        borderRadius: 'var(--radius-md)',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)'
-                      }}
-                      onClick={() => updateWizardData({
-                        equipmentChoices: { ...wizardData.equipmentChoices, [choiceKey]: choiceKey }
-                      })}
-                    >
-                      <input
-                        type="radio"
-                        name={choiceKey}
-                        checked={wizardData.equipmentChoices[choiceKey] === choiceKey}
-                        readOnly
-                        style={{ accentColor: 'var(--color-primary)', marginTop: '2px' }}
-                      />
-                      <ul style={{ marginTop: 0, paddingLeft: 'var(--spacing-md)' }}>
-                        {options.map((item, idx) => (
-                          <li key={idx} style={{ marginBottom: '2px' }}>{item}</li>
-                        ))}
-                      </ul>
-                    </label>
-                  ) : (
-                    /* Object with sub-choices: render as radio options */
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-                      {Object.entries(options).map(([optionKey, items]) => (
-                        <label
-                          key={optionKey}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: 'var(--spacing-sm)',
-                            padding: 'var(--spacing-md)',
-                            background: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--surface-light)',
-                            color: wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--bg-primary)' : 'var(--text-primary)',
-                            border: `2px solid ${wizardData.equipmentChoices[choiceKey] === optionKey ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                            borderRadius: 'var(--radius-md)',
-                            cursor: 'pointer',
-                            transition: 'all var(--transition-fast)'
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name={choiceKey}
-                            checked={wizardData.equipmentChoices[choiceKey] === optionKey}
-                            onChange={() => updateWizardData({
-                              equipmentChoices: { ...wizardData.equipmentChoices, [choiceKey]: optionKey }
-                            })}
-                            style={{ accentColor: 'var(--color-primary)', marginTop: '2px' }}
-                          />
-                          <div>
-                            <strong>Opção {optionKey.replace('choice', '').toUpperCase()}:</strong>
-                            <ul style={{ marginTop: 'var(--spacing-xs)', paddingLeft: 'var(--spacing-md)' }}>
-                              {(Array.isArray(items) ? items : [items]).map((item, idx) => (
-                                <li key={idx} style={{ marginBottom: '2px' }}>{item}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        </label>
+                <label
+                  key={setKey}
+                  onClick={() => updateWizardData({ selectedEquipmentSet: setKey })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 'var(--spacing-md)',
+                    padding: 'var(--spacing-lg)',
+                    background: isSelected ? 'var(--color-primary)' : 'var(--surface-light)',
+                    color: isSelected ? 'var(--bg-primary)' : 'var(--text-primary)',
+                    border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                    borderRadius: 'var(--radius-lg)',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)'
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="equipmentSet"
+                    checked={isSelected}
+                    onChange={() => updateWizardData({ selectedEquipmentSet: setKey })}
+                    style={{ accentColor: 'var(--color-primary)', marginTop: '4px', transform: 'scale(1.3)' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <strong style={{ fontSize: '1.1rem' }}>Conjunto {setKey}</strong>
+                    <ul style={{ marginTop: 'var(--spacing-sm)', paddingLeft: 'var(--spacing-lg)', lineHeight: 1.6 }}>
+                      {(equipSet.items || []).map((item, itemIdx) => (
+                        <li key={itemIdx} style={{ marginBottom: '4px' }}>{item}</li>
                       ))}
-                    </div>
-                  )}
-                </div>
+                    </ul>
+                  </div>
+                </label>
               );
             })}
           </div>
@@ -1442,10 +1464,17 @@ const CharacterWizard = ({
     );
   };
 
-  // Step 7 - Details
+  // Step 7 - Details (WITH OVERFLOW FIX)
   const Step7Details = () => (
-    <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-      <div style={{ textAlign: 'center' }}>
+    <div style={{ 
+      padding: 'var(--spacing-lg)', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 'var(--spacing-lg)',
+      maxHeight: '100%',
+      overflow: 'hidden'
+    }}>
+      <div style={{ textAlign: 'center', flexShrink: 0 }}>
         <h2 style={{ 
           fontFamily: 'var(--font-fantasy)', 
           color: 'var(--color-primary)', 
@@ -1459,197 +1488,208 @@ const CharacterWizard = ({
         </p>
       </div>
 
-      {/* Alignment */}
-      <div>
-        <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
-          Alinhamento *
-        </h3>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 'var(--spacing-sm)',
-          maxWidth: '600px'
-        }}>
-          {ALIGNMENTS.map(alignment => (
-            <button
-              key={alignment.short}
-              onClick={() => updateWizardData({ alignment })}
-              style={{
-                padding: 'var(--spacing-md)',
-                background: wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--surface-light)',
-                color: wizardData.alignment?.short === alignment.short ? 'var(--bg-primary)' : 'var(--text-primary)',
-                border: `2px solid ${wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)',
-                textAlign: 'center'
-              }}
-            >
-              <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{alignment.short}</div>
-              <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.9 }}>{alignment.name}</div>
-            </button>
-          ))}
+      {/* Scrollable content area */}
+      <div style={{ 
+        flex: 1, 
+        overflowY: 'auto', 
+        overflowX: 'hidden',
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: 'var(--spacing-lg)',
+        paddingRight: 'var(--spacing-sm)'
+      }}>
+        {/* Alignment */}
+        <div>
+          <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
+            Alinhamento *
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 'var(--spacing-sm)',
+            maxWidth: '600px'
+          }}>
+            {ALIGNMENTS.map(alignment => (
+              <button
+                key={alignment.short}
+                onClick={() => updateWizardData({ alignment })}
+                style={{
+                  padding: 'var(--spacing-md)',
+                  background: wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--surface-light)',
+                  color: wizardData.alignment?.short === alignment.short ? 'var(--bg-primary)' : 'var(--text-primary)',
+                  border: `2px solid ${wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
+                  textAlign: 'center'
+                }}
+              >
+                <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{alignment.short}</div>
+                <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.9 }}>{alignment.name}</div>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Background */}
-      <div>
-        <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
-          Antecedente *
-        </h3>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 'var(--spacing-sm)',
-          maxHeight: '300px',
-          overflowY: 'auto'
-        }}>
-          {BACKGROUNDS.map(background => (
-            <div
-              key={background.name}
-              onClick={() => {
-                // Auto-add background skills
-                const backgroundSkills = background.skillProficiencies;
-                const newSelectedSkills = [...new Set([...wizardData.selectedSkills, ...backgroundSkills])];
-                updateWizardData({ 
-                  background,
-                  selectedSkills: newSelectedSkills
-                });
-              }}
-              style={{
-                padding: 'var(--spacing-md)',
-                background: wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--surface-light)',
-                color: wizardData.background?.name === background.name ? 'var(--bg-primary)' : 'var(--text-primary)',
-                border: `2px solid ${wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)'
-              }}
-            >
-              <h4 style={{ margin: '0 0 var(--spacing-sm) 0', fontFamily: 'var(--font-fantasy)' }}>
-                {background.name}
-              </h4>
-              <p style={{ fontSize: '0.9rem', marginBottom: 'var(--spacing-sm)', opacity: 0.9, lineHeight: 1.4 }}>
-                {background.description}
-              </p>
-              <div style={{ fontSize: '0.8rem' }}>
-                <strong>Perícias:</strong> {background.skillProficiencies.map(skill => SKILLS[skill]?.name || skill).join(', ')}
+        {/* Background */}
+        <div>
+          <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
+            Antecedente *
+          </h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 'var(--spacing-sm)',
+            maxHeight: '250px',
+            overflowY: 'auto'
+          }}>
+            {BACKGROUNDS.map(background => (
+              <div
+                key={background.name}
+                onClick={() => {
+                  // Auto-add background skills
+                  const backgroundSkills = background.skillProficiencies;
+                  const newSelectedSkills = [...new Set([...wizardData.selectedSkills, ...backgroundSkills])];
+                  updateWizardData({ 
+                    background,
+                    selectedSkills: newSelectedSkills
+                  });
+                }}
+                style={{
+                  padding: 'var(--spacing-md)',
+                  background: wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--surface-light)',
+                  color: wizardData.background?.name === background.name ? 'var(--bg-primary)' : 'var(--text-primary)',
+                  border: `2px solid ${wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                <h4 style={{ margin: '0 0 var(--spacing-sm) 0', fontFamily: 'var(--font-fantasy)' }}>
+                  {background.name}
+                </h4>
+                <p style={{ fontSize: '0.9rem', marginBottom: 'var(--spacing-sm)', opacity: 0.9, lineHeight: 1.4 }}>
+                  {background.description}
+                </p>
+                <div style={{ fontSize: '0.8rem' }}>
+                  <strong>Perícias:</strong> {background.skillProficiencies.map(skill => SKILLS[skill]?.name || skill).join(', ')}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Personality Fields */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+        {/* Personality Fields */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+          <div>
+            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+              Traços de Personalidade
+            </label>
+            <textarea
+              value={wizardData.personality}
+              onChange={(e) => updateWizardData({ personality: e.target.value })}
+              placeholder="Como seu personagem age e se comporta..."
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: 'var(--spacing-sm)',
+                background: 'var(--surface-light)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+              Ideais
+            </label>
+            <textarea
+              value={wizardData.ideals}
+              onChange={(e) => updateWizardData({ ideals: e.target.value })}
+              placeholder="Princípios que motivam seu personagem..."
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: 'var(--spacing-sm)',
+                background: 'var(--surface-light)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+              Vínculos
+            </label>
+            <textarea
+              value={wizardData.bonds}
+              onChange={(e) => updateWizardData({ bonds: e.target.value })}
+              placeholder="Pessoas, lugares ou coisas importantes..."
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: 'var(--spacing-sm)',
+                background: 'var(--surface-light)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+              Defeitos
+            </label>
+            <textarea
+              value={wizardData.flaws}
+              onChange={(e) => updateWizardData({ flaws: e.target.value })}
+              placeholder="Fraquezas ou vícios do seu personagem..."
+              style={{
+                width: '100%',
+                minHeight: '80px',
+                padding: 'var(--spacing-sm)',
+                background: 'var(--surface-light)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                resize: 'vertical'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Notes */}
         <div>
           <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-            Traços de Personalidade
+            História e Notas Adicionais
           </label>
           <textarea
-            value={wizardData.personality}
-            onChange={(e) => updateWizardData({ personality: e.target.value })}
-            placeholder="Como seu personagem age e se comporta..."
+            value={wizardData.notes}
+            onChange={(e) => updateWizardData({ notes: e.target.value })}
+            placeholder="História de fundo, objetivos, ou outras notas sobre seu personagem..."
             style={{
               width: '100%',
-              minHeight: '80px',
-              padding: 'var(--spacing-sm)',
+              minHeight: '120px',
+              padding: 'var(--spacing-md)',
               background: 'var(--surface-light)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-md)',
               color: 'var(--text-primary)',
-              resize: 'vertical'
+              resize: 'vertical',
+              fontSize: '0.95rem',
+              lineHeight: 1.5
             }}
           />
         </div>
-
-        <div>
-          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-            Ideais
-          </label>
-          <textarea
-            value={wizardData.ideals}
-            onChange={(e) => updateWizardData({ ideals: e.target.value })}
-            placeholder="Princípios que motivam seu personagem..."
-            style={{
-              width: '100%',
-              minHeight: '80px',
-              padding: 'var(--spacing-sm)',
-              background: 'var(--surface-light)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-            Vínculos
-          </label>
-          <textarea
-            value={wizardData.bonds}
-            onChange={(e) => updateWizardData({ bonds: e.target.value })}
-            placeholder="Pessoas, lugares ou coisas importantes..."
-            style={{
-              width: '100%',
-              minHeight: '80px',
-              padding: 'var(--spacing-sm)',
-              background: 'var(--surface-light)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-            Defeitos
-          </label>
-          <textarea
-            value={wizardData.flaws}
-            onChange={(e) => updateWizardData({ flaws: e.target.value })}
-            placeholder="Fraquezas ou vícios do seu personagem..."
-            style={{
-              width: '100%',
-              minHeight: '80px',
-              padding: 'var(--spacing-sm)',
-              background: 'var(--surface-light)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              resize: 'vertical'
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-          História e Notas Adicionais
-        </label>
-        <textarea
-          value={wizardData.notes}
-          onChange={(e) => updateWizardData({ notes: e.target.value })}
-          placeholder="História de fundo, objetivos, ou outras notas sobre seu personagem..."
-          style={{
-            width: '100%',
-            minHeight: '120px',
-            padding: 'var(--spacing-md)',
-            background: 'var(--surface-light)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            color: 'var(--text-primary)',
-            resize: 'vertical',
-            fontSize: '0.95rem',
-            lineHeight: 1.5
-          }}
-        />
-      </div>
+      </div>{/* End scrollable content */}
     </div>
   );
 
@@ -1735,7 +1775,7 @@ const CharacterWizard = ({
                 {character.name}
               </h1>
               <div style={{ fontSize: '1.1rem', color: 'var(--text-primary)', marginTop: 'var(--spacing-xs)' }}>
-                {character.race} {character.class}, Nível {character.level}
+                {character.race} {character.class}{character.subclass ? ` (${character.subclass})` : ''}, Nível {character.level}
               </div>
               <div style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
                 {character.alignment} • {character.background}

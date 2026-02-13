@@ -3,15 +3,26 @@ import { useGame } from '../contexts/GameContext';
 
 export default function ScenesPanel() {
   const { state, actions } = useGame();
-  const { scenes, player } = state;
+  const { scenes, player, campaign } = state;
   const isDM = player.isDM;
   const [editingScene, setEditingScene] = useState(null);
   const [newName, setNewName] = useState('');
+  const [loading, setLoading] = useState(false);
   const fileRef = useRef(null);
 
+  // Load scenes when campaign is available
   useEffect(() => {
-    actions.listScenes();
-  }, []);
+    if (campaign?.id) {
+      setLoading(true);
+      actions.listScenes()
+        .then(res => {
+          // scenes are received via socket event 'scene:list'
+          // The emit returns callback, but scenes come via broadcast
+        })
+        .catch(err => console.error('Failed to load scenes:', err))
+        .finally(() => setLoading(false));
+    }
+  }, [campaign?.id, actions]);
 
   const handleCreate = useCallback(() => {
     const id = `scene_${Date.now()}`;
@@ -30,13 +41,19 @@ export default function ScenesPanel() {
     });
   }, [actions, scenes.length]);
 
-  const handleActivate = useCallback((sceneId) => {
+  const handleActivate = useCallback(async (sceneId) => {
     // Save current scene state first, then activate new one
-    actions.saveCurrentScene().then(() => {
-      actions.activateScene(sceneId);
-    }).catch(() => {
-      actions.activateScene(sceneId);
-    });
+    try {
+      await actions.saveCurrentScene();
+    } catch (e) {
+      // No active scene to save - that's fine
+    }
+    // Activate the new scene
+    try {
+      await actions.activateScene(sceneId);
+    } catch (e) {
+      console.error('Failed to activate scene:', e);
+    }
   }, [actions]);
 
   const handleDelete = useCallback((sceneId) => {

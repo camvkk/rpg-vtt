@@ -29,7 +29,7 @@ const CONDITION_PRESETS = [
   { name: 'Em Chamas', icon: '🔥' },
 ];
 
-export default function TokenContextMenu({ token, position, onClose, onUpdate, onDelete }) {
+export default function TokenContextMenu({ token, position, onClose, onUpdate, onDelete, onOpenSheet }) {
   const [view, setView] = useState('main'); // main | hp | conditions | size | vision
   const [hpCurrent, setHpCurrent] = useState(token.hp?.current ?? 0);
   const [hpMax, setHpMax] = useState(token.hp?.max ?? 0);
@@ -88,6 +88,11 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
         {/* Main Menu */}
         {view === 'main' && (
           <div className="tcm-body">
+            {onOpenSheet && (
+              <button className="tcm-item tcm-item-primary" onClick={() => { onOpenSheet(token); onClose(); }}>
+                <span>📋</span> <span>Abrir Ficha</span>
+              </button>
+            )}
             <button className="tcm-item" onClick={() => setView('hp')}>
               <span>❤️</span> <span>Editar HP</span>
               <span className="tcm-value">

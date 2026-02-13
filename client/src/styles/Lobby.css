@@ -32,6 +32,7 @@
   padding: 2rem;
   max-height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .lobby-header {
@@ -222,6 +223,10 @@
 .doc-name {
   flex: 1;
   color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-size {

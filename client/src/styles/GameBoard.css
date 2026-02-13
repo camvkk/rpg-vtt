@@ -120,9 +120,24 @@
   font-weight: 700;
   font-size: 0.85rem;
 }
-.gb-player-info { flex: 1; }
-.gb-player-name { font-weight: 600; font-size: 0.85rem; }
-.gb-player-role { font-size: 0.75rem; }
+.gb-player-info { 
+  flex: 1; 
+  min-width: 0;
+  overflow: hidden;
+}
+.gb-player-name { 
+  font-weight: 600; 
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gb-player-role { 
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Loading ── */
 .gb-loading {
@@ -335,6 +350,10 @@
   font-weight: 600;
   color: var(--color-primary);
   font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 
 .gb-campaign-info .gb-room-code {
@@ -470,3 +489,30 @@
 / *   r e b u i l d   * / 
  
  
+/* ── Better Image Interpolation (Bug #17) ── */
+.gb-canvas-area canvas {
+  image-rendering: auto;
+  image-rendering: smooth;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.gb-canvas-area img {
+  image-rendering: auto;
+  image-rendering: smooth;
+}
+
+/* Force anti-aliasing on token images */
+.token-image,
+.map-background {
+  image-rendering: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Ensure text remains crisp */
+.gb-canvas-area text {
+  font-smoothing: antialiased;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

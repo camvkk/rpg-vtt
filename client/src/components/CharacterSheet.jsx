@@ -50,15 +50,75 @@ const SPELL_LEVEL_NAMES = {
 export default function CharacterSheet({
   character,
   isEditable = true,
+  isDM = false,
+  isOtherCharacter = false,
   onUpdateCharacter,
   onRollDice,
   onClose,
+  onMinimize,
+  isMinimized = false,
+  windowMode = false,
+  initialPosition = null,
+  zIndex = 1000,
+  onFocus,
+  sheetId = null,
 }) {
+  // ── Draggable window state ──
+  const [position, setPosition] = useState(initialPosition || { x: 100, y: 50 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const modalRef = useRef(null);
+
+  // ── Drag handlers ──
+  const handleMouseDown = useCallback((e) => {
+    if (e.target.closest('.cs-tab') || e.target.closest('input') || e.target.closest('button') || e.target.closest('textarea')) {
+      return;
+    }
+    if (!windowMode) return;
+    e.preventDefault();
+    setIsDragging(true);
+    const rect = modalRef.current?.getBoundingClientRect();
+    if (rect) {
+      dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+    onFocus?.();
+  }, [windowMode, onFocus]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return;
+    const newX = e.clientX - dragOffset.current.x;
+    const newY = e.clientY - dragOffset.current.y;
+    // Constrain to viewport
+    const maxX = window.innerWidth - 400;
+    const maxY = window.innerHeight - 100;
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY)),
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // ── Determine if editable (DM can edit any sheet) ──
+  const canEdit = isEditable || (isDM && isOtherCharacter);
   const [activeTab, setActiveTab] = useState('overview');
   const char = character || makeDefaultCharacter();
-  const saveTimer = useRef(null);
+  const saveTimer = useRef(null); // eslint-disable-line no-unused-vars
 
-  // ── Derived values ──
+  // ── Derived values (must be before any conditional returns) ──
   const profBonus = useMemo(() => getProficiencyBonus(char.level || 1), [char.level]);
 
   const getMod = (score) => Math.floor(((score || 10) - 10) / 2);
@@ -83,10 +143,10 @@ export default function CharacterSheet({
 
   // ── Update helper with debounced auto-save ──
   const update = useCallback((patch) => {
-    if (!isEditable) return;
+    if (!canEdit) return;
     const updated = { ...char, ...patch };
     onUpdateCharacter(updated);
-  }, [char, isEditable, onUpdateCharacter]);
+  }, [char, canEdit, onUpdateCharacter]);
 
   const updateAttr = useCallback((attr, val) => {
     const v = Math.max(1, Math.min(30, parseInt(val) || 1));
@@ -137,7 +197,7 @@ export default function CharacterSheet({
 
   // ── Rest handlers ──
   const shortRest = () => {
-    if (!isEditable) return;
+    if (!canEdit) return;
     // Restore hit dice (half level, min 1)
     const restored = Math.max(1, Math.floor((char.level || 1) / 2));
     const newUsed = Math.max(0, (char.hitDice?.used || 0) - restored);
@@ -145,7 +205,7 @@ export default function CharacterSheet({
   };
 
   const longRest = () => {
-    if (!isEditable) return;
+    if (!canEdit) return;
     const maxHp = char.hp?.max || 10;
     const totalHitDice = char.level || 1;
     const halfBack = Math.max(1, Math.floor(totalHitDice / 2));
@@ -183,7 +243,7 @@ export default function CharacterSheet({
           <div>
             <span style={{ fontSize: '0.75rem', color: '#8888aa', fontFamily: "'Cinzel', serif" }}>PONTOS DE VIDA</span>
             <div className="cs-hp-values">
-              {isEditable ? (
+              {canEdit ? (
                 <>
                   <input
                     type="number"
@@ -207,11 +267,11 @@ export default function CharacterSheet({
               )}
             </div>
           </div>
-          {isEditable && (
+          {canEdit && (
             <div className="cs-hp-btns">
               <button className="cs-hp-btn minus" onClick={() => update({ hp: { ...char.hp, current: Math.max(0, (char.hp?.current || 0) - 1) } })}>−</button>
               <button className="cs-hp-btn plus" onClick={() => update({ hp: { ...char.hp, current: Math.min((char.hp?.max || 10) + (char.hp?.temp || 0), (char.hp?.current || 0) + 1) } })}>+</button>
-              {isEditable && (
+              {canEdit && (
                 <input
                   type="number"
                   placeholder="Temp"
@@ -234,7 +294,7 @@ export default function CharacterSheet({
         <div className="cs-quick-stat">
           <div className="cs-quick-stat-label">CA</div>
           <div className="cs-quick-stat-value">
-            {isEditable ? (
+            {canEdit ? (
               <input type="number" value={char.ac ?? 10} onChange={e => update({ ac: parseInt(e.target.value) || 10 })} />
             ) : char.ac}
           </div>
@@ -242,7 +302,7 @@ export default function CharacterSheet({
         <div className="cs-quick-stat">
           <div className="cs-quick-stat-label">Velocidade</div>
           <div className="cs-quick-stat-value">
-            {isEditable ? (
+            {canEdit ? (
               <input type="number" value={char.speed ?? 30} onChange={e => update({ speed: parseInt(e.target.value) || 30 })} />
             ) : char.speed}
             <span style={{ fontSize: '0.7rem', color: '#666' }}> pés</span>
@@ -267,7 +327,7 @@ export default function CharacterSheet({
         <div className="cs-inspiration">
           <button
             className={`cs-inspiration-star ${char.inspiration ? 'active' : ''}`}
-            onClick={() => isEditable && update({ inspiration: !char.inspiration })}
+            onClick={() => canEdit && update({ inspiration: !char.inspiration })}
             title="Inspiração"
           >
             {char.inspiration ? '⭐' : '☆'}
@@ -313,7 +373,7 @@ export default function CharacterSheet({
             <div key={key} className="cs-stat-box" title={info.name}>
               <div className="cs-stat-label">{info.short}</div>
               <div className="cs-stat-score">
-                {isEditable ? (
+                {canEdit ? (
                   <input type="number" value={char.attributes?.[key] || 10} onChange={e => updateAttr(key, e.target.value)} />
                 ) : (char.attributes?.[key] || 10)}
               </div>
@@ -331,7 +391,7 @@ export default function CharacterSheet({
           const total = mods[key] + (prof ? profBonus : 0);
           return (
             <div key={key} className="cs-skill-row">
-              {isEditable && (
+              {canEdit && (
                 <input
                   type="checkbox"
                   className="cs-skill-prof"
@@ -355,7 +415,7 @@ export default function CharacterSheet({
           const total = mods[skill.ability] + (prof ? profBonus : 0);
           return (
             <div key={key} className="cs-skill-row">
-              {isEditable && (
+              {canEdit && (
                 <input
                   type="checkbox"
                   className="cs-skill-prof"
@@ -407,7 +467,7 @@ export default function CharacterSheet({
           </div>
           {attacks.map((atk, i) => (
             <div key={i} className="cs-attack-row">
-              {isEditable ? (
+              {canEdit ? (
                 <>
                   <input value={atk.name} onChange={e => updateAttack(i, 'name', e.target.value)} placeholder="Arma" />
                   <input value={atk.bonus} onChange={e => updateAttack(i, 'bonus', e.target.value)} placeholder="+5" />
@@ -429,10 +489,10 @@ export default function CharacterSheet({
               )}
             </div>
           ))}
-          {isEditable && (
+          {canEdit && (
             <button className="cs-btn-small" onClick={addAttack} style={{ marginTop: 8 }}>+ Adicionar Ataque</button>
           )}
-          {!isEditable && attacks.length > 0 && (
+          {!canEdit && attacks.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {attacks.map((atk, i) => (
                 <div key={i} style={{ display: 'flex', gap: 4 }}>
@@ -460,7 +520,7 @@ export default function CharacterSheet({
                         key={i}
                         className={`cs-slot-check ${i < (slot.used || 0) ? 'used' : ''}`}
                         onClick={() => {
-                          if (!isEditable) return;
+                          if (!canEdit) return;
                           const newUsed = i < (slot.used || 0) ? i : i + 1;
                           update({
                             spellSlots: {
@@ -477,7 +537,7 @@ export default function CharacterSheet({
               );
             })}
           </div>
-          {isEditable && (
+          {canEdit && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => {
                 const slot = char.spellSlots?.[lvl] || { total: 0, used: 0 };
@@ -512,7 +572,7 @@ export default function CharacterSheet({
           <div className="cs-section-title">✨ Traços & Características</div>
           {(char.features || []).map((feat, i) => (
             <div key={i} className="cs-feature-item">
-              {isEditable ? (
+              {canEdit ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input
                     value={feat}
@@ -531,7 +591,7 @@ export default function CharacterSheet({
               ) : feat}
             </div>
           ))}
-          {isEditable && (
+          {canEdit && (
             <button className="cs-btn-small" onClick={() => update({ features: [...(char.features || []), ''] })} style={{ marginTop: 8 }}>
               + Adicionar Traço
             </button>
@@ -572,7 +632,7 @@ export default function CharacterSheet({
             ].map(c => (
               <div key={c.key} className="cs-currency-item">
                 <span style={{ color: c.color }}>{c.label}</span>
-                {isEditable ? (
+                {canEdit ? (
                   <input
                     type="number"
                     min="0"
@@ -596,7 +656,7 @@ export default function CharacterSheet({
           </div>
           {items.map((item, i) => (
             <div key={i} className="cs-inv-row">
-              {isEditable ? (
+              {canEdit ? (
                 <>
                   <input value={item.name || ''} onChange={e => updateItem(i, 'name', e.target.value)} placeholder="Item" />
                   <input type="number" min="1" value={item.qty || 1} onChange={e => updateItem(i, 'qty', e.target.value)} />
@@ -613,7 +673,7 @@ export default function CharacterSheet({
               )}
             </div>
           ))}
-          {isEditable && (
+          {canEdit && (
             <button className="cs-btn-small" onClick={() => update({ inventory: [...items, { name: '', qty: 1, weight: 0 }] })} style={{ marginTop: 8 }}>
               + Adicionar Item
             </button>
@@ -674,7 +734,7 @@ export default function CharacterSheet({
                         key={i}
                         className={`cs-slot-check ${i < (slot.used || 0) ? 'used' : ''}`}
                         onClick={() => {
-                          if (!isEditable) return;
+                          if (!canEdit) return;
                           const newUsed = i < (slot.used || 0) ? i : i + 1;
                           update({ spellSlots: { ...char.spellSlots, [lvl]: { ...slot, used: newUsed } } });
                         }}
@@ -690,7 +750,7 @@ export default function CharacterSheet({
         {/* Spells by level */}
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => {
           const levelSpells = spells[lvl] || [];
-          if (!isEditable && levelSpells.length === 0) return null;
+          if (!canEdit && levelSpells.length === 0) return null;
           return (
             <div key={lvl} className="cs-spell-group">
               <div className="cs-spell-group-title">{SPELL_LEVEL_NAMES[lvl]}</div>
@@ -701,12 +761,12 @@ export default function CharacterSheet({
                       type="checkbox"
                       className="cs-spell-prepared"
                       checked={!!spell.prepared}
-                      onChange={() => isEditable && updateSpell(lvl, i, 'prepared', !spell.prepared)}
+                      onChange={() => canEdit && updateSpell(lvl, i, 'prepared', !spell.prepared)}
                       title="Preparada"
                     />
                   )}
                   <span className="cs-spell-name">
-                    {isEditable ? (
+                    {canEdit ? (
                       <input
                         value={spell.name || ''}
                         onChange={e => updateSpell(lvl, i, 'name', e.target.value)}
@@ -716,12 +776,12 @@ export default function CharacterSheet({
                       <span style={{ opacity: spell.prepared || lvl === 0 ? 1 : 0.5 }}>{spell.name}</span>
                     )}
                   </span>
-                  {isEditable && (
+                  {canEdit && (
                     <button className="cs-btn-small danger" onClick={() => removeSpell(lvl, i)}>✕</button>
                   )}
                 </div>
               ))}
-              {isEditable && (
+              {canEdit && (
                 <button className="cs-btn-small" onClick={() => addSpell(lvl)} style={{ marginTop: 4, fontSize: '0.7rem' }}>
                   + Adicionar {lvl === 0 ? 'Truque' : 'Magia'}
                 </button>
@@ -744,7 +804,7 @@ export default function CharacterSheet({
           <textarea
             value={char.personality || ''}
             onChange={e => update({ personality: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="Como seu personagem age..."
           />
         </div>
@@ -753,7 +813,7 @@ export default function CharacterSheet({
           <textarea
             value={char.ideals || ''}
             onChange={e => update({ ideals: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="O que motiva seu personagem..."
           />
         </div>
@@ -762,7 +822,7 @@ export default function CharacterSheet({
           <textarea
             value={char.bonds || ''}
             onChange={e => update({ bonds: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="Conexões com pessoas, lugares..."
           />
         </div>
@@ -771,7 +831,7 @@ export default function CharacterSheet({
           <textarea
             value={char.flaws || ''}
             onChange={e => update({ flaws: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="Fraquezas e vícios..."
           />
         </div>
@@ -780,7 +840,7 @@ export default function CharacterSheet({
           <textarea
             value={char.backstory || ''}
             onChange={e => update({ backstory: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="A história de vida do seu personagem..."
           />
         </div>
@@ -789,7 +849,7 @@ export default function CharacterSheet({
           <textarea
             value={char.notes || ''}
             onChange={e => update({ notes: e.target.value })}
-            readOnly={!isEditable}
+            readOnly={!canEdit}
             placeholder="Anotações de sessão, lembretes, NPCs..."
             style={{ minHeight: 120 }}
           />
@@ -811,6 +871,107 @@ export default function CharacterSheet({
   // ════════════════════════════════════════════
   //  RENDER
   // ════════════════════════════════════════════
+  
+  // ── If minimized, render minimal floating tag ──
+  if (isMinimized) {
+    return (
+      <div
+        className="cs-minimized"
+        style={{
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+          zIndex: zIndex,
+        }}
+        onClick={() => onMinimize?.(false)}
+        onMouseDown={(e) => {
+          if (!windowMode) return;
+          e.preventDefault();
+          setIsDragging(true);
+          const rect = e.currentTarget.getBoundingClientRect();
+          dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          onFocus?.();
+        }}
+      >
+        <span className="cs-minimized-avatar">{char.avatarEmoji || '⚔️'}</span>
+        <span className="cs-minimized-name">{char.name || 'Sem Nome'}</span>
+        {isDM && isOtherCharacter && <span className="cs-minimized-dm-badge">👑</span>}
+      </div>
+    );
+  }
+
+  // Window mode: floating draggable window
+  if (windowMode) {
+    return (
+      <div
+        ref={modalRef}
+        className={`cs-window ${isDragging ? 'cs-window-dragging' : ''}`}
+        style={{
+          position: 'fixed',
+          left: position.x,
+          top: position.y,
+          zIndex: zIndex,
+        }}
+        onMouseDown={() => onFocus?.()}
+      >
+        {/* Window Header (draggable) */}
+        <div 
+          className="cs-window-header"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="cs-window-header-left">
+            <span className="cs-window-avatar">{char.avatarEmoji || '⚔️'}</span>
+            <span className="cs-window-title">{char.name || 'Sem Nome'}</span>
+            {isDM && isOtherCharacter && <span className="cs-window-dm-badge">👑 Mestre</span>}
+          </div>
+          <div className="cs-window-controls">
+            {onMinimize && (
+              <button 
+                className="cs-window-btn cs-window-minimize" 
+                onClick={(e) => { e.stopPropagation(); onMinimize(true); }}
+                title="Minimizar"
+              >
+                ─
+              </button>
+            )}
+            <button 
+              className="cs-window-btn cs-window-close" 
+              onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+              title="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="cs-tabs cs-tabs-window">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              className={`cs-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.icon}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="cs-content cs-content-window">
+          {tabContent[activeTab]?.()}
+        </div>
+
+        {/* Window Footer */}
+        <div className="cs-window-footer">
+          <button className="cs-rest-btn cs-rest-btn-sm" onClick={shortRest} title="Descanso Curto">☀️</button>
+          <button className="cs-rest-btn cs-rest-btn-sm" onClick={longRest} title="Descanso Longo">🌙</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Full-screen modal mode (original)
   return (
     <div className="cs-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className="cs-modal">
@@ -821,7 +982,7 @@ export default function CharacterSheet({
               {char.avatarEmoji || '⚔️'}
             </div>
             <div className="cs-header-info">
-              {isEditable ? (
+              {canEdit ? (
                 <input
                   className="cs-char-name"
                   value={char.name || ''}
@@ -832,7 +993,7 @@ export default function CharacterSheet({
                 <span className="cs-char-name">{char.name || 'Sem Nome'}</span>
               )}
               <div className="cs-char-subtitle">
-                {isEditable ? (
+                {canEdit ? (
                   <>
                     <input value={char.race || ''} onChange={e => update({ race: e.target.value })} placeholder="Raça" style={{ width: 80 }} />
                     <span>·</span>
@@ -848,8 +1009,12 @@ export default function CharacterSheet({
             </div>
           </div>
           <div className="cs-header-right">
+            {isDM && isOtherCharacter && <span className="cs-dm-viewing-badge">👑 Editando como Mestre</span>}
             <button className="cs-rest-btn" onClick={shortRest} title="Descanso Curto">☀️ Descanso Curto</button>
             <button className="cs-rest-btn" onClick={longRest} title="Descanso Longo">🌙 Descanso Longo</button>
+            {onMinimize && (
+              <button className="cs-minimize-btn" onClick={() => onMinimize(true)} title="Minimizar">─</button>
+            )}
             <button className="cs-close-btn" onClick={onClose} title="Fechar">✕</button>
           </div>
         </div>

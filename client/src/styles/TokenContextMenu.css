@@ -75,6 +75,8 @@
   border-radius: var(--radius-sm, 6px);
   transition: background 0.1s;
   text-align: left;
+  min-width: 0;
+  overflow: hidden;
 }
 .tcm-item:hover {
   background: rgba(255, 255, 255, 0.07);
@@ -88,6 +90,21 @@
   margin-left: auto;
   font-size: 0.75rem;
   color: var(--color-text-dim, #888);
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tcm-item-primary {
+  background: rgba(226, 183, 20, 0.1);
+  border: 1px solid rgba(226, 183, 20, 0.3);
+  color: #e2b714;
+  font-weight: 600;
+}
+.tcm-item-primary:hover {
+  background: rgba(226, 183, 20, 0.2);
 }
 
 .tcm-danger {

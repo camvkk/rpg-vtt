@@ -1351,6 +1351,30 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: false, error: error.message });
         }
     });
+
+    // Map offset (reposition)
+    socket.on('map:offset', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can reposition map');
+            
+            const { offsetX, offsetY } = data;
+            
+            // Save to room state
+            const persistedState = await loadRoomState(player.roomId);
+            await saveRoomState(player.roomId, 'map_offset', JSON.stringify({ offsetX, offsetY }));
+            
+            console.log(`🗺️ Map repositioned in room ${player.roomId}: offset(${offsetX}, ${offsetY})`);
+            
+            // Broadcast to room
+            io.to(player.roomId).emit('map:update', { offsetX, offsetY });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error setting map offset:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
     
     // Fog of War
     socket.on('fog:reveal', async (data, callback) => {
@@ -2301,6 +2325,8 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player?.campaignId) throw new Error('Not in a campaign');
             const scenes = await getScenes(player.campaignId);
+            // Send via callback AND broadcast to all in room for consistency
+            socket.emit('scene:list', scenes);
             if (callback) callback({ success: true, scenes });
         } catch (error) {
             if (callback) callback({ success: false, error: error.message });
@@ -2365,8 +2391,14 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player?.isDM || !player?.campaignId) throw new Error('Only DM');
             const scenes = await getScenes(player.campaignId);
-            const active = scenes.find(s => s.isActive);
-            if (!active) throw new Error('No active scene');
+            let active = scenes.find(s => s.isActive);
+            
+            // If no active scene, just return success (nothing to save)
+            if (!active) {
+                if (callback) callback({ success: true, message: 'No active scene to save' });
+                return;
+            }
+            
             const roomState = await loadRoomState(player.roomId);
             active.mapUrl = roomState.map_url || active.mapUrl;
             active.tokens = roomState.tokens || [];
@@ -2378,6 +2410,7 @@ io.on('connection', (socket) => {
             await saveScene(active);
             if (callback) callback({ success: true });
         } catch (error) {
+            console.error('Error saving current scene:', error);
             if (callback) callback({ success: false, error: error.message });
         }
     });

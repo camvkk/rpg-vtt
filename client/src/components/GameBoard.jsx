@@ -53,7 +53,7 @@ export default function GameBoardWithErrorBoundary(props) {
 
 function GameBoardInner({ onLeaveRoom }) {
   const { state, actions } = useGame();
-  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled } = state;
+  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled, allCharacters } = state;
   const isDM = player.isDM;
   const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
   const [showCharSheet, setShowCharSheet] = useState(false);
@@ -68,6 +68,137 @@ function GameBoardInner({ onLeaveRoom }) {
   const [openMenu, setOpenMenu] = useState(null);
   const [sidebarTab, setSidebarTab] = useState('tokens');
   const menuRef = useRef(null);
+  const canvasAreaRef = useRef(null);
+
+  // ── Multiple character sheet windows (for DM and token double-click) ──
+  // Each sheet: { id, token?, character?, playerName?, isMinimized, position, zIndex }
+  const [openSheets, setOpenSheets] = useState([]);
+  const [nextSheetZIndex, setNextSheetZIndex] = useState(1000);
+
+  // ── Open character sheet from token ──
+  const openCharacterSheetForToken = useCallback((token) => {
+    // Check if already open
+    const existingIdx = openSheets.findIndex(s => s.tokenId === token.id);
+    if (existingIdx >= 0) {
+      // Focus existing sheet
+      setOpenSheets(prev => prev.map((s, i) => 
+        i === existingIdx ? { ...s, isMinimized: false, zIndex: nextSheetZIndex } : s
+      ));
+      setNextSheetZIndex(z => z + 1);
+      return;
+    }
+
+    // Try to find character data for this token
+    let charData = null;
+    let playerName = null;
+
+    // First check if there's a linked player character
+    if (token.playerId) {
+      const linkedPlayer = players.find(p => p.id === token.playerId);
+      if (linkedPlayer && allCharacters.has(linkedPlayer.name)) {
+        charData = allCharacters.get(linkedPlayer.name);
+        playerName = linkedPlayer.name;
+      }
+    }
+
+    // Or check if token name matches a player name
+    if (!charData && token.name) {
+      if (allCharacters.has(token.name)) {
+        charData = allCharacters.get(token.name);
+        playerName = token.name;
+      }
+    }
+
+    // Create basic character from token stats if no linked character
+    if (!charData) {
+      charData = {
+        name: token.name || 'Token',
+        avatarEmoji: '🎭',
+        hp: token.hp || { current: 10, max: 10, temp: 0 },
+        ac: token.ac || 10,
+        conditions: token.conditions || [],
+        level: 1,
+        race: '',
+        class: '',
+        attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+        skills: {},
+        savingThrows: {},
+        attacks: [],
+        features: [],
+        inventory: [],
+        currency: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+        notes: '',
+      };
+    }
+
+    // Calculate position with offset for multiple windows
+    const offset = openSheets.length * 30;
+    const newSheet = {
+      id: `sheet_${Date.now()}`,
+      tokenId: token.id,
+      character: charData,
+      playerName: playerName,
+      isMinimized: false,
+      position: { x: 100 + offset, y: 50 + offset },
+      zIndex: nextSheetZIndex,
+    };
+
+    setOpenSheets(prev => [...prev, newSheet]);
+    setNextSheetZIndex(z => z + 1);
+  }, [openSheets, allCharacters, players, nextSheetZIndex]);
+
+  // ── Close a sheet window ──
+  const closeSheet = useCallback((sheetId) => {
+    setOpenSheets(prev => prev.filter(s => s.id !== sheetId));
+  }, []);
+
+  // ── Toggle minimize for a sheet ──
+  const toggleSheetMinimize = useCallback((sheetId, minimize) => {
+    setOpenSheets(prev => prev.map(s => 
+      s.id === sheetId ? { ...s, isMinimized: minimize } : s
+    ));
+  }, []);
+
+  // ── Focus a sheet (bring to front) ──
+  const focusSheet = useCallback((sheetId) => {
+    setOpenSheets(prev => prev.map(s => 
+      s.id === sheetId ? { ...s, zIndex: nextSheetZIndex } : s
+    ));
+    setNextSheetZIndex(z => z + 1);
+  }, [nextSheetZIndex]);
+
+  // ── Update character in sheet and sync to server ──
+  const updateSheetCharacter = useCallback((sheetId, charData) => {
+    setOpenSheets(prev => prev.map(s => 
+      s.id === sheetId ? { ...s, character: charData } : s
+    ));
+
+    // If DM editing a player's character, save to server
+    const sheet = openSheets.find(s => s.id === sheetId);
+    if (sheet?.playerName && isDM && campaign.id) {
+      actions.dmUpdateCharacter(campaign.id, sheet.playerName, charData);
+    }
+  }, [openSheets, isDM, campaign.id, actions]);
+
+  // ── Listen for open-character-sheet events from MapCanvas ──
+  useEffect(() => {
+    const el = canvasAreaRef.current;
+    if (!el) return;
+
+    const handler = (e) => {
+      openCharacterSheetForToken(e.detail.token);
+    };
+
+    el.addEventListener('open-character-sheet', handler);
+    return () => el.removeEventListener('open-character-sheet', handler);
+  }, [openCharacterSheetForToken]);
+
+  // ── Load all characters on mount for DM ──
+  useEffect(() => {
+    if (isDM && campaign.id) {
+      actions.getAllCharacters(campaign.id);
+    }
+  }, [isDM, campaign.id, actions]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -221,6 +352,7 @@ function GameBoardInner({ onLeaveRoom }) {
                 { id: 'door', icon: '🚪', label: 'Porta (R)', type: 'tool', active: ui.activeTool === 'door', onClick: () => { actions.setActiveTool('door'); setOpenMenu(null); } },
                 { id: 'aoe', icon: '💥', label: 'AoE Magias (A)', type: 'tool', active: ui.activeTool === 'aoe', onClick: () => { actions.setActiveTool('aoe'); setOpenMenu(null); } },
                 { id: 'add-token', icon: '🎭', label: 'Criar Token (T)', type: 'tool', active: ui.activeTool === 'add-token' || !!tokenAwaitingPlacement, onClick: () => { setShowTokenCreator(true); setOpenMenu(null); } },
+                { id: 'move-map', icon: '🗺️', label: 'Mover Mapa', type: 'tool', active: ui.activeTool === 'move-map', onClick: () => { actions.setActiveTool('move-map'); setOpenMenu(null); } },
                 { type: 'divider' },
                 { id: 'toggle-fog', icon: fogEnabled ? '👁️' : '👁️‍🗨️', label: fogEnabled ? 'Desativar Névoa' : 'Ativar Névoa', type: 'action', onClick: () => { actions.toggleFog(!fogEnabled); setOpenMenu(null); } },
                 { id: 'reset-fog', icon: '🌑', label: 'Resetar Névoa', type: 'action', onClick: () => { if (confirm('Resetar toda a névoa? Tudo será coberto novamente.')) { actions.resetFog(); setOpenMenu(null); } } },
@@ -229,7 +361,7 @@ function GameBoardInner({ onLeaveRoom }) {
                 { id: 'clear-doors', icon: '🚪', label: 'Limpar Portas', type: 'action', onClick: () => { actions.clearDoors(); setOpenMenu(null); } },
               ] : []),
             ]}
-            hasActive={['select', 'measure', 'draw', 'fog', 'wall', 'door', 'aoe', 'add-token'].includes(ui.activeTool)}
+            hasActive={['select', 'measure', 'draw', 'fog', 'wall', 'door', 'aoe', 'add-token', 'move-map'].includes(ui.activeTool)}
           />
 
           {/* 📋 Personagem */}
@@ -320,6 +452,21 @@ function GameBoardInner({ onLeaveRoom }) {
           <span>🚪 <strong>Porta:</strong></span>
           <span style={{ color: 'var(--color-text-dim)' }}>Clique numa parede para colocar porta</span>
           <span style={{ color: '#DEB887' }}>Clique na porta para alternar: Fechada → Aberta → Trancada</span>
+        </div>
+      )}
+
+      {/* ── Move Map Tool Info Panel ── */}
+      {ui.activeTool === 'move-map' && isDM && (
+        <div className="gb-aoe-config" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--color-border)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.85rem' }}>
+          <span>🗺️ <strong>Mover Mapa:</strong></span>
+          <span style={{ color: 'var(--color-text-dim)' }}>Arraste o mapa para reposicioná-lo dentro do cenário</span>
+          <button 
+            className="btn btn-ghost btn-sm" 
+            onClick={() => actions.setMapOffset(0, 0)} 
+            style={{ marginLeft: 'auto' }}
+          >
+            ↺ Resetar Posição
+          </button>
         </div>
       )}
 
@@ -419,7 +566,7 @@ function GameBoardInner({ onLeaveRoom }) {
         )}
 
         {/* Center — Map Canvas */}
-        <div className="gb-canvas-area">
+        <div className="gb-canvas-area" ref={canvasAreaRef}>
           <div style={{ position: 'absolute', inset: 0 }}>
             <CanvasErrorBoundary>
               <MapCanvas 
@@ -458,7 +605,9 @@ function GameBoardInner({ onLeaveRoom }) {
             <ChatPanel
               messages={chat}
               onSendMessage={handleChatSend}
-              currentUser={{ name: player.name, id: player.id }}
+              onDeleteMessage={actions.deleteMessage}
+              onHideMessage={actions.hideMessage}
+              currentUser={{ name: player.name, id: player.id, isDM }}
               isConnected={connected}
               onSpellDetected={handleSpellDetected}
             />
@@ -469,16 +618,40 @@ function GameBoardInner({ onLeaveRoom }) {
       {/* Floating Initiative Tracker */}
       {showInitiativeTracker && <InitiativeTracker />}
 
-      {/* Character Sheet Modal (new full-page) */}
+      {/* Character Sheet Modal (own character - full-page) */}
       {showCharSheet && (
         <CharacterSheet
           character={character}
           isEditable={!isDM}
+          isDM={isDM}
+          isOtherCharacter={false}
           onUpdateCharacter={(char) => actions.updateCharacter(char)}
           onRollDice={handleDiceRoll}
           onClose={() => setShowCharSheet(false)}
+          windowMode={false}
         />
       )}
+
+      {/* Multiple Character Sheet Windows (from token double-click) */}
+      {openSheets.map((sheet) => (
+        <CharacterSheet
+          key={sheet.id}
+          sheetId={sheet.id}
+          character={sheet.character}
+          isEditable={false}
+          isDM={isDM}
+          isOtherCharacter={true}
+          onUpdateCharacter={(char) => updateSheetCharacter(sheet.id, char)}
+          onRollDice={handleDiceRoll}
+          onClose={() => closeSheet(sheet.id)}
+          onMinimize={(minimize) => toggleSheetMinimize(sheet.id, minimize)}
+          isMinimized={sheet.isMinimized}
+          windowMode={true}
+          initialPosition={sheet.position}
+          zIndex={sheet.zIndex}
+          onFocus={() => focusSheet(sheet.id)}
+        />
+      ))}
 
       {/* Map Upload Modal */}
       {showMapUpload && (

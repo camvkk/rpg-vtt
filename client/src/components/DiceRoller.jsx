@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useGame } from '../contexts/GameContext';
 import '../styles/DiceRoller.css';
 
@@ -10,6 +10,15 @@ const DICE_TYPES = [
   { sides: 10, label: 'd10', icon: '◈', color: '#3498db' },
   { sides: 12, label: 'd12', icon: '⬠', color: '#9b59b6' },
   { sides: 20, label: 'd20', icon: '✦', color: '#f1c40f' },
+];
+
+// Roll context presets
+const ROLL_CONTEXTS = [
+  { id: 'attack', label: 'Ataque', icon: '⚔️' },
+  { id: 'damage', label: 'Dano', icon: '💥' },
+  { id: 'skill', label: 'Perícia', icon: '🎯' },
+  { id: 'save', label: 'Salvaguarda', icon: '🛡️' },
+  { id: 'other', label: 'Outro', icon: '🎲' },
 ];
 
 function rollSingleDie(sides) {
@@ -30,7 +39,7 @@ function buildFormula(tray, modifier) {
 }
 
 export default function DiceRoller() {
-  const { state, actions } = useGame();
+  const { actions } = useGame();
   const [open, setOpen] = useState(false);
   const [tray, setTray] = useState([]); // [{id, sides, label, color, icon}]
   const [modifier, setModifier] = useState(0);
@@ -38,6 +47,8 @@ export default function DiceRoller() {
   const [results, setResults] = useState(null); // {dice: [{sides, value, isCrit, isFumble}], total, formula}
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [rollContext, setRollContext] = useState(''); // e.g., "Ataque com Espada Longa"
+  const [contextType, setContextType] = useState('other'); // attack, damage, skill, save, other
   const trayIdRef = useRef(0);
 
   // Listen for dice results from other players via chat
@@ -56,6 +67,8 @@ export default function DiceRoller() {
     setTray([]);
     setModifier(0);
     setResults(null);
+    setRollContext('');
+    setContextType('other');
   }, []);
 
   const handleRoll = useCallback(async () => {
@@ -71,31 +84,57 @@ export default function DiceRoller() {
       return {
         sides: d.sides,
         value,
+        roll: value, // Alias for compatibility
         color: d.color,
         icon: d.icon,
         label: d.label,
         isCrit: d.sides === 20 && value === 20,
         isFumble: d.sides === 20 && value === 1,
+        kept: true,
+        dropped: false,
       };
     });
 
     const total = diceResults.reduce((sum, d) => sum + d.value, 0) + modifier;
     const formula = buildFormula(tray, modifier);
 
-    const rollData = { dice: diceResults, total, formula, timestamp: new Date().toISOString() };
+    // Build roll context string
+    const contextLabel = ROLL_CONTEXTS.find(c => c.id === contextType);
+    const fullContext = rollContext.trim() 
+      ? `${contextLabel?.label || ''}: ${rollContext}`.trim()
+      : (contextType !== 'other' ? contextLabel?.label : '');
+
+    const rollData = { 
+      dice: diceResults, 
+      total, 
+      formula, 
+      rollContext: fullContext,
+      rollDetails: {
+        individual: diceResults,
+        modifier: modifier,
+        formula: formula
+      },
+      timestamp: new Date().toISOString() 
+    };
     setResults(rollData);
     setRolling(false);
 
     // Add to history (keep last 10)
     setHistory(prev => [rollData, ...prev].slice(0, 10));
 
-    // Broadcast via socket
+    // Broadcast via socket with context
     try {
-      actions.rollDice(formula);
+      const notationWithContext = fullContext 
+        ? `${formula} ${fullContext}`
+        : formula;
+      actions.rollDice(notationWithContext);
     } catch (e) {
       console.error('Failed to broadcast dice roll:', e);
     }
-  }, [tray, modifier, rolling, actions]);
+
+    // Clear context after roll
+    setRollContext('');
+  }, [tray, modifier, rolling, actions, rollContext, contextType]);
 
   const hasCrit = results?.dice.some(d => d.isCrit);
   const hasFumble = results?.dice.some(d => d.isFumble);
@@ -168,6 +207,38 @@ export default function DiceRoller() {
             )}
           </div>
 
+          {/* Roll Context Type */}
+          <div className="dice-context-row">
+            {ROLL_CONTEXTS.map(ctx => (
+              <button
+                key={ctx.id}
+                className={`dice-context-btn ${contextType === ctx.id ? 'active' : ''}`}
+                onClick={() => setContextType(ctx.id)}
+                disabled={rolling}
+                title={ctx.label}
+              >
+                <span>{ctx.icon}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Roll Context Input */}
+          <div className="dice-context-input-row">
+            <input
+              type="text"
+              className="dice-context-input"
+              placeholder={`Descrição (ex: Espada Longa, Furtividade...)`}
+              value={rollContext}
+              onChange={(e) => setRollContext(e.target.value)}
+              disabled={rolling}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && tray.length > 0) {
+                  handleRoll();
+                }
+              }}
+            />
+          </div>
+
           {/* Modifier */}
           <div className="dice-modifier-row">
             <span className="dice-modifier-label">Modificador:</span>
@@ -215,12 +286,17 @@ export default function DiceRoller() {
               <div className="dice-history-title">Últimas Rolagens</div>
               {history.map((h, i) => (
                 <div key={i} className="dice-history-item">
-                  <span className="dice-history-formula">{h.formula}</span>
-                  <span className="dice-history-arrow">→</span>
-                  <span className="dice-history-total">{h.total}</span>
-                  <span className="dice-history-detail">
-                    [{h.dice.map(d => d.value).join(', ')}]
-                  </span>
+                  {h.rollContext && (
+                    <span className="dice-history-context">{h.rollContext}</span>
+                  )}
+                  <div className="dice-history-main">
+                    <span className="dice-history-formula">{h.formula}</span>
+                    <span className="dice-history-arrow">→</span>
+                    <span className="dice-history-total">{h.total}</span>
+                    <span className="dice-history-detail">
+                      [{h.dice.map(d => d.value).join(', ')}]
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>

@@ -77,6 +77,8 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  overflow: hidden;
+  flex: 1;
 }
 
 .cs-char-name {
@@ -89,6 +91,9 @@
   padding: 0;
   outline: none;
   width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cs-char-name::placeholder { color: rgba(226, 183, 20, 0.4); }
@@ -459,6 +464,10 @@
 .cs-skill-name {
   flex: 1;
   color: #ccc;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cs-skill-ability {
@@ -729,6 +738,9 @@
 .cs-spell-name {
   flex: 1;
   color: #ccc;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cs-spell-name input {
@@ -907,6 +919,227 @@
   .cs-currency {
     flex-wrap: wrap;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   WINDOW MODE — Draggable Floating Character Sheet
+   ═══════════════════════════════════════════════ */
+
+.cs-window {
+  width: 380px;
+  max-height: 70vh;
+  background:
+    linear-gradient(135deg, rgba(30, 25, 18, 0.98), rgba(20, 18, 15, 0.99)),
+    url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='60' height='60' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  border: 2px solid #c9a84c;
+  border-radius: 10px;
+  box-shadow:
+    0 0 30px rgba(201, 168, 76, 0.2),
+    0 8px 24px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleIn 0.2s ease-out;
+}
+
+.cs-window-dragging {
+  cursor: grabbing;
+  opacity: 0.9;
+  box-shadow:
+    0 0 40px rgba(201, 168, 76, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.8);
+}
+
+.cs-window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(201, 168, 76, 0.15), rgba(201, 168, 76, 0.05));
+  border-bottom: 1px solid rgba(201, 168, 76, 0.3);
+  cursor: grab;
+  user-select: none;
+}
+
+.cs-window-header:active {
+  cursor: grabbing;
+}
+
+.cs-window-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-window-avatar {
+  font-size: 1.2rem;
+}
+
+.cs-window-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #e2b714;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-window-dm-badge {
+  font-size: 0.65rem;
+  background: rgba(226, 183, 20, 0.2);
+  color: #e2b714;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(226, 183, 20, 0.3);
+}
+
+.cs-window-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.cs-window-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.cs-window-minimize {
+  background: rgba(226, 183, 20, 0.1);
+  color: #c9a84c;
+}
+
+.cs-window-minimize:hover {
+  background: rgba(226, 183, 20, 0.2);
+}
+
+.cs-window-close {
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff6b6b;
+}
+
+.cs-window-close:hover {
+  background: rgba(255, 107, 107, 0.2);
+}
+
+.cs-tabs-window {
+  padding: 0;
+  justify-content: center;
+}
+
+.cs-tabs-window .cs-tab {
+  flex: none;
+  min-width: auto;
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+
+.cs-content-window {
+  max-height: calc(70vh - 120px);
+  padding: 12px;
+}
+
+.cs-window-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.cs-rest-btn-sm {
+  padding: 4px 10px;
+  font-size: 0.9rem;
+}
+
+/* ═══════════════════════════════════════════════
+   MINIMIZED VIEW — Floating Name Tag
+   ═══════════════════════════════════════════════ */
+
+.cs-minimized {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, rgba(30, 25, 18, 0.95), rgba(20, 18, 15, 0.98));
+  border: 2px solid #c9a84c;
+  border-radius: 20px;
+  cursor: pointer;
+  user-select: none;
+  box-shadow:
+    0 0 15px rgba(201, 168, 76, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s;
+  animation: fadeIn 0.2s ease;
+}
+
+.cs-minimized:hover {
+  border-color: #e2b714;
+  box-shadow:
+    0 0 20px rgba(226, 183, 20, 0.25),
+    0 6px 16px rgba(0, 0, 0, 0.6);
+  transform: translateY(-2px);
+}
+
+.cs-minimized-avatar {
+  font-size: 1rem;
+}
+
+.cs-minimized-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2b714;
+  white-space: nowrap;
+}
+
+.cs-minimized-dm-badge {
+  font-size: 0.7rem;
+}
+
+/* ═══════════════════════════════════════════════
+   DM BADGES
+   ═══════════════════════════════════════════════ */
+
+.cs-dm-viewing-badge {
+  font-size: 0.7rem;
+  background: rgba(226, 183, 20, 0.15);
+  color: #e2b714;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(226, 183, 20, 0.3);
+  font-weight: 600;
+}
+
+.cs-minimize-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(226, 183, 20, 0.3);
+  background: rgba(226, 183, 20, 0.08);
+  color: #c9a84c;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.cs-minimize-btn:hover {
+  background: rgba(226, 183, 20, 0.2);
+  border-color: #e2b714;
 }
 
 /* ── Print Mode ── */

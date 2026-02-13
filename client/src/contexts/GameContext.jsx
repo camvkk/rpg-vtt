@@ -19,7 +19,7 @@ const initialState = {
   systemData: null,
 
   // Map
-  map: { url: null, width: 2000, height: 2000 },
+  map: { url: null, width: 2000, height: 2000, offsetX: 0, offsetY: 0 },
 
   // Grid config
   gridConfig: { gridType: 'square', gridSize: 40, snapEnabled: true, gridVisible: true },
@@ -230,6 +230,9 @@ function gameReducer(state, action) {
     case 'MAP_UPDATE':
       return { ...state, map: { ...state.map, ...action.payload } };
 
+    case 'MAP_OFFSET':
+      return { ...state, map: { ...state.map, offsetX: action.payload.offsetX, offsetY: action.payload.offsetY } };
+
     // Fog
     case 'FOG_REVEAL':
       return { ...state, fogAreas: [...state.fogAreas, action.payload] };
@@ -294,6 +297,19 @@ function gameReducer(state, action) {
     // Chat
     case 'CHAT_MESSAGE':
       return { ...state, chat: [...state.chat, action.payload] };
+
+    case 'CHAT_DELETE_MESSAGE':
+      return { ...state, chat: state.chat.filter(m => m.id !== action.payload.messageId) };
+
+    case 'CHAT_HIDE_MESSAGE':
+      return { 
+        ...state, 
+        chat: state.chat.map(m => 
+          m.id === action.payload.messageId 
+            ? { ...m, hidden: !m.hidden } 
+            : m
+        ) 
+      };
 
     case 'DICE_RESULT':
       return { ...state, chat: [...state.chat, action.payload] };
@@ -533,16 +549,54 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       target: data.targetPlayer,
       timestamp: data.timestamp,
     } }));
-    socket.on('dice:result', (data) => dispatch({ type: 'DICE_RESULT', payload: {
-      id: data.id || Date.now().toString(),
-      author: data.playerName,
-      authorId: data.playerId,
-      type: 'dice_result',
-      formula: data.notation || data.formula,
-      total: data.total,
-      breakdown: data.breakdown || { individual: (data.rolls || []).map(r => ({ roll: r, kept: true, dropped: false })) },
-      timestamp: data.timestamp || new Date().toISOString(),
-    } }));
+    socket.on('dice:result', (data) => {
+      // Parse rollContext from notation if it contains description text
+      let formula = data.notation || data.formula || '';
+      let rollContext = data.rollContext || '';
+      
+      // Check if formula contains context (e.g., "1d20+5 Ataque: Espada Longa")
+      if (!rollContext && formula) {
+        const match = formula.match(/^([0-9d+\-*/\s]+)(.+)$/i);
+        if (match && match[2]) {
+          formula = match[1].trim();
+          rollContext = match[2].trim();
+        }
+      }
+      
+      dispatch({ type: 'DICE_RESULT', payload: {
+        id: data.id || Date.now().toString(),
+        author: data.playerName,
+        authorId: data.playerId,
+        type: 'dice_result',
+        formula: formula,
+        total: data.total,
+        rollContext: rollContext,
+        breakdown: data.breakdown || { 
+          individual: (data.rolls || []).map(r => ({ 
+            roll: r, 
+            value: r,
+            kept: true, 
+            dropped: false 
+          })),
+          modifier: data.modifier || 0
+        },
+        rollDetails: data.rollDetails || {
+          individual: (data.rolls || []).map(r => ({ 
+            roll: r, 
+            value: r,
+            kept: true, 
+            dropped: false 
+          })),
+          modifier: data.modifier || 0,
+          formula: formula
+        },
+        timestamp: data.timestamp || new Date().toISOString(),
+      }});
+    });
+
+    // Chat message actions
+    socket.on('chat:deleted', (data) => dispatch({ type: 'CHAT_DELETE_MESSAGE', payload: data }));
+    socket.on('chat:hidden', (data) => dispatch({ type: 'CHAT_HIDE_MESSAGE', payload: data }));
 
     // Initiative
     socket.on('initiative:update', (data) => dispatch({ type: 'INITIATIVE_UPDATE', payload: data }));
@@ -785,12 +839,25 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Tokens
     addToken: (data) => emit('token:add', data),
-    moveToken: (tokenId, x, y) => emit('token:move', { tokenId, x, y }),
-    updateToken: (tokenId, updates) => emit('token:update', { tokenId, updates }),
+    moveToken: (tokenId, x, y) => {
+      // Optimistic update: update local state immediately
+      dispatch({ type: 'TOKEN_MOVE', payload: { tokenId, x, y } });
+      // Then send to server
+      return emit('token:move', { tokenId, x, y });
+    },
+    updateToken: (tokenId, updates) => {
+      // Optimistic update for responsiveness
+      dispatch({ type: 'TOKEN_UPDATE', payload: { id: tokenId, ...updates } });
+      return emit('token:update', { tokenId, updates });
+    },
     removeToken: (tokenId) => emit('token:remove', { tokenId }),
 
     // Map
     setMap: (mapUrl) => emit('map:set', { mapUrl }),
+    setMapOffset: (offsetX, offsetY) => {
+      dispatch({ type: 'MAP_OFFSET', payload: { offsetX, offsetY } });
+      return emit('map:offset', { offsetX, offsetY });
+    },
 
     // Fog
     revealFog: (x, y, radius) => emit('fog:reveal', { x, y, radius }),
@@ -809,6 +876,18 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     // Chat
     sendMessage: (message, isWhisper = false, targetPlayer = null) =>
       emit('chat:send', { message, isWhisper, targetPlayer }),
+    
+    deleteMessage: (messageId) => {
+      // Local-first deletion, also emit to server
+      dispatch({ type: 'CHAT_DELETE_MESSAGE', payload: { messageId } });
+      emit('chat:delete', { messageId }).catch(console.error);
+    },
+    
+    hideMessage: (messageId) => {
+      // Local-first toggle, also emit to server
+      dispatch({ type: 'CHAT_HIDE_MESSAGE', payload: { messageId } });
+      emit('chat:hide', { messageId }).catch(console.error);
+    },
 
     // Dice
     rollDice: (notation, isSecret = false) =>

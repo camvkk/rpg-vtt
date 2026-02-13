@@ -154,6 +154,7 @@ export default function MapCanvas({
   const fogToolRef = useRef({ isDragging: false, startPoint: null, graphics: null, polygonPoints: [], isPolygonMode: false });
   const doorsMapRef = useRef(new Map());
   const doorPlacementRef = useRef({ isPlacing: false, graphics: null });
+  const mapDragRef = useRef({ isDragging: false, startOffset: { x: 0, y: 0 }, startMouse: { x: 0, y: 0 } });
 
   const [contextMenu, setContextMenu] = useState(null); // { token, x, y }
 
@@ -256,6 +257,9 @@ export default function MapCanvas({
     };
   }, []);
 
+  // Map sprite reference for offset control
+  const mapSpriteRef = useRef(null);
+
   // ── Load map background image ──
   useEffect(() => {
     const app = pixiRef.current;
@@ -273,13 +277,23 @@ export default function MapCanvas({
         if (cancelled) return;
         bgLayer.removeChildren();
         const sprite = new Sprite(texture);
+        // Apply stored offset
+        sprite.position.set(map.offsetX || 0, map.offsetY || 0);
         bgLayer.addChild(sprite);
+        mapSpriteRef.current = sprite;
       } catch (err) {
         console.error('Failed to load map:', err);
       }
     })();
     return () => { cancelled = true; };
   }, [map.url]);
+
+  // ── Update map offset when it changes ──
+  useEffect(() => {
+    if (mapSpriteRef.current) {
+      mapSpriteRef.current.position.set(map.offsetX || 0, map.offsetY || 0);
+    }
+  }, [map.offsetX, map.offsetY]);
 
   // ── Draw Grid ──
   const drawGrid = useCallback((layer, w, h) => {
@@ -1353,6 +1367,13 @@ export default function MapCanvas({
         const snappedPos = snapToGridUnified(worldX, worldY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
         
         placeAoE(snappedPos.x, snappedPos.y, worldX, worldY);
+      } else if (e.button === 0 && activeToolRef.current === 'move-map' && isDMRef.current) {
+        // Map repositioning mode
+        e.preventDefault();
+        canvas.style.cursor = 'move';
+        mapDragRef.current.isDragging = true;
+        mapDragRef.current.startMouse = { x: e.clientX, y: e.clientY };
+        mapDragRef.current.startOffset = { x: map.offsetX || 0, y: map.offsetY || 0 };
       }
     });
     canvas.addEventListener('pointermove', (e) => {
@@ -1413,6 +1434,17 @@ export default function MapCanvas({
         const snappedPos = snapToGridUnified(worldX, worldY, gridTypeRef.current, gridSizeRef.current, snapEnabledRef.current);
         
         showAoEPreview(snappedPos.x, snappedPos.y, worldX, worldY);
+      } else if (mapDragRef.current.isDragging && activeToolRef.current === 'move-map' && isDMRef.current) {
+        // Update map position while dragging
+        const dx = e.clientX - mapDragRef.current.startMouse.x;
+        const dy = e.clientY - mapDragRef.current.startMouse.y;
+        const newOffsetX = mapDragRef.current.startOffset.x + dx / v.zoom;
+        const newOffsetY = mapDragRef.current.startOffset.y + dy / v.zoom;
+        
+        // Update map sprite position directly for smooth dragging
+        if (mapSpriteRef.current) {
+          mapSpriteRef.current.position.set(newOffsetX, newOffsetY);
+        }
       }
     });
     canvas.addEventListener('pointerup', (e) => {
@@ -1431,6 +1463,21 @@ export default function MapCanvas({
         const worldY = (canvasY - v.panY) / v.zoom;
         finishFogTool(worldX, worldY);
         isRevealingFogRef.current = false;
+      }
+      
+      // Finish map repositioning
+      if (mapDragRef.current.isDragging && activeToolRef.current === 'move-map' && isDMRef.current) {
+        const v = viewRef.current;
+        const dx = e.clientX - mapDragRef.current.startMouse.x;
+        const dy = e.clientY - mapDragRef.current.startMouse.y;
+        const newOffsetX = mapDragRef.current.startOffset.x + dx / v.zoom;
+        const newOffsetY = mapDragRef.current.startOffset.y + dy / v.zoom;
+        
+        // Save to server
+        actions.setMapOffset(newOffsetX, newOffsetY);
+        
+        mapDragRef.current.isDragging = false;
+        canvas.style.cursor = 'default';
       }
       
       // Finish ruler measurement
@@ -1479,6 +1526,22 @@ export default function MapCanvas({
     };
     el.addEventListener('token-context-menu', handler);
     return () => el.removeEventListener('token-context-menu', handler);
+  }, []);
+
+  // ── Token double-click listener (open character sheet) ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      // Emit custom event that GameBoard can listen to
+      const openSheetEvent = new CustomEvent('open-character-sheet', {
+        bubbles: true,
+        detail: { token: e.detail.token }
+      });
+      el.dispatchEvent(openSheetEvent);
+    };
+    el.addEventListener('token-double-click', handler);
+    return () => el.removeEventListener('token-double-click', handler);
   }, []);
 
   // ── Token context menu actions ──
@@ -1804,7 +1867,7 @@ export default function MapCanvas({
       }
     }
 
-    // Default condition indicators: small colored dots for other conditions
+    // Default condition indicators: small colored icons BELOW the token
     const specialConditions = ['Invisível', 'Envenenado', 'Prone', 'Atordoado', 'Concentrating'];
     const otherConditions = conditions.filter(c => !specialConditions.includes(c.name));
     
@@ -1813,33 +1876,34 @@ export default function MapCanvas({
       
       otherConditions.forEach((condition, index) => {
         const indicator = new Graphics();
-        const dotSize = 3;
+        const dotSize = 4;
         const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff, 0x44ffff];
         const color = colors[index % colors.length];
         
-        indicator.circle(0, 0, dotSize).fill({ color, alpha: 0.9 });
+        indicator.circle(0, 0, dotSize).fill({ color, alpha: 0.9 }).stroke({ width: 1, color: 0xffffff, alpha: 0.5 });
         
-        // Position dots in a row below the token
-        const spacing = 8;
+        // Position dots in a row BELOW the token
+        const spacing = 10;
         const totalWidth = (otherConditions.length - 1) * spacing;
         const startX = -totalWidth / 2;
         
-        indicator.position.set(startX + index * spacing, baseRadius + 20);
+        indicator.position.set(startX + index * spacing, baseRadius + 8);
         indicatorsContainer.addChild(indicator);
         
         // Add tooltip-like text on hover (simple implementation)
         indicator.eventMode = 'static';
+        indicator.cursor = 'help';
         const tooltipText = new Text({
           text: `${condition.icon || '⚡'} ${condition.name}`,
           style: new TextStyle({
             fontFamily: 'Inter, sans-serif',
-            fontSize: 8,
+            fontSize: 9,
             fill: 0xffffff,
-            stroke: { color: 0x000000, width: 1 },
+            stroke: { color: 0x000000, width: 2 },
           }),
         });
-        tooltipText.anchor.set(0.5, 1);
-        tooltipText.position.set(0, -5);
+        tooltipText.anchor.set(0.5, 0);
+        tooltipText.position.set(0, 8);
         tooltipText.visible = false;
         indicator.addChild(tooltipText);
         
@@ -1847,7 +1911,7 @@ export default function MapCanvas({
         indicator.on('pointerout', () => { tooltipText.visible = false; });
       });
       
-      tokenRefs.effectsContainer.addChild(indicatorsContainer);
+      c.addChild(indicatorsContainer);
     }
 
     // ── Current Turn Glow Ring ──
@@ -1872,12 +1936,27 @@ export default function MapCanvas({
       }
     }
 
-    // ── HP Bar ──
+    // ── Name Tag (ABOVE token) ──
+    const nameTag = new Text({
+      text: token.name || '',
+      style: new TextStyle({
+        fontFamily: 'Inter, sans-serif',
+        fontSize: 10,
+        fill: 0xe8e8e8,
+        stroke: { color: 0x0f0f1a, width: 2 },
+        fontWeight: 'bold',
+      }),
+    });
+    nameTag.anchor.set(0.5, 1); // anchor bottom center
+    nameTag.position.set(0, -baseRadius - 8); // position ABOVE token
+    c.addChild(nameTag);
+
+    // ── HP Bar (ABOVE token, below name) ──
     if (hp && hp.max > 0) {
       const hpBarContainer = new Container();
       
       const barWidth = baseRadius * 2;
-      const barHeight = 4;
+      const barHeight = 5;
       const currentHP = Math.max(0, hp.current || 0);
       const maxHP = hp.max;
       const tempHP = hp.temp || 0;
@@ -1885,7 +1964,7 @@ export default function MapCanvas({
       
       // Background bar
       const bgBar = new Graphics();
-      bgBar.rect(-barWidth / 2, 0, barWidth, barHeight).fill({ color: 0x333333, alpha: 0.8 });
+      bgBar.roundRect(-barWidth / 2, 0, barWidth, barHeight, 2).fill({ color: 0x222222, alpha: 0.9 });
       hpBarContainer.addChild(bgBar);
       
       // HP fill with color gradient
@@ -1898,35 +1977,36 @@ export default function MapCanvas({
         else hpColor = 0xcc4444; // Red
         
         const fillWidth = (currentHP / maxHP) * barWidth;
-        hpBar.rect(-barWidth / 2, 0, fillWidth, barHeight).fill({ color: hpColor, alpha: 0.9 });
+        hpBar.roundRect(-barWidth / 2, 0, fillWidth, barHeight, 2).fill({ color: hpColor, alpha: 0.95 });
         hpBarContainer.addChild(hpBar);
       }
       
-      // Temp HP (additional blue bar)
+      // Temp HP (additional blue bar on right side)
       if (tempHP > 0) {
         const tempBar = new Graphics();
         const tempWidth = Math.min((tempHP / maxHP) * barWidth, barWidth * 0.3); // Cap temp HP visual
-        tempBar.rect(barWidth / 2 - tempWidth, 0, tempWidth, barHeight).fill({ color: 0x4488cc, alpha: 0.7 });
+        tempBar.roundRect(barWidth / 2 - tempWidth, 0, tempWidth, barHeight, 2).fill({ color: 0x4488cc, alpha: 0.8 });
         hpBarContainer.addChild(tempBar);
       }
+
+      // HP text overlay (current/max)
+      const hpText = new Text({
+        text: `${currentHP}/${maxHP}`,
+        style: new TextStyle({
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 7,
+          fill: 0xffffff,
+          fontWeight: 'bold',
+        }),
+      });
+      hpText.anchor.set(0.5, 0.5);
+      hpText.position.set(0, barHeight / 2);
+      hpBarContainer.addChild(hpText);
       
-      // Position HP bar below name tag
-      hpBarContainer.position.set(0, baseRadius + 18);
+      // Position HP bar ABOVE token, below name tag
+      hpBarContainer.position.set(0, -baseRadius - 6);
       c.addChild(hpBarContainer);
     }
-
-    const nameTag = new Text({
-      text: token.name || '',
-      style: new TextStyle({
-        fontFamily: 'Inter, sans-serif',
-        fontSize: 9,
-        fill: 0xe8e8e8,
-        stroke: { color: 0x0f0f1a, width: 2 },
-      }),
-    });
-    nameTag.anchor.set(0.5, 0);
-    nameTag.position.set(0, baseRadius + 6);
-    c.addChild(nameTag);
 
     c.eventMode = 'static';
     c.cursor = 'pointer';
@@ -1999,6 +2079,25 @@ export default function MapCanvas({
           detail: { token, x: screenX, y: screenY }
         });
         containerRef.current.dispatchEvent(customEvent);
+      }
+    });
+
+    // Double-click → open character sheet
+    let lastClickTime = 0;
+    c.on('pointertap', (e) => {
+      const now = Date.now();
+      if (now - lastClickTime < 350) {
+        // Double-click detected!
+        e.stopPropagation();
+        if (containerRef.current) {
+          const customEvent = new CustomEvent('token-double-click', {
+            detail: { token }
+          });
+          containerRef.current.dispatchEvent(customEvent);
+        }
+        lastClickTime = 0; // Reset to prevent triple-click issues
+      } else {
+        lastClickTime = now;
       }
     });
 
@@ -2099,6 +2198,13 @@ export default function MapCanvas({
           onClose={() => setContextMenu(null)}
           onUpdate={handleTokenContextUpdate}
           onDelete={handleTokenContextDelete}
+          onOpenSheet={(token) => {
+            const openSheetEvent = new CustomEvent('open-character-sheet', {
+              bubbles: true,
+              detail: { token }
+            });
+            containerRef.current?.dispatchEvent(openSheetEvent);
+          }}
         />
       )}
     </div>

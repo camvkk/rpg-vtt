@@ -170,7 +170,7 @@ const InitiativeTracker = () => {
   };
 
   return (
-    <div style={styles.panel}>
+    <div id="initiative-tracker-panel" style={styles.panel}>
       {/* Notifications */}
       <div style={styles.notifContainer}>
         {notifications.map(n => (
@@ -498,9 +498,10 @@ const InitiativeTracker = () => {
 const styles = {
   panel: {
     position: 'fixed',
-    right: 16,
+    left: 16,
     top: 60,
     width: 300,
+    maxWidth: 'calc(100vw - 32px)',
     maxHeight: 'calc(100vh - 80px)',
     background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)',
     border: '1px solid #2d3748',
@@ -531,6 +532,9 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: 600,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '280px',
     animation: 'slideDown 0.3s ease-out',
     boxShadow: '0 4px 12px rgba(226,183,20,0.4)',
   },
@@ -643,6 +647,7 @@ const styles = {
   nameBlock: {
     flex: 1,
     minWidth: 0,
+    overflow: 'hidden',
   },
   name: {
     fontWeight: 600,
@@ -650,6 +655,7 @@ const styles = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    maxWidth: '100%',
   },
   acLabel: {
     fontSize: '0.65rem',
@@ -882,6 +888,23 @@ if (typeof document !== 'undefined') {
       to { transform: translateY(0); opacity: 1; }
     }
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
+    
+    /* Responsive adjustments for Initiative Tracker */
+    @media (max-width: 768px) {
+      #initiative-tracker-panel {
+        width: 280px !important;
+        left: 8px !important;
+        top: 56px !important;
+      }
+    }
+    @media (max-width: 480px) {
+      #initiative-tracker-panel {
+        width: calc(100vw - 16px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        max-width: none !important;
+      }
+    }
   `;
 }
 

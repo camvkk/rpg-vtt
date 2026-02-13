@@ -30,8 +30,10 @@
   bottom: 16px;
   right: 16px;
   width: 320px;
+  max-width: calc(100vw - 32px);
   max-height: 80vh;
   overflow-y: auto;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
   border: 1px solid #c9a84c44;
   border-radius: 12px;
@@ -85,6 +87,11 @@
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .dice-tray-header-actions {
   display: flex;
@@ -194,6 +201,10 @@
   text-align: center;
   margin-bottom: 8px;
   font-family: 'Courier New', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 .dice-tray-dice {
   display: flex;
@@ -262,6 +273,80 @@
 .dice-in-tray.dice-rolling:nth-child(6) { animation-delay: 0.3s; }
 .dice-in-tray.dice-rolling:nth-child(7) { animation-delay: 0.35s; }
 .dice-in-tray.dice-rolling:nth-child(8) { animation-delay: 0.4s; }
+
+/* Roll Context Type Buttons */
+.dice-context-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.dice-context-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c9a84c33;
+  border-radius: 6px;
+  background: transparent;
+  color: #888;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.dice-context-btn:hover {
+  border-color: #c9a84c66;
+  background: #c9a84c11;
+  color: #c9a84c;
+}
+
+.dice-context-btn.active {
+  border-color: #c9a84c;
+  background: #c9a84c22;
+  color: #c9a84c;
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.2);
+}
+
+.dice-context-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Roll Context Input */
+.dice-context-input-row {
+  margin-bottom: 8px;
+}
+
+.dice-context-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #c9a84c33;
+  border-radius: 6px;
+  background: #0a0a14;
+  color: #ccc;
+  font-size: 0.8rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.dice-context-input::placeholder {
+  color: #555;
+  font-style: italic;
+}
+
+.dice-context-input:focus {
+  outline: none;
+  border-color: #c9a84c;
+  box-shadow: 0 0 10px rgba(201, 168, 76, 0.15);
+}
+
+.dice-context-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* Modifier row */
 .dice-modifier-row {
@@ -514,19 +599,40 @@
 }
 .dice-history-item {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
   border-bottom: 1px solid #ffffff08;
   font-size: 0.8rem;
+  min-width: 0;
+  overflow: hidden;
 }
 .dice-history-item:last-child {
   border-bottom: none;
+}
+.dice-history-context {
+  color: #9b59b6;
+  font-size: 0.7rem;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dice-history-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .dice-history-formula {
   color: #888;
   font-family: 'Courier New', monospace;
   font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .dice-history-arrow {
   color: #c9a84c44;
@@ -540,6 +646,11 @@
   color: #555;
   font-size: 0.7rem;
   font-family: 'Courier New', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 /* Scrollbar styling */
