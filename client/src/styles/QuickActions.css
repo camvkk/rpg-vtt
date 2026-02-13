@@ -10,8 +10,8 @@
   left: 50%;
   transform: translateX(-50%);
   width: auto;
-  min-width: 400px;
-  max-width: min(800px, calc(100vw - 32px));
+  min-width: 380px;
+  max-width: min(600px, calc(100vw - 32px));
   background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
   border: 1px solid rgba(226, 183, 20, 0.3);
   border-radius: 16px;
@@ -463,15 +463,16 @@
 /* ── Saving Throws Grid ── */
 .qa-saves-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 8px;
 }
 
 .qa-action-btn.save {
   flex-direction: row;
-  gap: 8px;
-  padding: 10px 12px;
-  min-height: 48px;
+  gap: 4px;
+  padding: 8px 10px;
+  min-height: 42px;
+  font-size: 0.7rem;
 }
 
 .qa-action-btn.save.proficient {
@@ -485,17 +486,17 @@
 }
 
 .qa-save-icon {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
 }
 
 .qa-save-name {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   flex: 1;
 }
 
 .qa-save-bonus {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: #e2b714;
 }

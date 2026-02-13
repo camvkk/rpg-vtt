@@ -157,7 +157,9 @@ const CharacterWizard = ({
   onClose, 
   onCreateCharacter,
   system = 'dnd5e',
-  systemData: rawSystemData = null 
+  systemData: rawSystemData = null,
+  mode = 'player', // 'player' or 'npc'
+  existingCharacter = null // For editing existing NPC
 }) => {
   // Normalize systemData — handle wrapped formats
   const systemData = React.useMemo(() => {
@@ -169,51 +171,92 @@ const CharacterWizard = ({
     return rawSystemData;
   }, [rawSystemData]);
   
+  // Helper to get initial wizard data (for new character or editing existing)
+  const getInitialWizardData = () => {
+    const defaultData = {
+      // Step 1 - Identity
+      name: '',
+      tokenColor: '#3b82f6',
+      imageUrl: null,
+      
+      // Step 2 - Race  
+      race: null,
+      raceData: null,
+      
+      // Step 3 - Class
+      class: null,
+      classData: null,
+      
+      // Step 4 - Attributes
+      attributeMethod: 'pointBuy', // 'pointBuy' or 'rollDice'
+      baseAttributes: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+      rolledScores: null,
+      pointsSpent: 0,
+      
+      // Step 5 - Skills
+      selectedSkills: [],
+      expertiseSkills: [], // For classes that get expertise
+      
+      // Step 5.5 - Subclass (if applicable at level 1)
+      subclass: null,
+      
+      // Step 6 - Equipment
+      selectedEquipmentSet: null, // Single set selection (A or B)
+      startingGold: false,
+      
+      // Step 7 - Details
+      alignment: null,
+      background: null,
+      personality: '',
+      ideals: '',
+      bonds: '',
+      flaws: '',
+      notes: '',
+      
+      // Step 8 - Summary (calculated)
+      finalCharacter: null
+    };
+    
+    // If editing existing character, pre-populate
+    if (existingCharacter) {
+      return {
+        ...defaultData,
+        name: existingCharacter.name || '',
+        tokenColor: existingCharacter.tokenColor || '#3b82f6',
+        imageUrl: existingCharacter.imageUrl || null,
+        race: existingCharacter.race || null,
+        raceData: existingCharacter.raceData || null,
+        class: existingCharacter.class || null,
+        classData: existingCharacter.classData || null,
+        subclass: existingCharacter.subclass || null,
+        baseAttributes: existingCharacter.attributes || defaultData.baseAttributes,
+        selectedSkills: existingCharacter.skills ? Object.keys(existingCharacter.skills).filter(k => existingCharacter.skills[k]?.proficient) : [],
+        expertiseSkills: existingCharacter.skills ? Object.keys(existingCharacter.skills).filter(k => existingCharacter.skills[k]?.expertise) : [],
+        alignment: existingCharacter.alignment ? { name: existingCharacter.alignment } : null,
+        background: existingCharacter.background ? { name: existingCharacter.background } : null,
+        personality: existingCharacter.personality || '',
+        ideals: existingCharacter.ideals || '',
+        bonds: existingCharacter.bonds || '',
+        flaws: existingCharacter.flaws || '',
+        notes: existingCharacter.notes || '',
+        attributeMethod: 'pointBuy' // Default to point buy for editing
+      };
+    }
+    
+    return defaultData;
+  };
+
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
-  const [wizardData, setWizardData] = useState({
-    // Step 1 - Identity
-    name: '',
-    tokenColor: '#3b82f6',
-    imageUrl: null,
-    
-    // Step 2 - Race  
-    race: null,
-    raceData: null,
-    
-    // Step 3 - Class
-    class: null,
-    classData: null,
-    
-    // Step 4 - Attributes
-    attributeMethod: 'pointBuy', // 'pointBuy' or 'rollDice'
-    baseAttributes: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
-    rolledScores: null,
-    pointsSpent: 0,
-    
-    // Step 5 - Skills
-    selectedSkills: [],
-    expertiseSkills: [], // For classes that get expertise
-    
-    // Step 5.5 - Subclass (if applicable at level 1)
-    subclass: null,
-    
-    // Step 6 - Equipment
-    selectedEquipmentSet: null, // Single set selection (A or B)
-    startingGold: false,
-    
-    // Step 7 - Details
-    alignment: null,
-    background: null,
-    personality: '',
-    ideals: '',
-    bonds: '',
-    flaws: '',
-    notes: '',
-    
-    // Step 8 - Summary (calculated)
-    finalCharacter: null
-  });
+  const [wizardData, setWizardData] = useState(getInitialWizardData);
+  
+  // Reset wizard data when existingCharacter changes
+  useEffect(() => {
+    if (isOpen) {
+      setWizardData(getInitialWizardData());
+      setCurrentStep(1);
+    }
+  }, [existingCharacter, isOpen]);
 
   // File upload ref
   const fileInputRef = useRef(null);
@@ -441,7 +484,7 @@ const CharacterWizard = ({
     const ac = calculateAC(equipment, dexModifier);
 
     return {
-      id: `char_${Date.now()}`,
+      id: existingCharacter?.id || `char_${Date.now()}`,
       name: wizardData.name,
       race: wizardData.race,
       raceData: wizardData.raceData,
@@ -2022,11 +2065,14 @@ const CharacterWizard = ({
         }}>
           <h1 style={{
             fontFamily: 'var(--font-fantasy)',
-            color: 'var(--color-primary)',
+            color: mode === 'npc' ? 'var(--color-secondary)' : 'var(--color-primary)',
             fontSize: '1.8rem',
             margin: 0
           }}>
-            🧙 Criar Personagem
+            {mode === 'npc' 
+              ? (existingCharacter ? '🎭 Editar NPC' : '🎭 Criar NPC/Personagem')
+              : '🧙 Criar Personagem'
+            }
           </h1>
           <button
             onClick={onClose}

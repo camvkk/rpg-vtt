@@ -50,6 +50,38 @@
   gap: var(--spacing-sm);
 }
 
+/* ── Tab Navigation ── */
+.dm-dashboard-tabs {
+  display: flex;
+  gap: 2px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dm-tab {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  background: var(--bg-surface-light);
+  color: var(--color-text-dim);
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  transition: all var(--transition-fast);
+}
+
+.dm-tab:hover {
+  background: var(--bg-surface);
+  color: var(--color-text);
+}
+
+.dm-tab.active {
+  background: var(--color-primary);
+  color: var(--bg-primary);
+  font-weight: 600;
+}
+
 /* ── Content ── */
 .dm-dashboard-content {
   flex: 1;
@@ -750,4 +782,61 @@
     transform: translate(-50%, -50%);
     max-width: 90vw;
   }
+}
+
+/* ── NPC Section ── */
+.dm-npcs-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* NPC Card Styles */
+.npc-card {
+  border-color: var(--color-secondary);
+}
+
+.npc-card:hover {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 20px rgba(var(--color-secondary-rgb, 155, 89, 182), 0.2);
+}
+
+.npc-header {
+  background: linear-gradient(135deg, rgba(155, 89, 182, 0.1) 0%, transparent 100%);
+}
+
+.npc-indicator {
+  font-size: 1rem;
+}
+
+.npc-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.npc-actions .action-btn {
+  flex: 1;
+  min-width: fit-content;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.npc-actions .edit-btn:hover {
+  background: var(--color-secondary);
+  border-color: var(--color-secondary);
+}
+
+.npc-actions .delete-btn {
+  flex: 0;
+  min-width: 36px;
+  color: var(--color-accent);
+}
+
+.npc-actions .delete-btn:hover {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
 }

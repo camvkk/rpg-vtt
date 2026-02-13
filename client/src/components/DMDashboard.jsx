@@ -60,7 +60,7 @@ const SAVES = ['Força', 'Destreza', 'Constituição', 'Inteligência', 'Sabedor
 
 export default function DMDashboard({ isOpen, onClose }) {
   const { state, actions } = useGame();
-  const { player, players, allCharacters, campaign, connected, npcs, systemData } = state;
+  const { player, players, allCharacters, campaign, npcs, systemData } = state;
   const [viewMode, setViewMode] = useState('overview'); // 'overview', 'detail', 'npcs'
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [selectedPlayerName, setSelectedPlayerName] = useState(null);
@@ -72,7 +72,6 @@ export default function DMDashboard({ isOpen, onClose }) {
   // NPC management state
   const [showNPCWizard, setShowNPCWizard] = useState(false);
   const [editingNPC, setEditingNPC] = useState(null);
-  const [selectedNPC, setSelectedNPC] = useState(null);
 
   // Load all characters and NPCs when dashboard opens
   useEffect(() => {
@@ -386,7 +385,6 @@ export default function DMDashboard({ isOpen, onClose }) {
                     onDelete={() => handleDeleteNPC(npc.id)}
                     onCreateToken={() => handleCreateTokenFromNPC(npc)}
                     onViewDetails={() => {
-                      setSelectedNPC(npc);
                       setSelectedCharacter(npc);
                       setSelectedPlayerName(`NPC: ${npc.name}`);
                       setViewMode('detail');
@@ -507,8 +505,22 @@ export default function DMDashboard({ isOpen, onClose }) {
               </>
             )}
           </div>
-        )}
+        ) : null}
       </div>
+
+      {/* NPC Character Wizard Modal */}
+      <CharacterWizard
+        isOpen={showNPCWizard}
+        onClose={() => {
+          setShowNPCWizard(false);
+          setEditingNPC(null);
+        }}
+        onCreateCharacter={handleCreateNPC}
+        system={campaign.system || 'dnd5e'}
+        systemData={systemData}
+        mode="npc"
+        existingCharacter={editingNPC}
+      />
     </div>
   );
 }
@@ -893,6 +905,85 @@ function TestsMenu({ character, onRequestTest, onClose }) {
             </button>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// NPC Card Component
+function NPCCard({ npc, onEdit, onDelete, onCreateToken, onViewDetails, getHPPercentage, getHPColor }) {
+  const hpPercentage = getHPPercentage(npc);
+  const hpColor = getHPColor(hpPercentage);
+
+  return (
+    <div className="character-card npc-card">
+      {/* Header */}
+      <div className="card-header npc-header">
+        <div className="player-status">
+          <span className="npc-indicator">🎭</span>
+          <span className="player-name">NPC</span>
+        </div>
+      </div>
+
+      <div className="card-divider"></div>
+
+      {/* Character Info */}
+      <div className="character-info">
+        <h4 className="character-name">{npc.name || 'Sem Nome'}</h4>
+        <div className="character-details">
+          {npc.race && npc.class ? (
+            <span>{npc.race} {npc.class}</span>
+          ) : (
+            <span>{npc.class || npc.race || 'Tipo não definido'}</span>
+          )}
+          {npc.level && <span>Nv.{npc.level}</span>}
+        </div>
+      </div>
+
+      {/* HP Bar */}
+      {npc.hp && (
+        <div className="hp-section">
+          <div className="hp-info">
+            <span className="hp-text">
+              ❤️ {npc.hp.current || 0}/{npc.hp.max || 0}
+            </span>
+            <span className="ac-text">🛡️ {npc.ac || 10}</span>
+          </div>
+          <div className="hp-bar">
+            <div
+              className="hp-fill"
+              style={{ width: `${hpPercentage}%`, backgroundColor: hpColor }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Stats */}
+      {npc.attributes && (
+        <div className="stats-section">
+          {Object.entries(npc.attributes).map(([stat, value]) => (
+            <div key={stat} className="stat-badge">
+              <span className="stat-name">{stat.toUpperCase()}</span>
+              <span className="stat-value">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="card-actions npc-actions">
+        <button className="action-btn edit-btn" onClick={onEdit} title="Editar NPC">
+          ✏️ Editar
+        </button>
+        <button className="action-btn token-btn" onClick={onCreateToken} title="Colocar no Mapa">
+          🗺️ Mapa
+        </button>
+        <button className="action-btn view-btn" onClick={onViewDetails} title="Ver Ficha">
+          👁️ Ficha
+        </button>
+        <button className="action-btn delete-btn" onClick={onDelete} title="Deletar NPC">
+          🗑️
+        </button>
       </div>
     </div>
   );
