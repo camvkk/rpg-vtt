@@ -34,7 +34,6 @@ const CharacterWizard = ({
     return rawSystemData;
   }, [rawSystemData]);
   
-  console.log('[CharacterWizard] system:', system, 'systemData keys:', systemData ? Object.keys(systemData) : null, 'races?', Array.isArray(systemData?.races), systemData?.races?.length);
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
   const [wizardData, setWizardData] = useState({
@@ -207,13 +206,15 @@ const CharacterWizard = ({
     return total;
   };
 
-  // Update points spent when attributes change
+  // Update points spent when attributes change (only if value actually changed)
   useEffect(() => {
     if (wizardData.attributeMethod === 'pointBuy') {
       const spent = calculatePointsSpent();
-      updateWizardData({ pointsSpent: spent });
+      if (spent !== wizardData.pointsSpent) {
+        updateWizardData({ pointsSpent: spent });
+      }
     }
-  }, [wizardData.baseAttributes, wizardData.attributeMethod]);
+  }, [wizardData.baseAttributes, wizardData.attributeMethod, wizardData.pointsSpent]);
 
   // Handle avatar image upload
   const handleImageUpload = async (file) => {
@@ -585,7 +586,6 @@ const CharacterWizard = ({
           onChange={(e) => updateWizardData({ name: e.target.value })}
           placeholder="Digite o nome do seu personagem..."
           style={{ fontSize: '1.1rem' }}
-          autoFocus
         />
       </div>
 
@@ -2110,4 +2110,4 @@ const CharacterWizard = ({
   );
 };
 
-export default CharacterWizard;
+export default React.memo(CharacterWizard);

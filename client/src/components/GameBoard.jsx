@@ -311,6 +311,11 @@ function GameBoardInner({ onLeaveRoom }) {
     setShowCharacterWizard(false);
   }, [actions]);
 
+  // ── Character wizard close handler (stable reference) ──
+  const handleCloseWizard = useCallback(() => {
+    setShowCharacterWizard(false);
+  }, []);
+
   // ── Spell detection handler ──
   const handleSpellDetected = useCallback((spell) => {
     if (!isDM) return; // Only DMs can place AoE
@@ -817,7 +822,7 @@ function GameBoardInner({ onLeaveRoom }) {
       {/* Character Wizard Modal */}
       <CharacterWizard
         isOpen={showCharacterWizard}
-        onClose={() => setShowCharacterWizard(false)}
+        onClose={handleCloseWizard}
         onCreateCharacter={handleCharacterCreate}
         system={campaign.system || room.system || 'dnd5e'}
         systemData={systemData}
