@@ -20,6 +20,7 @@ import JukeboxPanel from './JukeboxPanel';
 import FloatingWindow from './FloatingWindow';
 import MinimizedWindowBar from './MinimizedWindowBar';
 import QuickActions from './QuickActions';
+import ThemeSelector from './ThemeSelector';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
 import '../styles/FloatingWindow.css';
@@ -508,6 +509,8 @@ function GameBoardInner({ onLeaveRoom }) {
           >
             🎲
           </button>
+          <div className="gb-toolbar-divider" />
+          <ThemeSelector compact />
         </div>
       </div>
 

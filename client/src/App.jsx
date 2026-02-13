@@ -1,6 +1,9 @@
 import { useState, lazy, Suspense } from 'react';
 import { GameProvider, useGame } from './contexts/GameContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Lobby from './components/Lobby';
+import ThemeSelector from './components/ThemeSelector';
+import './styles/themes.css';
 
 const GameBoard = lazy(() => import('./components/GameBoard'));
 
@@ -107,7 +110,7 @@ function AppInner() {
       {/* Error overlay */}
       {(error || state.error) && inGame && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(15,15,26,0.85)',
+          position: 'fixed', inset: 0, background: 'var(--bg-overlay-light, rgba(15,15,26,0.85))',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 9998,
         }}>
@@ -127,14 +130,19 @@ function AppInner() {
           </div>
         </div>
       )}
+
+      {/* Theme Selector - shows on lobby only, GameBoard has its own */}
+      {!inGame && <ThemeSelector position="bottom-right" />}
     </div>
   );
 }
 
 export default function App() {
   return (
-    <GameProvider>
-      <AppInner />
-    </GameProvider>
+    <ThemeProvider>
+      <GameProvider>
+        <AppInner />
+      </GameProvider>
+    </ThemeProvider>
   );
 }

@@ -12,12 +12,12 @@
   width: auto;
   min-width: 400px;
   max-width: min(750px, calc(100vw - 32px));
-  background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
-  border: 1px solid rgba(226, 183, 20, 0.3);
+  background: var(--qa-bg, linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%));
+  border: 1px solid var(--qa-border, rgba(226, 183, 20, 0.3));
   border-radius: 16px;
   box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 40px rgba(226, 183, 20, 0.1),
+    0 8px 32px var(--shadow-color, rgba(0, 0, 0, 0.5)),
+    var(--shadow-glow, 0 0 40px rgba(226, 183, 20, 0.1)),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
   overflow: visible;
@@ -41,8 +41,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: linear-gradient(180deg, rgba(45, 55, 72, 0.5), rgba(45, 55, 72, 0.2));
-  border-bottom: 1px solid rgba(226, 183, 20, 0.2);
+  background: var(--qa-header-bg, linear-gradient(180deg, rgba(45, 55, 72, 0.5), rgba(45, 55, 72, 0.2)));
+  border-bottom: 1px solid var(--color-border-light, rgba(226, 183, 20, 0.2));
 }
 
 .qa-header-left {
@@ -56,17 +56,17 @@
 }
 
 .qa-title {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading, 'Cinzel', serif);
   font-size: 0.85rem;
   font-weight: 600;
-  color: #e2b714;
+  color: var(--color-primary, #e2b714);
   letter-spacing: 0.5px;
 }
 
 .qa-minimize-btn {
   background: none;
   border: none;
-  color: #8888aa;
+  color: var(--color-text-dim, #8888aa);
   font-size: 0.8rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -75,8 +75,8 @@
 }
 
 .qa-minimize-btn:hover {
-  background: rgba(226, 183, 20, 0.2);
-  color: #e2b714;
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.2);
+  color: var(--color-primary, #e2b714);
 }
 
 /* ── Minimized State ── */
@@ -89,8 +89,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
-  border: 1px solid rgba(226, 183, 20, 0.3);
+  background: var(--qa-bg, linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%));
+  border: 1px solid var(--qa-border, rgba(226, 183, 20, 0.3));
   border-radius: 24px;
   cursor: pointer;
   z-index: 1000;
@@ -99,8 +99,8 @@
 }
 
 .qa-minimized:hover {
-  border-color: rgba(226, 183, 20, 0.6);
-  box-shadow: 0 4px 16px rgba(226, 183, 20, 0.2);
+  border-color: var(--color-border-accent, rgba(226, 183, 20, 0.6));
+  box-shadow: 0 4px 16px var(--shadow-accent, rgba(226, 183, 20, 0.2));
   transform: translateX(-50%) translateY(-2px);
 }
 
@@ -109,10 +109,10 @@
 }
 
 .qa-minimized-text {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading, 'Cinzel', serif);
   font-size: 0.8rem;
   font-weight: 600;
-  color: #e2b714;
+  color: var(--color-primary, #e2b714);
 }
 
 /* ── Tabs ── */
@@ -121,7 +121,7 @@
   gap: 2px;
   padding: 6px 8px;
   background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(226, 183, 20, 0.1);
+  border-bottom: 1px solid var(--color-border-light, rgba(226, 183, 20, 0.1));
 }
 
 .qa-tab {
@@ -134,21 +134,21 @@
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: #8888aa;
+  color: var(--color-text-dim, #8888aa);
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .qa-tab:hover {
-  background: rgba(226, 183, 20, 0.1);
-  color: #e8e8e8;
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.1);
+  color: var(--color-text, #e8e8e8);
 }
 
 .qa-tab.active {
-  background: linear-gradient(135deg, rgba(226, 183, 20, 0.25), rgba(226, 183, 20, 0.15));
-  color: #e2b714;
-  box-shadow: inset 0 1px 0 rgba(226, 183, 20, 0.3);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb, 226, 183, 20), 0.25), rgba(var(--color-primary-rgb, 226, 183, 20), 0.15));
+  color: var(--color-primary, #e2b714);
+  box-shadow: inset 0 1px 0 rgba(var(--color-primary-rgb, 226, 183, 20), 0.3);
 }
 
 .qa-tab-icon {
@@ -160,8 +160,8 @@
 }
 
 .qa-tab-count {
-  background: rgba(226, 183, 20, 0.2);
-  color: #e2b714;
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.2);
+  color: var(--color-primary, #e2b714);
   font-size: 0.7rem;
   font-weight: 600;
   padding: 2px 6px;
@@ -171,7 +171,7 @@
 }
 
 .qa-tab.active .qa-tab-count {
-  background: rgba(226, 183, 20, 0.4);
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.4);
 }
 
 /* ── Content Area ── */
@@ -194,12 +194,12 @@
 }
 
 .qa-content::-webkit-scrollbar-thumb {
-  background: rgba(226, 183, 20, 0.3);
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.3);
   border-radius: 3px;
 }
 
 .qa-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(226, 183, 20, 0.5);
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.5);
 }
 
 /* ── Empty State ── */
@@ -209,7 +209,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  color: #8888aa;
+  color: var(--color-text-dim, #8888aa);
   text-align: center;
 }
 
@@ -246,7 +246,7 @@
   background: linear-gradient(135deg, rgba(45, 55, 72, 0.6), rgba(45, 55, 72, 0.3));
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  color: #e8e8e8;
+  color: var(--color-text, #e8e8e8);
   font-size: 0.75rem;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -256,10 +256,10 @@
 }
 
 .qa-action-btn:hover {
-  background: linear-gradient(135deg, rgba(226, 183, 20, 0.25), rgba(226, 183, 20, 0.15));
-  border-color: rgba(226, 183, 20, 0.4);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb, 226, 183, 20), 0.25), rgba(var(--color-primary-rgb, 226, 183, 20), 0.15));
+  border-color: var(--color-border-accent, rgba(226, 183, 20, 0.4));
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.3));
 }
 
 .qa-action-btn:active {
@@ -284,7 +284,7 @@
 .qa-btn-bonus {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #e2b714;
+  color: var(--color-primary, #e2b714);
   margin-top: 2px;
 }
 
@@ -304,7 +304,7 @@
   top: 4px;
   right: 4px;
   font-size: 0.6rem;
-  color: #c77dff;
+  color: var(--color-secondary, #c77dff);
 }
 
 /* ── Attack List ── */
@@ -336,7 +336,7 @@
 .qa-attack-name {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #e8e8e8;
+  color: var(--color-text, #e8e8e8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -344,7 +344,7 @@
 
 .qa-attack-damage {
   font-size: 0.75rem;
-  color: #8888aa;
+  color: var(--color-text-dim, #8888aa);
 }
 
 .qa-attack-buttons {
@@ -400,16 +400,16 @@
   justify-content: space-between;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #8888aa;
+  color: var(--color-text-dim, #8888aa);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding-bottom: 4px;
-  border-bottom: 1px solid rgba(226, 183, 20, 0.1);
+  border-bottom: 1px solid var(--color-border-light, rgba(226, 183, 20, 0.1));
 }
 
 .qa-slots {
-  background: rgba(226, 183, 20, 0.2);
-  color: #e2b714;
+  background: rgba(var(--color-primary-rgb, 226, 183, 20), 0.2);
+  color: var(--color-primary, #e2b714);
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 0.7rem;
@@ -417,7 +417,7 @@
 
 .qa-slots.empty {
   background: rgba(255, 107, 107, 0.2);
-  color: #ff6b6b;
+  color: var(--color-accent, #ff6b6b);
 }
 
 /* ── Spell Button Variants ── */
@@ -499,7 +499,7 @@
 .qa-save-bonus {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #e2b714;
+  color: var(--color-primary, #e2b714);
 }
 
 .qa-proficient-dot {
@@ -507,7 +507,7 @@
   top: 4px;
   right: 6px;
   font-size: 0.6rem;
-  color: #51cf66;
+  color: var(--color-success, #51cf66);
 }
 
 /* Footer removido - info redundante com a ficha */
@@ -598,7 +598,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at center, rgba(226, 183, 20, 0.3), transparent);
+  background: radial-gradient(circle at center, rgba(var(--color-primary-rgb, 226, 183, 20), 0.3), transparent);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
