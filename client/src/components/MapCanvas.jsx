@@ -291,6 +291,9 @@ export default function MapCanvas({
 
   // ── Update map offset when it changes ──
   useEffect(() => {
+    // Skip if currently dragging (prevents visual snap-back during drag)
+    if (mapDragRef.current.isDragging) return;
+    
     if (mapSpriteRef.current) {
       mapSpriteRef.current.position.set(map.offsetX || 0, map.offsetY || 0);
     }
