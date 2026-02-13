@@ -50,6 +50,8 @@ const DEFAULT_WINDOWS = {
 
 // Windows that should always start closed (regardless of localStorage)
 const ALWAYS_START_CLOSED = ['initiative', 'dmDashboard'];
+// Windows that should always start open (regardless of localStorage)
+const ALWAYS_START_OPEN = ['leftPanel', 'rightPanel'];
 
 export function WindowManagerProvider({ children }) {
   const [windows, setWindows] = useState(() => {
@@ -67,6 +69,17 @@ export function WindowManagerProvider({ children }) {
             merged[windowId] = {
               ...merged[windowId],
               isOpen: false,
+              isMinimized: false,
+            };
+          }
+        });
+        
+        // Force certain windows to always start open (keep position/size from localStorage)
+        ALWAYS_START_OPEN.forEach(windowId => {
+          if (merged[windowId]) {
+            merged[windowId] = {
+              ...merged[windowId],
+              isOpen: true,
               isMinimized: false,
             };
           }
