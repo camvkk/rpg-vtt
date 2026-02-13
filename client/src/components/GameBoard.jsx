@@ -387,6 +387,8 @@ function GameBoardInner({ onLeaveRoom }) {
               setOpenMenu={setOpenMenu}
               items={[
                 { id: 'map-upload', icon: '🗺️', label: 'Importar Mapa', onClick: () => { setShowMapUpload(true); setOpenMenu(null); } },
+                { id: 'move-map', icon: '✋', label: 'Mover Mapa', onClick: () => { actions.setActiveTool('move-map'); setOpenMenu(null); }, active: ui.activeTool === 'move-map' },
+                { id: 'reset-map-offset', icon: '🔄', label: 'Resetar Posição', onClick: () => { actions.setMapOffset(0, 0); setOpenMenu(null); } },
                 ...(campaign.id ? [
                   { id: 'docs-config', icon: '📄', label: 'Configurar Documento', onClick: () => { setShowDocsModal(true); setOpenMenu(null); } },
                 ] : []),
