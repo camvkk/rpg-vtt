@@ -155,6 +155,7 @@ export default function MapCanvas({
   const doorsMapRef = useRef(new Map());
   const doorPlacementRef = useRef({ isPlacing: false, graphics: null });
   const mapDragRef = useRef({ isDragging: false, startOffset: { x: 0, y: 0 }, startMouse: { x: 0, y: 0 } });
+  const draggingTokenRef = useRef(null); // Track which token is being dragged to prevent useEffect position override
 
   const [contextMenu, setContextMenu] = useState(null); // { token, x, y }
 
@@ -2027,6 +2028,7 @@ export default function MapCanvas({
       e.stopPropagation();
       actions.selectToken(token.id);
       dragging = true;
+      draggingTokenRef.current = token.id; // Prevent useEffect from overriding position during drag
       const local = e.getLocalPosition(c.parent);
       dragOffset = { x: local.x - c.x, y: local.y - c.y };
       c.alpha = 0.7;
@@ -2058,12 +2060,28 @@ export default function MapCanvas({
         gridY = Math.round((c.y - _gs / 2) / _gs);
       }
       actions.moveToken(token.id, gridX, gridY);
+      // Clear dragging ref AFTER moveToken so optimistic update happens first
+      setTimeout(() => { draggingTokenRef.current = null; }, 50);
     });
     c.on('pointerupoutside', () => {
       if (!dragging) return;
       dragging = false;
       c.alpha = 1;
       c.zIndex = 0;
+      // FIX: Also save position when releasing outside token bounds!
+      const _gs = gridSizeRef.current;
+      const gt = gridTypeRef.current;
+      let gridX, gridY;
+      if (gt === 'hex') {
+        const hex = pixelToHex(c.x, c.y, _gs);
+        gridX = hex.col;
+        gridY = hex.row;
+      } else {
+        gridX = Math.round((c.x - _gs / 2) / _gs);
+        gridY = Math.round((c.y - _gs / 2) / _gs);
+      }
+      actions.moveToken(token.id, gridX, gridY);
+      setTimeout(() => { draggingTokenRef.current = null; }, 50);
     });
 
     // Right-click → context menu
@@ -2145,6 +2163,12 @@ export default function MapCanvas({
         
         layer.addChild(sprite);
         existing.set(token.id, sprite);
+      }
+      
+      // Skip position update if this token is currently being dragged
+      // This prevents useEffect from overriding the visual drag position
+      if (draggingTokenRef.current === token.id) {
+        return;
       }
       
       let pos;
