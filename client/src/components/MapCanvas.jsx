@@ -154,7 +154,7 @@ export default function MapCanvas({
   const fogToolRef = useRef({ isDragging: false, startPoint: null, graphics: null, polygonPoints: [], isPolygonMode: false });
   const doorsMapRef = useRef(new Map());
   const doorPlacementRef = useRef({ isPlacing: false, graphics: null });
-  const mapDragRef = useRef({ isDragging: false, startOffset: { x: 0, y: 0 }, startMouse: { x: 0, y: 0 } });
+  const mapDragRef = useRef({ isDragging: false, startOffset: { x: 0, y: 0 }, startMouse: { x: 0, y: 0 }, justFinished: false });
   const draggingTokenRef = useRef(null); // Track which token is being dragged to prevent useEffect position override
 
   const [contextMenu, setContextMenu] = useState(null); // { token, x, y }
@@ -291,10 +291,24 @@ export default function MapCanvas({
 
   // ── Update map offset when it changes ──
   useEffect(() => {
-    // Skip if currently dragging (prevents visual snap-back during drag)
-    if (mapDragRef.current.isDragging) return;
+    console.log('[MAP DEBUG] useEffect triggered', {
+      isDragging: mapDragRef.current.isDragging,
+      justFinished: mapDragRef.current.justFinished,
+      offsetX: map.offsetX,
+      offsetY: map.offsetY,
+      spriteX: mapSpriteRef.current?.x,
+      spriteY: mapSpriteRef.current?.y
+    });
+    
+    // Skip if currently dragging or just finished (prevents visual snap-back during drag
+    // and while waiting for server response)
+    if (mapDragRef.current.isDragging || mapDragRef.current.justFinished) {
+      console.log('[MAP DEBUG] SKIPPED - drag in progress');
+      return;
+    }
     
     if (mapSpriteRef.current) {
+      console.log('[MAP DEBUG] APPLYING position', map.offsetX, map.offsetY);
       mapSpriteRef.current.position.set(map.offsetX || 0, map.offsetY || 0);
     }
   }, [map.offsetX, map.offsetY]);
@@ -1477,11 +1491,22 @@ export default function MapCanvas({
         const newOffsetX = mapDragRef.current.startOffset.x + dx / v.zoom;
         const newOffsetY = mapDragRef.current.startOffset.y + dy / v.zoom;
         
+        console.log('[MAP DEBUG] pointerup - saving offset', newOffsetX, newOffsetY);
+        
+        // Mark as just finished BEFORE dispatch to prevent race condition
+        mapDragRef.current.justFinished = true;
+        mapDragRef.current.isDragging = false;
+        
         // Save to server
         actions.setMapOffset(newOffsetX, newOffsetY);
         
-        mapDragRef.current.isDragging = false;
         canvas.style.cursor = 'default';
+        
+        // Clear justFinished flag after a delay to allow server response to arrive
+        setTimeout(() => { 
+          console.log('[MAP DEBUG] clearing justFinished flag');
+          mapDragRef.current.justFinished = false; 
+        }, 500);
       }
       
       // Finish ruler measurement
