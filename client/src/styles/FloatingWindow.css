@@ -1,0 +1,356 @@
+/* ═══════════════════════════════════════════════
+   FLOATING WINDOW — Desktop-style draggable panels
+   ═══════════════════════════════════════════════ */
+
+.floating-window {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid #2d3748;
+  border-radius: 12px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 1px rgba(255, 255, 255, 0.1) inset;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease, opacity 0.15s ease;
+}
+
+.floating-window:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 1px rgba(255, 255, 255, 0.15) inset;
+}
+
+.floating-window.dragging {
+  cursor: grabbing;
+  opacity: 0.92;
+  box-shadow: 
+    0 16px 48px rgba(0, 0, 0, 0.6),
+    0 0 2px rgba(226, 183, 20, 0.3) inset;
+}
+
+.floating-window.resizing {
+  transition: none;
+}
+
+/* ── Window Header (Drag Handle) ── */
+.fw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(45, 55, 72, 0.6), rgba(45, 55, 72, 0.3));
+  border-bottom: 1px solid #2d3748;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.fw-header:active {
+  cursor: grabbing;
+}
+
+.fw-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fw-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.fw-title {
+  font-family: 'Cinzel', 'Georgia', serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e2b714;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-controls {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fw-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  background: transparent;
+}
+
+.fw-btn-minimize {
+  color: #a0aec0;
+}
+
+.fw-btn-minimize:hover {
+  background: rgba(160, 174, 192, 0.2);
+  color: #e2e8f0;
+}
+
+.fw-btn-close {
+  color: #fc8181;
+}
+
+.fw-btn-close:hover {
+  background: rgba(252, 129, 129, 0.2);
+  color: #feb2b2;
+}
+
+/* ── Window Content ── */
+.fw-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Override default panel styles when inside floating window */
+.fw-content .gb-side-panel,
+.fw-content .gb-left-panel,
+.fw-content .gb-right-panel {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: none !important;
+  background: transparent !important;
+  position: static !important;
+  transform: none !important;
+}
+
+/* ── Resize Handle ── */
+.fw-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: se-resize;
+  background: linear-gradient(135deg, transparent 50%, rgba(226, 183, 20, 0.3) 50%);
+  border-radius: 0 0 12px 0;
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.fw-resize-handle:hover,
+.floating-window.resizing .fw-resize-handle {
+  opacity: 1;
+  background: linear-gradient(135deg, transparent 50%, rgba(226, 183, 20, 0.6) 50%);
+}
+
+/* ═══════════════════════════════════════════════
+   MINIMIZED WINDOW BAR — Bottom taskbar for minimized windows
+   ═══════════════════════════════════════════════ */
+
+.minimized-window-bar {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(26, 26, 46, 0.95);
+  border: 1px solid #2d3748;
+  border-radius: 24px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.minimized-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, rgba(45, 55, 72, 0.8), rgba(45, 55, 72, 0.5));
+  border: 1px solid #4a5568;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.minimized-pill:hover {
+  background: linear-gradient(135deg, rgba(226, 183, 20, 0.2), rgba(226, 183, 20, 0.1));
+  border-color: rgba(226, 183, 20, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(226, 183, 20, 0.15);
+}
+
+.minimized-pill:active {
+  transform: translateY(0);
+}
+
+.minimized-pill-icon {
+  font-size: 0.9rem;
+}
+
+.minimized-pill-title {
+  font-family: 'Cinzel', 'Georgia', serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #e2b714;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════
+   RESPONSIVE ADJUSTMENTS
+   ═══════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .floating-window {
+    border-radius: 8px;
+  }
+
+  .fw-header {
+    padding: 8px 10px;
+  }
+
+  .fw-title {
+    font-size: 0.85rem;
+  }
+
+  .minimized-window-bar {
+    bottom: 8px;
+    padding: 6px 10px;
+    gap: 6px;
+    max-width: calc(100vw - 32px);
+    overflow-x: auto;
+  }
+
+  .minimized-pill {
+    padding: 5px 10px;
+  }
+
+  .minimized-pill-title {
+    max-width: 80px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .minimized-window-bar {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    justify-content: center;
+  }
+
+  .minimized-pill-title {
+    display: none;
+  }
+
+  .minimized-pill {
+    padding: 8px;
+    border-radius: 50%;
+  }
+
+  .minimized-pill-icon {
+    font-size: 1.1rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   WINDOW-SPECIFIC OVERRIDES
+   ═══════════════════════════════════════════════ */
+
+/* Initiative Tracker inside floating window */
+.floating-window #initiative-tracker-panel {
+  position: static !important;
+  width: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Make initiative tracker fill available height */
+.floating-window .fw-content > #initiative-tracker-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* DM Dashboard inside floating window */
+.floating-window .gb-dm-dashboard-container {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+}
+
+/* Chat panel adjustments */
+.floating-window .chat-panel,
+.floating-window [class*="chat"],
+.floating-window [class*="Chat"] {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+/* Panel sections inside floating windows */
+.floating-window .gb-panel-section {
+  flex-shrink: 0;
+}
+
+/* Player list adjustments */
+.floating-window .gb-player-list {
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Scroll styling for content */
+.fw-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.fw-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.fw-content::-webkit-scrollbar-thumb {
+  background: rgba(226, 183, 20, 0.3);
+  border-radius: 3px;
+}
+
+.fw-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(226, 183, 20, 0.5);
+}

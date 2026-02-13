@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '../contexts/GameContext';
+import { WindowManagerProvider, useWindowManager } from '../contexts/WindowManagerContext';
 import MapCanvas from './MapCanvas';
 import DiceRoller from './DiceRoller';
 import ChatPanel from './ChatPanel';
@@ -15,8 +16,11 @@ import CharacterWizard from './CharacterWizard';
 import ScenesPanel from './ScenesPanel';
 import JournalPanel from './JournalPanel';
 import JukeboxPanel from './JukeboxPanel';
+import FloatingWindow from './FloatingWindow';
+import MinimizedWindowBar from './MinimizedWindowBar';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
+import '../styles/FloatingWindow.css';
 
 // Error boundary to catch MapCanvas crashes
 import { Component } from 'react';
@@ -48,21 +52,30 @@ class CanvasErrorBoundary extends Component {
 }
 
 export default function GameBoardWithErrorBoundary(props) {
-  return <GameBoardErrorBoundary><GameBoardInner {...props} /></GameBoardErrorBoundary>;
+  return (
+    <WindowManagerProvider>
+      <GameBoardErrorBoundary>
+        <GameBoardInner {...props} />
+      </GameBoardErrorBoundary>
+    </WindowManagerProvider>
+  );
 }
 
 function GameBoardInner({ onLeaveRoom }) {
   const { state, actions } = useGame();
   const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled, allCharacters } = state;
   const isDM = player.isDM;
-  const [showInitiativeTracker, setShowInitiativeTracker] = useState(false);
+  
+  // Window manager for floating panels
+  const { windows, toggleWindow, openWindow, closeWindow } = useWindowManager();
+  
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
   const [showGoogleDocs, setShowGoogleDocs] = useState(false);
   const [showDocsModal, setShowDocsModal] = useState(false);
   const [showSystemImporter, setShowSystemImporter] = useState(false);
-  const [showDMDashboard, setShowDMDashboard] = useState(false);
+  // DM Dashboard is now managed by WindowManager
   const [showCharacterWizard, setShowCharacterWizard] = useState(false);
   const [tokenAwaitingPlacement, setTokenAwaitingPlacement] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
@@ -408,7 +421,7 @@ function GameBoardInner({ onLeaveRoom }) {
               openMenu={openMenu}
               setOpenMenu={setOpenMenu}
               items={[
-                { id: 'dm-dashboard', icon: '👥', label: 'Painel do Grupo', onClick: () => { setShowDMDashboard(!showDMDashboard); setOpenMenu(null); }, active: showDMDashboard },
+                { id: 'dm-dashboard', icon: '👥', label: 'Painel do Grupo', onClick: () => { toggleWindow('dmDashboard'); setOpenMenu(null); }, active: windows.dmDashboard?.isOpen },
                 { id: 'system-import', icon: '📚', label: 'Importar Regras', onClick: () => { setShowSystemImporter(true); setOpenMenu(null); } },
               ]}
             />
@@ -427,11 +440,26 @@ function GameBoardInner({ onLeaveRoom }) {
         </div>
 
         <div className="gb-toolbar-right">
-          <button className="btn btn-ghost gb-toolbar-btn" onClick={actions.toggleLeftPanel}>
-            {ui.leftPanel ? '◄' : '►'}
+          <button 
+            className={`btn btn-ghost gb-toolbar-btn ${windows.leftPanel?.isOpen && !windows.leftPanel?.isMinimized ? 'active' : ''}`} 
+            onClick={() => toggleWindow('leftPanel')}
+            title="Painel Esquerdo"
+          >
+            👥
           </button>
-          <button className="btn btn-ghost gb-toolbar-btn" onClick={actions.toggleRightPanel}>
-            {ui.rightPanel ? '►' : '◄'}
+          <button 
+            className={`btn btn-ghost gb-toolbar-btn ${windows.rightPanel?.isOpen && !windows.rightPanel?.isMinimized ? 'active' : ''}`} 
+            onClick={() => toggleWindow('rightPanel')}
+            title="Chat & Dados"
+          >
+            💬
+          </button>
+          <button 
+            className={`btn btn-ghost gb-toolbar-btn ${windows.initiative?.isOpen && !windows.initiative?.isMinimized ? 'active' : ''}`} 
+            onClick={() => toggleWindow('initiative')}
+            title="Iniciativa"
+          >
+            ⚔️
           </button>
         </div>
       </div>
@@ -483,91 +511,7 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* ── Main layout ── */}
       <div className="gb-content">
-        {/* Left panel */}
-        {ui.leftPanel && (
-          <div className="gb-side-panel gb-left-panel">
-            {/* Sidebar Tabs */}
-            <div style={{
-              display: 'flex', gap: 2, background: 'var(--bg-surface-light)',
-              borderRadius: 'var(--radius-md)', padding: 2, marginBottom: 'var(--spacing-sm)',
-            }}>
-              {[
-                { id: 'tokens', icon: '🎭', label: 'Tokens' },
-                { id: 'scenes', icon: '🗺️', label: 'Cenas' },
-                { id: 'journal', icon: '📋', label: 'Diário' },
-                { id: 'jukebox', icon: '🎵', label: 'Jukebox' },
-                { id: 'settings', icon: '⚙️', label: 'Config' },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSidebarTab(tab.id)}
-                  title={tab.label}
-                  style={{
-                    flex: 1, padding: '6px 4px', border: 'none', borderRadius: 'var(--radius-sm)',
-                    background: sidebarTab === tab.id ? 'var(--color-primary)' : 'transparent',
-                    color: sidebarTab === tab.id ? 'white' : 'var(--color-text-dim)',
-                    cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.15s',
-                  }}
-                >
-                  {tab.icon}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            {sidebarTab === 'tokens' && (
-              <>
-                {/* Players */}
-                <div className="gb-panel-section">
-                  <div className="panel-header">
-                    <h3 className="heading-sm">Jogadores</h3>
-                    <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
-                  </div>
-                  <div className="gb-player-list">
-                    {players.map((p) => (
-                      <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
-                        <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
-                        <div className="gb-player-info">
-                          <div className="gb-player-name">{p.name}</div>
-                          <div className="gb-player-role text-dim">
-                            {p.is_dm ? 'Mestre' : 'Jogador'}
-                            {p.id === player.id && ' (Você)'}
-                          </div>
-                        </div>
-                        <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Initiative Toggle */}
-                <button
-                  onClick={() => setShowInitiativeTracker(!showInitiativeTracker)}
-                  className={`btn ${showInitiativeTracker ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ width: '100%', marginTop: 'var(--spacing-sm)' }}
-                >
-                  ⚔️ {showInitiativeTracker ? 'Ocultar' : 'Mostrar'} Iniciativa
-                </button>
-              </>
-            )}
-
-            {sidebarTab === 'scenes' && <ScenesPanel />}
-            {sidebarTab === 'journal' && <JournalPanel />}
-            {sidebarTab === 'jukebox' && <JukeboxPanel />}
-
-            {sidebarTab === 'settings' && (
-              <>
-                {/* Ambiance (DM) */}
-                {isDM && <Ambiance isDM={isDM} />}
-
-                {/* Grid Config (DM) */}
-                {isDM && <GridConfigPanel />}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Center — Map Canvas */}
+        {/* Center — Map Canvas (full area now) */}
         <div className="gb-canvas-area" ref={canvasAreaRef}>
           <div style={{ position: 'absolute', inset: 0 }}>
             <CanvasErrorBoundary>
@@ -600,25 +544,146 @@ function GameBoardInner({ onLeaveRoom }) {
             </div>
           )}
         </div>
-
-        {/* Right panel */}
-        {ui.rightPanel && (
-          <div className="gb-side-panel gb-right-panel">
-            <ChatPanel
-              messages={chat}
-              onSendMessage={handleChatSend}
-              onDeleteMessage={actions.deleteMessage}
-              onHideMessage={actions.hideMessage}
-              currentUser={{ name: player.name, id: player.id, isDM }}
-              isConnected={connected}
-              onSpellDetected={handleSpellDetected}
-            />
-          </div>
-        )}
       </div>
 
-      {/* Floating Initiative Tracker */}
-      {showInitiativeTracker && <InitiativeTracker />}
+      {/* ═══ FLOATING WINDOWS ═══ */}
+      
+      {/* Left Panel - Players, Scenes, Journal, etc */}
+      <FloatingWindow
+        windowId="leftPanel"
+        title="Jogadores & Cenas"
+        icon="👥"
+        resizable={true}
+      >
+        <div className="gb-side-panel gb-left-panel">
+          {/* Sidebar Tabs */}
+          <div style={{
+            display: 'flex', gap: 2, background: 'var(--bg-surface-light)',
+            borderRadius: 'var(--radius-md)', padding: 2, marginBottom: 'var(--spacing-sm)',
+          }}>
+            {[
+              { id: 'tokens', icon: '🎭', label: 'Tokens' },
+              { id: 'scenes', icon: '🗺️', label: 'Cenas' },
+              { id: 'journal', icon: '📋', label: 'Diário' },
+              { id: 'jukebox', icon: '🎵', label: 'Jukebox' },
+              { id: 'settings', icon: '⚙️', label: 'Config' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSidebarTab(tab.id)}
+                title={tab.label}
+                style={{
+                  flex: 1, padding: '6px 4px', border: 'none', borderRadius: 'var(--radius-sm)',
+                  background: sidebarTab === tab.id ? 'var(--color-primary)' : 'transparent',
+                  color: sidebarTab === tab.id ? 'white' : 'var(--color-text-dim)',
+                  cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.15s',
+                }}
+              >
+                {tab.icon}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {sidebarTab === 'tokens' && (
+            <>
+              {/* Players */}
+              <div className="gb-panel-section">
+                <div className="panel-header">
+                  <h3 className="heading-sm">Jogadores</h3>
+                  <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
+                </div>
+                <div className="gb-player-list">
+                  {players.map((p) => (
+                    <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
+                      <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
+                      <div className="gb-player-info">
+                        <div className="gb-player-name">{p.name}</div>
+                        <div className="gb-player-role text-dim">
+                          {p.is_dm ? 'Mestre' : 'Jogador'}
+                          {p.id === player.id && ' (Você)'}
+                        </div>
+                      </div>
+                      <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Initiative Toggle */}
+              <button
+                onClick={() => toggleWindow('initiative')}
+                className={`btn ${windows.initiative?.isOpen ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ width: '100%', marginTop: 'var(--spacing-sm)' }}
+              >
+                ⚔️ {windows.initiative?.isOpen ? 'Ocultar' : 'Mostrar'} Iniciativa
+              </button>
+            </>
+          )}
+
+          {sidebarTab === 'scenes' && <ScenesPanel />}
+          {sidebarTab === 'journal' && <JournalPanel />}
+          {sidebarTab === 'jukebox' && <JukeboxPanel />}
+
+          {sidebarTab === 'settings' && (
+            <>
+              {/* Ambiance (DM) */}
+              {isDM && <Ambiance isDM={isDM} />}
+
+              {/* Grid Config (DM) */}
+              {isDM && <GridConfigPanel />}
+            </>
+          )}
+        </div>
+      </FloatingWindow>
+
+      {/* Right Panel - Chat */}
+      <FloatingWindow
+        windowId="rightPanel"
+        title="Chat & Dados"
+        icon="💬"
+        resizable={true}
+      >
+        <ChatPanel
+          messages={chat}
+          onSendMessage={handleChatSend}
+          onDeleteMessage={actions.deleteMessage}
+          onHideMessage={actions.hideMessage}
+          currentUser={{ name: player.name, id: player.id, isDM }}
+          isConnected={connected}
+          onSpellDetected={handleSpellDetected}
+        />
+      </FloatingWindow>
+
+      {/* Initiative Tracker */}
+      <FloatingWindow
+        windowId="initiative"
+        title="Iniciativa"
+        icon="⚔️"
+        resizable={true}
+      >
+        <InitiativeTracker />
+      </FloatingWindow>
+
+      {/* DM Dashboard */}
+      {isDM && campaign.id && (
+        <FloatingWindow
+          windowId="dmDashboard"
+          title="Painel do Mestre"
+          icon="👑"
+          resizable={true}
+        >
+          <DMDashboard
+            isOpen={true}
+            onClose={() => closeWindow('dmDashboard')}
+          />
+        </FloatingWindow>
+      )}
+
+      {/* Minimized Window Bar */}
+      <MinimizedWindowBar />
+
+      {/* Note: Initiative Tracker is now in FloatingWindow above */}
 
       {/* Character Sheet Modal (own character - full-page) */}
       {showCharSheet && (
@@ -709,17 +774,7 @@ function GameBoardInner({ onLeaveRoom }) {
         />
       )}
 
-      {/* DM Dashboard Modal */}
-      {showDMDashboard && isDM && campaign.id && (
-        <div className="gb-charsheet-overlay">
-          <div className="gb-dm-dashboard-container">
-            <DMDashboard
-              isOpen={showDMDashboard}
-              onClose={() => setShowDMDashboard(false)}
-            />
-          </div>
-        </div>
-      )}
+      {/* DM Dashboard is now in FloatingWindow above */}
 
       {/* Floating Dice Tray */}
       <DiceRoller />
