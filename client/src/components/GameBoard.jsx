@@ -694,16 +694,15 @@ function GameBoardInner({ onLeaveRoom }) {
         />
       </FloatingWindow>
 
-      {/* Initiative Tracker - temporarily without FloatingWindow to debug */}
-      {windows?.initiative?.isOpen && !windows?.initiative?.isMinimized && (
-        <div style={{ position: 'fixed', left: 16, top: 72, zIndex: 500, background: 'var(--bg-surface)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 8, maxHeight: '80vh', overflow: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span>⚔️ Iniciativa</span>
-            <button onClick={() => closeWindow('initiative')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
-          </div>
-          <InitiativeTracker />
-        </div>
-      )}
+      {/* Initiative Tracker */}
+      <FloatingWindow
+        windowId="initiative"
+        title="Iniciativa"
+        icon="⚔️"
+        resizable={true}
+      >
+        <InitiativeTracker />
+      </FloatingWindow>
 
       {/* DM Dashboard */}
       {isDM && campaign.id && (
