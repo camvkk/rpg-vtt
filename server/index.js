@@ -1342,8 +1342,16 @@ io.on('connection', (socket) => {
             
             console.log(`🗺️ Map changed in room ${player.roomId}: ${mapUrl}`);
             
-            // Broadcast to room
+            // Broadcast map update to room
             io.to(player.roomId).emit('map:update', result);
+            
+            // Also send full game state so tokens sync properly
+            const gameState = await getGameState(player.roomId);
+            const roomDetails = await roomManager.getRoomDetails(player.roomId);
+            io.to(player.roomId).emit('room:state', {
+                ...roomDetails,
+                gameState
+            });
             
             if (callback) callback({ success: true });
         } catch (error) {
