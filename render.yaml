@@ -3,7 +3,7 @@ services:
     name: rpg-vtt-backend
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install && cd client && npm install && npm run build
     startCommand: node server/index.js
     envVars:
       - key: NODE_ENV

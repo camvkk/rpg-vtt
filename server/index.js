@@ -61,6 +61,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
+// Serve frontend build in production
+const clientDistPath = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+}
+
 // Map upload endpoint (HTTP — more reliable than socket for large files)
 const mapsDir = path.join(__dirname, 'public', 'maps');
 if (!fs.existsSync(mapsDir)) fs.mkdirSync(mapsDir, { recursive: true });
@@ -2559,6 +2565,18 @@ io.on('connection', (socket) => {
         }
     });
 });
+
+// SPA fallback - serve index.html for any non-API route (must be after all other routes)
+const clientDistPath2 = path.join(__dirname, '..', 'client', 'dist');
+if (fs.existsSync(clientDistPath2)) {
+  app.get('*', (req, res, next) => {
+    // Skip API routes and static files
+    if (req.path.startsWith('/api') || req.path.startsWith('/public') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath2, 'index.html'));
+  });
+}
 
 // Start server
 const PORT = process.env.PORT || 3001;
