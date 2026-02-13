@@ -2,6 +2,40 @@
    🎲 3D Dice Roller — Dark Fantasy Theme
    ═══════════════════════════════════════════════════ */
 
+/* Dice Tray Content (inside FloatingWindow) */
+.dice-tray-content {
+  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.dice-tray-content.crit-glow {
+  animation: critPulse 1.5s ease-in-out 3;
+}
+
+.dice-tray-content.fumble-shake {
+  animation: fumbleShake 0.6s ease-in-out 3;
+}
+
+.dice-history-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1px solid #c9a84c44;
+  border-radius: 6px;
+  color: #c9a84c;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dice-history-toggle:hover {
+  background: rgba(201, 168, 76, 0.2);
+}
+
 /* Toggle Button */
 .dice-toggle-btn {
   position: fixed;
