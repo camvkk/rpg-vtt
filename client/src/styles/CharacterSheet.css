@@ -435,6 +435,39 @@
   transition: all 0.4s ease;
 }
 
+/* ── XP Progress Bar ── */
+.cs-xp-container {
+  margin-top: 4px;
+}
+
+.cs-xp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.cs-xp-values {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.cs-xp-bar {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 183, 20, 0.2);
+}
+
+.cs-xp-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: all 0.4s ease;
+  box-shadow: 0 0 8px rgba(226, 183, 20, 0.4);
+}
+
 /* ── Skills List ── */
 .cs-skill-row {
   display: flex;
@@ -717,6 +750,10 @@
   border-bottom: 1px solid rgba(199, 125, 255, 0.2);
 }
 
+.cs-spell-item-container {
+  margin-bottom: 2px;
+}
+
 .cs-spell-item {
   display: flex;
   align-items: center;
@@ -726,8 +763,17 @@
   font-size: 0.82rem;
 }
 
-.cs-spell-item:nth-child(odd) {
+.cs-spell-item-container:nth-child(odd) > .cs-spell-item {
   background: rgba(0, 0, 0, 0.15);
+}
+
+.cs-spell-details select {
+  cursor: pointer;
+}
+
+.cs-spell-details select option {
+  background: #1a1a2e;
+  color: #ccc;
 }
 
 .cs-spell-prepared {
@@ -1140,6 +1186,257 @@
 .cs-minimize-btn:hover {
   background: rgba(226, 183, 20, 0.2);
   border-color: #e2b714;
+}
+
+/* ══════════════════════════════════════════════════
+   Estado do Personagem (Death Saves, Conditions, Concentration)
+   ══════════════════════════════════════════════════ */
+
+.cs-character-state {
+  background: linear-gradient(135deg, rgba(60, 40, 40, 0.3), rgba(40, 30, 30, 0.2));
+  border: 1px solid rgba(255, 100, 100, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* ── Death Saves ── */
+.cs-death-saves {
+  margin-bottom: 16px;
+}
+
+.cs-death-saves-label {
+  font-size: 0.75rem;
+  color: #8888aa;
+  font-family: 'Cinzel', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.cs-death-saves-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cs-death-saves-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-death-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.cs-death-label.success { color: #51cf66; }
+.cs-death-label.failure { color: #ff6b6b; }
+
+.cs-death-checks {
+  display: flex;
+  gap: 4px;
+}
+
+.cs-death-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cs-death-check.success {
+  border-color: rgba(81, 207, 102, 0.5);
+}
+
+.cs-death-check.success:hover {
+  border-color: #51cf66;
+  box-shadow: 0 0 8px rgba(81, 207, 102, 0.3);
+}
+
+.cs-death-check.success.filled {
+  background: #51cf66;
+  border-color: #51cf66;
+  box-shadow: 0 0 10px rgba(81, 207, 102, 0.4);
+}
+
+.cs-death-check.failure {
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+.cs-death-check.failure:hover {
+  border-color: #ff6b6b;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.3);
+}
+
+.cs-death-check.failure.filled {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.4);
+}
+
+/* ── Concentração ── */
+.cs-concentration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: rgba(199, 125, 255, 0.08);
+  border: 1px solid rgba(199, 125, 255, 0.2);
+  border-radius: 6px;
+}
+
+.cs-concentration-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.cs-concentration-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #c77dff;
+}
+
+.cs-concentration-label {
+  font-size: 0.85rem;
+  color: #c77dff;
+  font-weight: 500;
+}
+
+.cs-concentration-spell {
+  flex: 1;
+  padding: 4px 10px;
+  background: rgba(199, 125, 255, 0.1);
+  border: 1px solid rgba(199, 125, 255, 0.3);
+  border-radius: 4px;
+  color: #e8e8e8;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.cs-concentration-spell:focus {
+  border-color: #c77dff;
+  box-shadow: 0 0 8px rgba(199, 125, 255, 0.2);
+}
+
+.cs-concentration-spell::placeholder {
+  color: rgba(199, 125, 255, 0.5);
+}
+
+/* ── Condições ── */
+.cs-conditions {
+  margin-top: 8px;
+}
+
+.cs-conditions-label {
+  font-size: 0.75rem;
+  color: #8888aa;
+  font-family: 'Cinzel', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.cs-conditions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
+}
+
+.cs-condition-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(60, 60, 80, 0.4);
+  border: 1px solid rgba(100, 100, 120, 0.3);
+  border-radius: 6px;
+  color: #888;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cs-condition-btn:hover {
+  background: rgba(80, 80, 100, 0.5);
+  border-color: rgba(150, 150, 170, 0.4);
+  color: #aaa;
+}
+
+.cs-condition-btn.active {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: rgba(255, 107, 107, 0.5);
+  color: #ff8888;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.15);
+}
+
+.cs-condition-icon {
+  font-size: 1rem;
+}
+
+.cs-condition-name {
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Header Status Badges ── */
+.cs-header-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-right: auto;
+  margin-left: 16px;
+}
+
+.cs-header-conditions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.cs-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cs-badge-concentration {
+  background: rgba(199, 125, 255, 0.2);
+  border: 1px solid rgba(199, 125, 255, 0.4);
+  color: #c77dff;
+}
+
+.cs-badge-condition {
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ff8888;
+}
+
+/* Window mode badges (compact) */
+.cs-window-header-left .cs-header-badge {
+  padding: 2px 6px;
+  font-size: 0.65rem;
+}
+
+.cs-window-header-left .cs-header-conditions {
+  margin-left: 6px;
 }
 
 /* ── Print Mode ── */

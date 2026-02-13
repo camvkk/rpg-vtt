@@ -2534,6 +2534,103 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ── NPC Management (DM only) ──
+    socket.on('npc:list', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.campaignId) throw new Error('Not in a campaign');
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const npcs = persistedState.npcs || [];
+            
+            if (callback) callback({ success: true, npcs });
+        } catch (error) {
+            console.error('Error listing NPCs:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('npc:create', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can create NPCs');
+            
+            const npc = {
+                id: data.id || uuidv4(),
+                ...data,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            };
+            
+            // Save to room state
+            const persistedState = await loadRoomState(player.roomId);
+            const npcs = persistedState.npcs || [];
+            npcs.push(npc);
+            await saveRoomState(player.roomId, 'npcs', npcs);
+            
+            console.log(`🎭 NPC created: ${npc.name} in campaign ${player.campaignId}`);
+            
+            // Broadcast to room
+            io.to(player.roomId).emit('npc:created', npc);
+            
+            if (callback) callback({ success: true, npc });
+        } catch (error) {
+            console.error('Error creating NPC:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('npc:update', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can update NPCs');
+            
+            const { npcId, updates } = data;
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const npcs = persistedState.npcs || [];
+            const npcIndex = npcs.findIndex(n => n.id === npcId);
+            
+            if (npcIndex < 0) throw new Error('NPC not found');
+            
+            npcs[npcIndex] = { ...npcs[npcIndex], ...updates, id: npcId, updatedAt: Date.now() };
+            await saveRoomState(player.roomId, 'npcs', npcs);
+            
+            console.log(`🎭 NPC updated: ${npcs[npcIndex].name}`);
+            
+            // Broadcast to room
+            io.to(player.roomId).emit('npc:updated', npcs[npcIndex]);
+            
+            if (callback) callback({ success: true, npc: npcs[npcIndex] });
+        } catch (error) {
+            console.error('Error updating NPC:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
+    socket.on('npc:delete', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player?.isDM || !player?.campaignId) throw new Error('Only DM can delete NPCs');
+            
+            const { npcId } = data;
+            
+            const persistedState = await loadRoomState(player.roomId);
+            const npcs = (persistedState.npcs || []).filter(n => n.id !== npcId);
+            await saveRoomState(player.roomId, 'npcs', npcs);
+            
+            console.log(`🎭 NPC deleted: ${npcId}`);
+            
+            // Broadcast to room
+            io.to(player.roomId).emit('npc:deleted', { npcId });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error deleting NPC:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
+
     // Handle disconnection
     socket.on('disconnect', async () => {
         console.log(`🔌 Client disconnected: ${socket.id}`);

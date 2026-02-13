@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
 import CharSheet from './CharSheet';
+import CharacterWizard from './CharacterWizard';
 import '../styles/DMDashboard.css';
 
 // Available conditions for D&D 5e
@@ -59,21 +60,76 @@ const SAVES = ['Força', 'Destreza', 'Constituição', 'Inteligência', 'Sabedor
 
 export default function DMDashboard({ isOpen, onClose }) {
   const { state, actions } = useGame();
-  const { player, players, allCharacters, campaign, connected } = state;
-  const [viewMode, setViewMode] = useState('overview'); // 'overview' or 'detail'
+  const { player, players, allCharacters, campaign, connected, npcs, systemData } = state;
+  const [viewMode, setViewMode] = useState('overview'); // 'overview', 'detail', 'npcs'
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [selectedPlayerName, setSelectedPlayerName] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [sortBy, setSortBy] = useState('name'); // 'name', 'hp', 'level'
   const [displayMode, setDisplayMode] = useState('card'); // 'card' or 'list'
+  
+  // NPC management state
+  const [showNPCWizard, setShowNPCWizard] = useState(false);
+  const [editingNPC, setEditingNPC] = useState(null);
+  const [selectedNPC, setSelectedNPC] = useState(null);
 
-  // Load all characters when dashboard opens
+  // Load all characters and NPCs when dashboard opens
   useEffect(() => {
     if (isOpen && campaign.id && player.isDM) {
       actions.getAllCharacters(campaign.id);
+      actions.listNPCs();
     }
   }, [isOpen, campaign.id, player.isDM]);
+
+  // Handle NPC creation from wizard
+  const handleCreateNPC = async (characterData) => {
+    try {
+      if (editingNPC) {
+        // Update existing NPC
+        await actions.updateNPC(editingNPC.id, characterData);
+      } else {
+        // Create new NPC
+        await actions.createNPC(characterData);
+      }
+      setShowNPCWizard(false);
+      setEditingNPC(null);
+    } catch (error) {
+      console.error('Error saving NPC:', error);
+    }
+  };
+
+  // Handle NPC deletion
+  const handleDeleteNPC = async (npcId) => {
+    if (!window.confirm('Tem certeza que deseja deletar este NPC?')) return;
+    try {
+      await actions.deleteNPC(npcId);
+    } catch (error) {
+      console.error('Error deleting NPC:', error);
+    }
+  };
+
+  // Create token from NPC
+  const handleCreateTokenFromNPC = async (npc) => {
+    try {
+      const tokenData = {
+        name: npc.name,
+        x: 5,
+        y: 5,
+        conditions: npc.conditions || [],
+        hp: npc.hp || null,
+        color: npc.tokenColor ? parseInt(npc.tokenColor.replace('#', '0x')) : 0x9b59b6,
+        size: npc.size || 'medium',
+        imageUrl: npc.imageUrl || null,
+        isNPC: true,
+        npcId: npc.id
+      };
+      await actions.addToken(tokenData);
+      console.log(`Token created for NPC ${npc.name}`);
+    } catch (error) {
+      console.error('Error creating token from NPC:', error);
+    }
+  };
 
   // Convert allCharacters Map to array for display
   const charactersArray = allCharacters ? Array.from(allCharacters.entries()).map(([playerName, character]) => ({
@@ -275,9 +331,74 @@ export default function DMDashboard({ isOpen, onClose }) {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="dm-dashboard-tabs">
+        <button
+          className={`dm-tab ${viewMode === 'overview' || viewMode === 'detail' ? 'active' : ''}`}
+          onClick={() => setViewMode('overview')}
+        >
+          👥 Personagens dos Jogadores
+        </button>
+        <button
+          className={`dm-tab ${viewMode === 'npcs' ? 'active' : ''}`}
+          onClick={() => setViewMode('npcs')}
+        >
+          🎭 NPCs/Personagens do Mestre ({npcs?.length || 0})
+        </button>
+      </div>
+
       {/* Content */}
       <div className="dm-dashboard-content">
-        {viewMode === 'overview' ? (
+        {/* NPCs Tab */}
+        {viewMode === 'npcs' ? (
+          <div className="dm-npcs-section">
+            {/* NPC Controls */}
+            <div className="dm-dashboard-filters">
+              <div className="filter-row">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setEditingNPC(null);
+                    setShowNPCWizard(true);
+                  }}
+                >
+                  ➕ Criar NPC/Personagem
+                </button>
+              </div>
+            </div>
+
+            {/* NPCs Grid */}
+            <div className="dm-characters dm-characters-grid">
+              {(!npcs || npcs.length === 0) ? (
+                <div className="dm-no-characters">
+                  <p>🎭 Nenhum NPC criado ainda</p>
+                  <span>Clique em "Criar NPC/Personagem" para adicionar NPCs com fichas completas.</span>
+                </div>
+              ) : (
+                npcs.map((npc) => (
+                  <NPCCard
+                    key={npc.id}
+                    npc={npc}
+                    onEdit={() => {
+                      setEditingNPC(npc);
+                      setShowNPCWizard(true);
+                    }}
+                    onDelete={() => handleDeleteNPC(npc.id)}
+                    onCreateToken={() => handleCreateTokenFromNPC(npc)}
+                    onViewDetails={() => {
+                      setSelectedNPC(npc);
+                      setSelectedCharacter(npc);
+                      setSelectedPlayerName(`NPC: ${npc.name}`);
+                      setViewMode('detail');
+                    }}
+                    getHPPercentage={getHPPercentage}
+                    getHPColor={getHPColor}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        ) : viewMode === 'overview' ? (
           <>
             {/* Controls */}
             <div className="dm-dashboard-filters">
@@ -351,7 +472,7 @@ export default function DMDashboard({ isOpen, onClose }) {
               )}
             </div>
           </>
-        ) : (
+        ) : viewMode === 'detail' ? (
           /* Detail View */
           <div className="dm-character-detail">
             {selectedCharacter && (

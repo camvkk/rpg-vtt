@@ -19,6 +19,7 @@ import JournalPanel from './JournalPanel';
 import JukeboxPanel from './JukeboxPanel';
 import FloatingWindow from './FloatingWindow';
 import MinimizedWindowBar from './MinimizedWindowBar';
+import QuickActions from './QuickActions';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
 import '../styles/FloatingWindow.css';
@@ -728,6 +729,9 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* Minimized Window Bar */}
       <MinimizedWindowBar />
+
+      {/* Quick Actions Hotbar (only for players, not DM) */}
+      <QuickActions />
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 

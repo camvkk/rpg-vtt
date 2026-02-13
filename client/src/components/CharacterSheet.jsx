@@ -2,13 +2,65 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { SKILLS, ABILITIES, getProficiencyBonus } from '../data/dnd5e';
 import '../styles/CharacterSheet.css';
 
+// ── D&D 5e XP Table ──
+const XP_TABLE = [
+  { level: 1, xp: 0 },
+  { level: 2, xp: 300 },
+  { level: 3, xp: 900 },
+  { level: 4, xp: 2700 },
+  { level: 5, xp: 6500 },
+  { level: 6, xp: 14000 },
+  { level: 7, xp: 23000 },
+  { level: 8, xp: 34000 },
+  { level: 9, xp: 48000 },
+  { level: 10, xp: 64000 },
+  { level: 11, xp: 85000 },
+  { level: 12, xp: 100000 },
+  { level: 13, xp: 120000 },
+  { level: 14, xp: 140000 },
+  { level: 15, xp: 165000 },
+  { level: 16, xp: 195000 },
+  { level: 17, xp: 225000 },
+  { level: 18, xp: 265000 },
+  { level: 19, xp: 305000 },
+  { level: 20, xp: 355000 },
+];
+
+// Get XP progress info for a given level and current XP
+const getXpProgress = (level, currentXp) => {
+  const currentLevelData = XP_TABLE.find(t => t.level === level) || XP_TABLE[0];
+  const nextLevelData = XP_TABLE.find(t => t.level === level + 1);
+  
+  if (!nextLevelData) {
+    // Max level (20)
+    return { current: currentXp, min: currentLevelData.xp, max: currentLevelData.xp, percent: 100, isMaxLevel: true };
+  }
+  
+  const xpForCurrentLevel = currentLevelData.xp;
+  const xpForNextLevel = nextLevelData.xp;
+  const xpNeeded = xpForNextLevel - xpForCurrentLevel;
+  const xpProgress = currentXp - xpForCurrentLevel;
+  const percent = Math.min(100, Math.max(0, (xpProgress / xpNeeded) * 100));
+  
+  return { current: currentXp, min: xpForCurrentLevel, max: xpForNextLevel, percent, isMaxLevel: false };
+};
+
+// ── Spell Schools ──
+const SPELL_SCHOOLS = [
+  'Abjuration', 'Conjuration', 'Divination', 'Enchantment',
+  'Evocation', 'Illusion', 'Necromancy', 'Transmutation'
+];
+
 // ── Default character factory ──
 const makeDefaultCharacter = () => ({
   name: '',
   race: '',
   class: '',
+  subclass: '',
   level: 1,
+  xp: 0,
   alignment: '',
+  background: '',
   avatarEmoji: '⚔️',
   inspiration: false,
   attributes: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
@@ -16,21 +68,67 @@ const makeDefaultCharacter = () => ({
   ac: 10,
   speed: 30,
   hitDice: { total: 1, used: 0 },
-  skills: {},
+  skills: {},          // { perception: { proficient: false, expertise: false }, ... }
   savingThrows: {},
   attacks: [],
   features: [],
   spellSlots: {},      // { 1: { total: 2, used: 0 }, 2: { total: 1, used: 0 }, ... }
-  spells: {},          // { 0: [{name,prepared}], 1: [{name,prepared}], ... }
+  spells: {},          // { 0: [{name,prepared,school,castingTime,range,components}], 1: [...], ... }
   inventory: [],       // [{ name, qty, weight }]
   currency: { pp: 0, gp: 0, ep: 0, sp: 0, cp: 0 },
+  proficiencies: {
+    armor: [],         // ['light', 'medium', 'heavy', 'shields']
+    weapons: [],       // ['simple', 'martial', 'longsword', etc.]
+    tools: [],         // ['Thieves\' Tools', 'Smith\'s Tools', etc.]
+    languages: [],     // ['Common', 'Elvish', 'Dwarvish', etc.]
+  },
   personality: '',
   ideals: '',
   bonds: '',
   flaws: '',
   backstory: '',
   notes: '',
+  // ── Estado do Personagem ──
+  deathSaves: { successes: 0, failures: 0 },
+  conditions: [],      // ['blinded', 'poisoned', ...]
+  concentration: { active: false, spell: '' },
 });
+
+// ── Condições D&D 5e ──
+const DND_CONDITIONS = [
+  { id: 'blinded', name: 'Cego', icon: '👁️' },
+  { id: 'charmed', name: 'Enfeitiçado', icon: '💕' },
+  { id: 'deafened', name: 'Surdo', icon: '🔇' },
+  { id: 'frightened', name: 'Amedrontado', icon: '😱' },
+  { id: 'grappled', name: 'Agarrado', icon: '🤼' },
+  { id: 'incapacitated', name: 'Incapacitado', icon: '💫' },
+  { id: 'invisible', name: 'Invisível', icon: '👻' },
+  { id: 'paralyzed', name: 'Paralisado', icon: '⚡' },
+  { id: 'petrified', name: 'Petrificado', icon: '🪨' },
+  { id: 'poisoned', name: 'Envenenado', icon: '🤢' },
+  { id: 'prone', name: 'Caído', icon: '🔻' },
+  { id: 'restrained', name: 'Contido', icon: '⛓️' },
+  { id: 'stunned', name: 'Atordoado', icon: '💥' },
+  { id: 'unconscious', name: 'Inconsciente', icon: '💤' },
+];
+
+// ── Proficiency options ──
+const ARMOR_TYPES = [
+  { id: 'light', name: 'Armadura Leve' },
+  { id: 'medium', name: 'Armadura Média' },
+  { id: 'heavy', name: 'Armadura Pesada' },
+  { id: 'shields', name: 'Escudos' },
+];
+
+const WEAPON_TYPES = [
+  { id: 'simple', name: 'Armas Simples' },
+  { id: 'martial', name: 'Armas Marciais' },
+];
+
+const COMMON_LANGUAGES = [
+  'Comum', 'Élfico', 'Anão', 'Gigante', 'Gnômico', 'Goblin', 'Halfling', 'Orc',
+  'Abissal', 'Celestial', 'Dracônico', 'Infernal', 'Primordial', 'Subcomum', 'Silvestre',
+];
 
 const TABS = [
   { id: 'overview',   icon: '📋', label: 'Visão Geral' },
@@ -115,6 +213,7 @@ export default function CharacterSheet({
   // ── Determine if editable (DM can edit any sheet) ──
   const canEdit = isEditable || (isDM && isOtherCharacter);
   const [activeTab, setActiveTab] = useState('overview');
+  const [expandedSpells, setExpandedSpells] = useState({}); // Track which spells have expanded details
   const char = character || makeDefaultCharacter();
   const saveTimer = useRef(null); // eslint-disable-line no-unused-vars
 
@@ -129,10 +228,23 @@ export default function CharacterSheet({
     return m;
   }, [char.attributes]);
 
+  // ── Helper to calculate skill bonus with expertise support ──
+  const getSkillBonus = useCallback((skillKey) => {
+    const skill = SKILLS[skillKey];
+    if (!skill) return 0;
+    const abilityMod = mods[skill.ability];
+    const skillData = char.skills?.[skillKey];
+    if (skillData?.expertise) {
+      return abilityMod + (profBonus * 2); // Expertise = double proficiency
+    } else if (skillData?.proficient) {
+      return abilityMod + profBonus;
+    }
+    return abilityMod;
+  }, [char.skills, mods, profBonus]);
+
   const passivePerception = useMemo(() => {
-    const perceptionMod = mods.wis + (char.skills?.perception?.proficient ? profBonus : 0);
-    return 10 + perceptionMod;
-  }, [mods.wis, char.skills?.perception?.proficient, profBonus]);
+    return 10 + getSkillBonus('perception');
+  }, [getSkillBonus]);
 
   const hpPct = useMemo(() => {
     const total = (char.hp?.max || 1) + (char.hp?.temp || 0);
@@ -166,9 +278,7 @@ export default function CharacterSheet({
 
   const rollSkill = (skillKey) => {
     const skill = SKILLS[skillKey];
-    const abilityMod = mods[skill.ability];
-    const prof = char.skills?.[skillKey]?.proficient ? profBonus : 0;
-    const total = abilityMod + prof;
+    const total = getSkillBonus(skillKey);
     onRollDice?.({
       type: 'skill_check',
       notation: `1d20${total >= 0 ? '+' : ''}${total}`,
@@ -336,6 +446,55 @@ export default function CharacterSheet({
         </div>
       </div>
 
+      {/* Experience Points (XP) */}
+      <div className="cs-section">
+        <div className="cs-section-title">✨ Experiência (XP)</div>
+        {(() => {
+          const xpProgress = getXpProgress(char.level || 1, char.xp || 0);
+          return (
+            <div className="cs-xp-container">
+              <div className="cs-xp-header">
+                <div className="cs-xp-values">
+                  {canEdit ? (
+                    <input
+                      type="number"
+                      min="0"
+                      value={char.xp || 0}
+                      onChange={e => update({ xp: Math.max(0, parseInt(e.target.value) || 0) })}
+                      style={{ width: 80, textAlign: 'center', background: 'transparent', border: '1px solid rgba(226,183,20,0.3)', borderRadius: 4, color: '#e2b714', fontSize: '1rem', fontWeight: 600, outline: 'none' }}
+                    />
+                  ) : (
+                    <span style={{ color: '#e2b714', fontWeight: 600, fontSize: '1rem' }}>{char.xp || 0}</span>
+                  )}
+                  <span style={{ color: '#666', fontSize: '0.85rem' }}> / {xpProgress.max} XP</span>
+                </div>
+                {!xpProgress.isMaxLevel && (
+                  <span style={{ color: '#8888aa', fontSize: '0.75rem' }}>
+                    Próximo nível: {xpProgress.max - (char.xp || 0)} XP restantes
+                  </span>
+                )}
+                {xpProgress.isMaxLevel && (
+                  <span style={{ color: '#51cf66', fontSize: '0.75rem' }}>Nível Máximo!</span>
+                )}
+              </div>
+              <div className="cs-xp-bar">
+                <div 
+                  className="cs-xp-fill" 
+                  style={{ 
+                    width: `${xpProgress.percent}%`, 
+                    background: 'linear-gradient(90deg, #e2b714, #ffd43b)' 
+                  }} 
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#666', marginTop: 2 }}>
+                <span>Nv. {char.level || 1}</span>
+                {!xpProgress.isMaxLevel && <span>Nv. {(char.level || 1) + 1}</span>}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Ability Scores Preview */}
       <div className="cs-section">
         <div className="cs-section-title">⚡ Atributos</div>
@@ -357,6 +516,176 @@ export default function CharacterSheet({
           Restantes: <strong style={{ color: '#e2b714' }}>{(char.hitDice?.total || char.level || 1) - (char.hitDice?.used || 0)}</strong> / {char.hitDice?.total || char.level || 1}
         </div>
       </div>
+
+      {/* Estado do Personagem */}
+      <div className="cs-section cs-character-state">
+        <div className="cs-section-title">💀 Estado do Personagem</div>
+        
+        {/* Death Saves */}
+        <div className="cs-death-saves">
+          <div className="cs-death-saves-label">Salvaguardas contra Morte</div>
+          <div className="cs-death-saves-row">
+            <div className="cs-death-saves-group">
+              <span className="cs-death-label success">Sucessos</span>
+              <div className="cs-death-checks">
+                {[0, 1, 2].map(i => (
+                  <button
+                    key={i}
+                    className={`cs-death-check success ${i < (char.deathSaves?.successes || 0) ? 'filled' : ''}`}
+                    onClick={() => {
+                      if (!canEdit) return;
+                      const current = char.deathSaves?.successes || 0;
+                      const newVal = i < current ? i : i + 1;
+                      update({ deathSaves: { ...char.deathSaves, successes: Math.min(3, newVal) } });
+                    }}
+                    title={`Sucesso ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="cs-death-saves-group">
+              <span className="cs-death-label failure">Falhas</span>
+              <div className="cs-death-checks">
+                {[0, 1, 2].map(i => (
+                  <button
+                    key={i}
+                    className={`cs-death-check failure ${i < (char.deathSaves?.failures || 0) ? 'filled' : ''}`}
+                    onClick={() => {
+                      if (!canEdit) return;
+                      const current = char.deathSaves?.failures || 0;
+                      const newVal = i < current ? i : i + 1;
+                      update({ deathSaves: { ...char.deathSaves, failures: Math.min(3, newVal) } });
+                    }}
+                    title={`Falha ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+            {canEdit && (char.deathSaves?.successes > 0 || char.deathSaves?.failures > 0) && (
+              <button
+                className="cs-btn-small"
+                onClick={() => update({ deathSaves: { successes: 0, failures: 0 } })}
+                title="Resetar"
+                style={{ marginLeft: 8 }}
+              >
+                ↺
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Concentração */}
+        <div className="cs-concentration">
+          <label className="cs-concentration-toggle">
+            <input
+              type="checkbox"
+              checked={char.concentration?.active || false}
+              onChange={() => canEdit && update({
+                concentration: {
+                  ...char.concentration,
+                  active: !char.concentration?.active,
+                  spell: !char.concentration?.active ? char.concentration?.spell : ''
+                }
+              })}
+              disabled={!canEdit}
+            />
+            <span className="cs-concentration-label">🔮 Concentrando</span>
+          </label>
+          {char.concentration?.active && (
+            <input
+              type="text"
+              className="cs-concentration-spell"
+              value={char.concentration?.spell || ''}
+              onChange={e => canEdit && update({
+                concentration: { ...char.concentration, spell: e.target.value }
+              })}
+              placeholder="Nome da magia..."
+              disabled={!canEdit}
+            />
+          )}
+        </div>
+
+        {/* Condições */}
+        <div className="cs-conditions">
+          <div className="cs-conditions-label">Condições Ativas</div>
+          <div className="cs-conditions-grid">
+            {DND_CONDITIONS.map(cond => {
+              const isActive = (char.conditions || []).includes(cond.id);
+              return (
+                <button
+                  key={cond.id}
+                  className={`cs-condition-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    if (!canEdit) return;
+                    const currentConditions = char.conditions || [];
+                    const newConditions = isActive
+                      ? currentConditions.filter(c => c !== cond.id)
+                      : [...currentConditions, cond.id];
+                    update({ conditions: newConditions });
+                  }}
+                  title={cond.name}
+                >
+                  <span className="cs-condition-icon">{cond.icon}</span>
+                  <span className="cs-condition-name">{cond.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Rest Buttons */}
+      {canEdit && (
+        <div className="cs-section">
+          <div className="cs-section-title">🛌 Descanso</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div className="cs-rest-card" style={{ flex: 1, minWidth: 140 }}>
+              <button
+                className="cs-rest-btn-card"
+                onClick={shortRest}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 8,
+                  background: 'linear-gradient(135deg, #ff922b 0%, #fd7e14 100%)',
+                  border: 'none', cursor: 'pointer', color: '#fff',
+                  fontWeight: 600, fontSize: '0.85rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  boxShadow: '0 2px 8px rgba(255,146,43,0.3)',
+                  transition: 'transform 0.1s, box-shadow 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(255,146,43,0.4)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(255,146,43,0.3)'; }}
+              >
+                ☀️ Descanso Curto
+              </button>
+              <div style={{ marginTop: 6, fontSize: '0.65rem', color: '#888', lineHeight: 1.4 }}>
+                <strong>1 hora.</strong> Usa Dados de Vida para recuperar HP. Restaura habilidades de descanso curto (ex: Ação Ardilosa, Fôlego).
+              </div>
+            </div>
+            <div className="cs-rest-card" style={{ flex: 1, minWidth: 140 }}>
+              <button
+                className="cs-rest-btn-card"
+                onClick={longRest}
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 8,
+                  background: 'linear-gradient(135deg, #7950f2 0%, #845ef7 100%)',
+                  border: 'none', cursor: 'pointer', color: '#fff',
+                  fontWeight: 600, fontSize: '0.85rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  boxShadow: '0 2px 8px rgba(121,80,242,0.3)',
+                  transition: 'transform 0.1s, box-shadow 0.1s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(121,80,242,0.4)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(121,80,242,0.3)'; }}
+              >
+                🌙 Descanso Longo
+              </button>
+              <div style={{ marginTop: 6, fontSize: '0.65rem', color: '#888', lineHeight: 1.4 }}>
+                <strong>8 horas.</strong> Recupera todo HP, metade dos Dados de Vida e todos os espaços de magia.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -410,22 +739,74 @@ export default function CharacterSheet({
       {/* Skills */}
       <div className="cs-section">
         <div className="cs-section-title">🎯 Perícias</div>
+        {canEdit && (
+          <div className="cs-skill-legend" style={{ fontSize: '0.65rem', color: '#666', marginBottom: 6, display: 'flex', gap: 12 }}>
+            <span>◯ = Não treinado</span>
+            <span style={{ color: '#51cf66' }}>● = Proficiente</span>
+            <span style={{ color: '#e2b714' }}>★ = Expertise (2x)</span>
+          </div>
+        )}
         {Object.entries(SKILLS).map(([key, skill]) => {
-          const prof = char.skills?.[key]?.proficient;
-          const total = mods[skill.ability] + (prof ? profBonus : 0);
+          const skillData = char.skills?.[key] || {};
+          const total = getSkillBonus(key);
+          const isExpert = skillData.expertise;
+          const isProf = skillData.proficient;
           return (
             <div key={key} className="cs-skill-row">
               {canEdit && (
-                <input
-                  type="checkbox"
-                  className="cs-skill-prof"
-                  checked={!!prof}
-                  onChange={() => update({ skills: { ...char.skills, [key]: { proficient: !prof } } })}
-                />
+                <div className="cs-skill-prof-group" style={{ display: 'flex', gap: 2 }}>
+                  <button
+                    className={`cs-skill-prof-btn ${isProf && !isExpert ? 'active' : ''}`}
+                    style={{
+                      width: 16, height: 16, borderRadius: '50%', border: '2px solid #51cf66',
+                      background: isProf && !isExpert ? '#51cf66' : 'transparent',
+                      cursor: 'pointer', fontSize: '0.6rem', color: isProf && !isExpert ? '#1a1a2e' : '#51cf66',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onClick={() => {
+                      if (!isProf) {
+                        update({ skills: { ...char.skills, [key]: { proficient: true, expertise: false } } });
+                      } else if (!isExpert) {
+                        update({ skills: { ...char.skills, [key]: { proficient: false, expertise: false } } });
+                      } else {
+                        update({ skills: { ...char.skills, [key]: { proficient: true, expertise: false } } });
+                      }
+                    }}
+                    title="Proficiência"
+                  >
+                    {isProf && !isExpert ? '●' : '○'}
+                  </button>
+                  <button
+                    className={`cs-skill-exp-btn ${isExpert ? 'active' : ''}`}
+                    style={{
+                      width: 16, height: 16, borderRadius: '50%', border: '2px solid #e2b714',
+                      background: isExpert ? '#e2b714' : 'transparent',
+                      cursor: 'pointer', fontSize: '0.6rem', color: isExpert ? '#1a1a2e' : '#e2b714',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onClick={() => {
+                      if (isExpert) {
+                        update({ skills: { ...char.skills, [key]: { proficient: true, expertise: false } } });
+                      } else {
+                        update({ skills: { ...char.skills, [key]: { proficient: true, expertise: true } } });
+                      }
+                    }}
+                    title="Expertise (dobra bônus de proficiência)"
+                  >
+                    {isExpert ? '★' : '☆'}
+                  </button>
+                </div>
+              )}
+              {!canEdit && (isProf || isExpert) && (
+                <span style={{ color: isExpert ? '#e2b714' : '#51cf66', marginRight: 4 }}>
+                  {isExpert ? '★' : '●'}
+                </span>
               )}
               <span className="cs-skill-name">{skill.name}</span>
               <span className="cs-skill-ability">{ABILITIES[skill.ability]?.short}</span>
-              <span className={`cs-skill-bonus ${prof ? 'proficient' : ''}`}>{fmtMod(total)}</span>
+              <span className={`cs-skill-bonus ${isExpert ? 'expertise' : isProf ? 'proficient' : ''}`} style={{ color: isExpert ? '#e2b714' : isProf ? '#51cf66' : undefined }}>
+                {fmtMod(total)}
+              </span>
               <button className="cs-skill-roll" onClick={() => rollSkill(key)} title="Rolar">🎲</button>
             </div>
           );
@@ -433,6 +814,183 @@ export default function CharacterSheet({
         <div className="cs-passive">
           👁️ Percepção Passiva: <strong>{passivePerception}</strong>
         </div>
+      </div>
+
+      {/* Proficiencies */}
+      <div className="cs-section">
+        <div className="cs-section-title">🛡️ Proficiências</div>
+        
+        {/* Armor */}
+        <div className="cs-prof-group">
+          <div className="cs-prof-label" style={{ fontSize: '0.75rem', color: '#8888aa', marginBottom: 4 }}>Armaduras</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {ARMOR_TYPES.map(armor => {
+              const isProf = (char.proficiencies?.armor || []).includes(armor.id);
+              return (
+                <button
+                  key={armor.id}
+                  className={`cs-prof-chip ${isProf ? 'active' : ''}`}
+                  style={{
+                    padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem',
+                    border: `1px solid ${isProf ? '#51cf66' : '#444'}`,
+                    background: isProf ? 'rgba(81,207,102,0.2)' : 'transparent',
+                    color: isProf ? '#51cf66' : '#888',
+                    cursor: canEdit ? 'pointer' : 'default',
+                  }}
+                  onClick={() => {
+                    if (!canEdit) return;
+                    const current = char.proficiencies?.armor || [];
+                    const newArmor = isProf
+                      ? current.filter(a => a !== armor.id)
+                      : [...current, armor.id];
+                    update({ proficiencies: { ...char.proficiencies, armor: newArmor } });
+                  }}
+                >
+                  {armor.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Weapons */}
+        <div className="cs-prof-group" style={{ marginTop: 10 }}>
+          <div className="cs-prof-label" style={{ fontSize: '0.75rem', color: '#8888aa', marginBottom: 4 }}>Armas</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            {WEAPON_TYPES.map(weapon => {
+              const isProf = (char.proficiencies?.weapons || []).includes(weapon.id);
+              return (
+                <button
+                  key={weapon.id}
+                  className={`cs-prof-chip ${isProf ? 'active' : ''}`}
+                  style={{
+                    padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem',
+                    border: `1px solid ${isProf ? '#51cf66' : '#444'}`,
+                    background: isProf ? 'rgba(81,207,102,0.2)' : 'transparent',
+                    color: isProf ? '#51cf66' : '#888',
+                    cursor: canEdit ? 'pointer' : 'default',
+                  }}
+                  onClick={() => {
+                    if (!canEdit) return;
+                    const current = char.proficiencies?.weapons || [];
+                    const newWeapons = isProf
+                      ? current.filter(w => w !== weapon.id)
+                      : [...current, weapon.id];
+                    update({ proficiencies: { ...char.proficiencies, weapons: newWeapons } });
+                  }}
+                >
+                  {weapon.name}
+                </button>
+              );
+            })}
+          </div>
+          {/* Custom weapons input */}
+          {canEdit && (
+            <div style={{ marginTop: 6 }}>
+              <input
+                type="text"
+                placeholder="Armas específicas (ex: Espada Longa, Besta de Mão)"
+                value={(char.proficiencies?.weapons || []).filter(w => !['simple', 'martial'].includes(w)).join(', ')}
+                onChange={e => {
+                  const baseWeapons = (char.proficiencies?.weapons || []).filter(w => ['simple', 'martial'].includes(w));
+                  const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                  update({ proficiencies: { ...char.proficiencies, weapons: [...baseWeapons, ...custom] } });
+                }}
+                style={{
+                  width: '100%', padding: '4px 8px', fontSize: '0.75rem',
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid #333',
+                  borderRadius: 4, color: '#ccc', outline: 'none',
+                }}
+              />
+            </div>
+          )}
+          {!canEdit && (char.proficiencies?.weapons || []).filter(w => !['simple', 'martial'].includes(w)).length > 0 && (
+            <div style={{ fontSize: '0.7rem', color: '#888', marginTop: 4 }}>
+              {(char.proficiencies?.weapons || []).filter(w => !['simple', 'martial'].includes(w)).join(', ')}
+            </div>
+          )}
+        </div>
+
+        {/* Tools */}
+        <div className="cs-prof-group" style={{ marginTop: 10 }}>
+          <div className="cs-prof-label" style={{ fontSize: '0.75rem', color: '#8888aa', marginBottom: 4 }}>Ferramentas</div>
+          {canEdit ? (
+            <input
+              type="text"
+              placeholder="Ferramentas de Ladrão, Ferramentas de Ferreiro, Kit de Herbalismo..."
+              value={(char.proficiencies?.tools || []).join(', ')}
+              onChange={e => {
+                const tools = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                update({ proficiencies: { ...char.proficiencies, tools } });
+              }}
+              style={{
+                width: '100%', padding: '4px 8px', fontSize: '0.75rem',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid #333',
+                borderRadius: 4, color: '#ccc', outline: 'none',
+              }}
+            />
+          ) : (
+            <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
+              {(char.proficiencies?.tools || []).length > 0 ? (char.proficiencies?.tools || []).join(', ') : <span style={{ color: '#666' }}>Nenhuma</span>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Languages */}
+      <div className="cs-section">
+        <div className="cs-section-title">🗣️ Idiomas</div>
+        {canEdit ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+              {COMMON_LANGUAGES.map(lang => {
+                const isKnown = (char.proficiencies?.languages || []).includes(lang);
+                return (
+                  <button
+                    key={lang}
+                    style={{
+                      padding: '2px 6px', borderRadius: 10, fontSize: '0.65rem',
+                      border: `1px solid ${isKnown ? '#7950f2' : '#333'}`,
+                      background: isKnown ? 'rgba(121,80,242,0.2)' : 'transparent',
+                      color: isKnown ? '#b197fc' : '#666',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      const current = char.proficiencies?.languages || [];
+                      const newLangs = isKnown
+                        ? current.filter(l => l !== lang)
+                        : [...current, lang];
+                      update({ proficiencies: { ...char.proficiencies, languages: newLangs } });
+                    }}
+                  >
+                    {lang}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              type="text"
+              placeholder="Outros idiomas (ex: Língua dos Mortos, Dialeto Racial)"
+              value={(char.proficiencies?.languages || []).filter(l => !COMMON_LANGUAGES.includes(l)).join(', ')}
+              onChange={e => {
+                const baseLangs = (char.proficiencies?.languages || []).filter(l => COMMON_LANGUAGES.includes(l));
+                const custom = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                update({ proficiencies: { ...char.proficiencies, languages: [...baseLangs, ...custom] } });
+              }}
+              style={{
+                width: '100%', padding: '4px 8px', fontSize: '0.75rem',
+                background: 'rgba(255,255,255,0.05)', border: '1px solid #333',
+                borderRadius: 4, color: '#ccc', outline: 'none',
+              }}
+            />
+          </>
+        ) : (
+          <div style={{ fontSize: '0.8rem', color: '#ccc' }}>
+            {(char.proficiencies?.languages || []).length > 0 
+              ? (char.proficiencies?.languages || []).join(', ') 
+              : <span style={{ color: '#666' }}>Nenhum</span>}
+          </div>
+        )}
       </div>
     </>
   );
@@ -707,8 +1265,20 @@ export default function CharacterSheet({
     };
 
     const addSpell = (lvl) => {
-      const levelSpells = [...(spells[lvl] || []), { name: '', prepared: false }];
+      const levelSpells = [...(spells[lvl] || []), { 
+        name: '', 
+        prepared: false, 
+        school: '', 
+        castingTime: '', 
+        range: '', 
+        components: '' 
+      }];
       update({ spells: { ...spells, [lvl]: levelSpells } });
+    };
+
+    const toggleSpellDetails = (lvl, idx) => {
+      const key = `${lvl}-${idx}`;
+      setExpandedSpells(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     const removeSpell = (lvl, idx) => {
@@ -754,33 +1324,186 @@ export default function CharacterSheet({
           return (
             <div key={lvl} className="cs-spell-group">
               <div className="cs-spell-group-title">{SPELL_LEVEL_NAMES[lvl]}</div>
-              {levelSpells.map((spell, i) => (
-                <div key={i} className="cs-spell-item">
-                  {lvl > 0 && (
-                    <input
-                      type="checkbox"
-                      className="cs-spell-prepared"
-                      checked={!!spell.prepared}
-                      onChange={() => canEdit && updateSpell(lvl, i, 'prepared', !spell.prepared)}
-                      title="Preparada"
-                    />
-                  )}
-                  <span className="cs-spell-name">
-                    {canEdit ? (
-                      <input
-                        value={spell.name || ''}
-                        onChange={e => updateSpell(lvl, i, 'name', e.target.value)}
-                        placeholder="Nome da magia..."
-                      />
-                    ) : (
-                      <span style={{ opacity: spell.prepared || lvl === 0 ? 1 : 0.5 }}>{spell.name}</span>
+              {levelSpells.map((spell, i) => {
+                const spellKey = `${lvl}-${i}`;
+                const isExpanded = expandedSpells[spellKey];
+                const hasDetails = spell.school || spell.castingTime || spell.range || spell.components;
+                
+                return (
+                  <div key={i} className="cs-spell-item-container">
+                    <div className="cs-spell-item">
+                      {lvl > 0 && (
+                        <input
+                          type="checkbox"
+                          className="cs-spell-prepared"
+                          checked={!!spell.prepared}
+                          onChange={() => canEdit && updateSpell(lvl, i, 'prepared', !spell.prepared)}
+                          title="Preparada"
+                        />
+                      )}
+                      <span className="cs-spell-name">
+                        {canEdit ? (
+                          <input
+                            value={spell.name || ''}
+                            onChange={e => updateSpell(lvl, i, 'name', e.target.value)}
+                            placeholder="Nome da magia..."
+                          />
+                        ) : (
+                          <span style={{ opacity: spell.prepared || lvl === 0 ? 1 : 0.5 }}>{spell.name}</span>
+                        )}
+                      </span>
+                      {/* School badge (compact) */}
+                      {spell.school && !isExpanded && (
+                        <span style={{ 
+                          fontSize: '0.6rem', 
+                          color: '#c77dff', 
+                          background: 'rgba(199,125,255,0.15)', 
+                          padding: '1px 6px', 
+                          borderRadius: 8,
+                          marginLeft: 4
+                        }}>
+                          {spell.school.substring(0, 3)}
+                        </span>
+                      )}
+                      {/* Expand/collapse button */}
+                      <button
+                        className="cs-btn-small"
+                        onClick={() => toggleSpellDetails(lvl, i)}
+                        style={{ 
+                          marginLeft: 4, 
+                          opacity: hasDetails || canEdit ? 1 : 0.4,
+                          fontSize: '0.7rem',
+                          padding: '2px 6px'
+                        }}
+                        title={isExpanded ? 'Ocultar detalhes' : 'Mostrar detalhes'}
+                      >
+                        {isExpanded ? '▲' : '▼'}
+                      </button>
+                      {canEdit && (
+                        <button className="cs-btn-small danger" onClick={() => removeSpell(lvl, i)}>✕</button>
+                      )}
+                    </div>
+                    
+                    {/* Expanded spell details */}
+                    {isExpanded && (
+                      <div className="cs-spell-details" style={{
+                        background: 'rgba(199,125,255,0.05)',
+                        border: '1px solid rgba(199,125,255,0.2)',
+                        borderRadius: 6,
+                        padding: 8,
+                        marginTop: 4,
+                        marginBottom: 8,
+                        marginLeft: lvl > 0 ? 24 : 0
+                      }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {/* School */}
+                          <div>
+                            <label style={{ fontSize: '0.65rem', color: '#8888aa', display: 'block', marginBottom: 2 }}>Escola</label>
+                            {canEdit ? (
+                              <select
+                                value={spell.school || ''}
+                                onChange={e => updateSpell(lvl, i, 'school', e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 6px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(199,125,255,0.3)',
+                                  borderRadius: 4,
+                                  color: '#c77dff',
+                                  outline: 'none'
+                                }}
+                              >
+                                <option value="">--</option>
+                                {SPELL_SCHOOLS.map(school => (
+                                  <option key={school} value={school}>{school}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span style={{ color: '#c77dff', fontSize: '0.8rem' }}>{spell.school || '-'}</span>
+                            )}
+                          </div>
+                          
+                          {/* Casting Time */}
+                          <div>
+                            <label style={{ fontSize: '0.65rem', color: '#8888aa', display: 'block', marginBottom: 2 }}>Tempo de Conjuração</label>
+                            {canEdit ? (
+                              <input
+                                type="text"
+                                value={spell.castingTime || ''}
+                                onChange={e => updateSpell(lvl, i, 'castingTime', e.target.value)}
+                                placeholder="1 ação"
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 6px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(199,125,255,0.3)',
+                                  borderRadius: 4,
+                                  color: '#ccc',
+                                  outline: 'none'
+                                }}
+                              />
+                            ) : (
+                              <span style={{ color: '#ccc', fontSize: '0.8rem' }}>{spell.castingTime || '-'}</span>
+                            )}
+                          </div>
+                          
+                          {/* Range */}
+                          <div>
+                            <label style={{ fontSize: '0.65rem', color: '#8888aa', display: 'block', marginBottom: 2 }}>Alcance</label>
+                            {canEdit ? (
+                              <input
+                                type="text"
+                                value={spell.range || ''}
+                                onChange={e => updateSpell(lvl, i, 'range', e.target.value)}
+                                placeholder="36m / 120ft"
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 6px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(199,125,255,0.3)',
+                                  borderRadius: 4,
+                                  color: '#ccc',
+                                  outline: 'none'
+                                }}
+                              />
+                            ) : (
+                              <span style={{ color: '#ccc', fontSize: '0.8rem' }}>{spell.range || '-'}</span>
+                            )}
+                          </div>
+                          
+                          {/* Components */}
+                          <div>
+                            <label style={{ fontSize: '0.65rem', color: '#8888aa', display: 'block', marginBottom: 2 }}>Componentes</label>
+                            {canEdit ? (
+                              <input
+                                type="text"
+                                value={spell.components || ''}
+                                onChange={e => updateSpell(lvl, i, 'components', e.target.value)}
+                                placeholder="V, S, M"
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 6px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(199,125,255,0.3)',
+                                  borderRadius: 4,
+                                  color: '#ccc',
+                                  outline: 'none'
+                                }}
+                              />
+                            ) : (
+                              <span style={{ color: '#ccc', fontSize: '0.8rem' }}>{spell.components || '-'}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </span>
-                  {canEdit && (
-                    <button className="cs-btn-small danger" onClick={() => removeSpell(lvl, i)}>✕</button>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
               {canEdit && (
                 <button className="cs-btn-small" onClick={() => addSpell(lvl)} style={{ marginTop: 4, fontSize: '0.7rem' }}>
                   + Adicionar {lvl === 0 ? 'Truque' : 'Magia'}
@@ -798,6 +1521,42 @@ export default function CharacterSheet({
   // ════════════════════════════════════════════
   const renderNotes = () => (
     <>
+      {/* Background/Antecedente */}
+      <div className="cs-section">
+        <div className="cs-section-title">📜 Antecedente (Background)</div>
+        <div style={{ marginBottom: 12 }}>
+          {canEdit ? (
+            <input
+              type="text"
+              value={char.background || ''}
+              onChange={e => update({ background: e.target.value })}
+              placeholder="Ex: Soldado, Nobre, Criminoso, Eremita..."
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                fontSize: '0.9rem',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(226,183,20,0.3)',
+                borderRadius: 6,
+                color: '#e2b714',
+                fontWeight: 500,
+                outline: 'none'
+              }}
+            />
+          ) : (
+            <span style={{ 
+              color: '#e2b714', 
+              fontSize: '1rem', 
+              fontWeight: 500,
+              display: 'block',
+              padding: '8px 0'
+            }}>
+              {char.background || 'Nenhum antecedente definido'}
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="cs-notes-grid">
         <div className="cs-note-box">
           <div className="cs-note-label">Traços de Personalidade</div>
@@ -923,6 +1682,29 @@ export default function CharacterSheet({
             <span className="cs-window-avatar">{char.avatarEmoji || '⚔️'}</span>
             <span className="cs-window-title">{char.name || 'Sem Nome'}</span>
             {isDM && isOtherCharacter && <span className="cs-window-dm-badge">👑 Mestre</span>}
+            {/* Status badges */}
+            {char.concentration?.active && (
+              <span className="cs-header-badge cs-badge-concentration" title={`Concentrando: ${char.concentration.spell || '?'}`}>
+                🔮 {char.concentration.spell || 'Conc.'}
+              </span>
+            )}
+            {(char.conditions || []).length > 0 && (
+              <div className="cs-header-conditions">
+                {(char.conditions || []).slice(0, 3).map(condId => {
+                  const cond = DND_CONDITIONS.find(c => c.id === condId);
+                  return cond ? (
+                    <span key={condId} className="cs-header-badge cs-badge-condition" title={cond.name}>
+                      {cond.icon}
+                    </span>
+                  ) : null;
+                })}
+                {(char.conditions || []).length > 3 && (
+                  <span className="cs-header-badge cs-badge-condition" title={(char.conditions || []).slice(3).map(id => DND_CONDITIONS.find(c => c.id === id)?.name).join(', ')}>
+                    +{(char.conditions || []).length - 3}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="cs-window-controls">
             {onMinimize && (
@@ -998,15 +1780,42 @@ export default function CharacterSheet({
                     <input value={char.race || ''} onChange={e => update({ race: e.target.value })} placeholder="Raça" style={{ width: 80 }} />
                     <span>·</span>
                     <input value={char.class || ''} onChange={e => update({ class: e.target.value })} placeholder="Classe" style={{ width: 80 }} />
+                    <input 
+                      value={char.subclass || ''} 
+                      onChange={e => update({ subclass: e.target.value })} 
+                      placeholder="Subclasse" 
+                      style={{ width: 90, marginLeft: 4, color: '#c77dff', fontStyle: 'italic' }} 
+                      title="Ex: Campeão, Círculo da Lua"
+                    />
                     <span>·</span>
                     <span>Nv.</span>
                     <input type="number" min="1" max="20" value={char.level || 1} onChange={e => update({ level: Math.max(1, Math.min(20, parseInt(e.target.value) || 1)) })} style={{ width: 36 }} />
                   </>
                 ) : (
-                  <span>{char.race} · {char.class} · Nv. {char.level}</span>
+                  <span>
+                    {char.race} · {char.class}
+                    {char.subclass && <span style={{ color: '#c77dff', fontStyle: 'italic' }}> - {char.subclass}</span>}
+                    {' '}· Nv. {char.level}
+                  </span>
                 )}
               </div>
             </div>
+          </div>
+          {/* Status badges no header */}
+          <div className="cs-header-status">
+            {char.concentration?.active && (
+              <span className="cs-header-badge cs-badge-concentration" title={`Concentrando: ${char.concentration.spell || '?'}`}>
+                🔮 {char.concentration.spell || 'Concentrando'}
+              </span>
+            )}
+            {(char.conditions || []).map(condId => {
+              const cond = DND_CONDITIONS.find(c => c.id === condId);
+              return cond ? (
+                <span key={condId} className="cs-header-badge cs-badge-condition" title={cond.name}>
+                  {cond.icon} {cond.name}
+                </span>
+              ) : null;
+            })}
           </div>
           <div className="cs-header-right">
             {isDM && isOtherCharacter && <span className="cs-dm-viewing-badge">👑 Editando como Mestre</span>}

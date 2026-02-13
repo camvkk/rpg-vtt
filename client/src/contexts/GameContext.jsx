@@ -58,6 +58,9 @@ const initialState = {
   // Journal
   journal: [],
 
+  // NPCs (DM created characters/NPCs with full sheets)
+  npcs: [],
+
   // Jukebox
   jukebox: {
     playlists: [],
@@ -364,6 +367,21 @@ function gameReducer(state, action) {
     case 'JOURNAL_LOADED':
       return { ...state, journal: action.payload };
 
+    // NPCs
+    case 'NPCS_LOADED':
+      return { ...state, npcs: action.payload };
+
+    case 'NPC_CREATED':
+      return { ...state, npcs: [...state.npcs, action.payload] };
+
+    case 'NPC_UPDATED': {
+      const updatedNpc = action.payload;
+      return { ...state, npcs: state.npcs.map(n => n.id === updatedNpc.id ? updatedNpc : n) };
+    }
+
+    case 'NPC_DELETED':
+      return { ...state, npcs: state.npcs.filter(n => n.id !== action.payload.npcId) };
+
     // Jukebox
     case 'JUKEBOX_PLAYLISTS':
       return { ...state, jukebox: { ...state.jukebox, playlists: action.payload } };
@@ -644,6 +662,11 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     socket.on('jukebox:play', (data) => dispatch({ type: 'JUKEBOX_PLAY', payload: data }));
     socket.on('jukebox:stop', () => dispatch({ type: 'JUKEBOX_STOP' }));
     socket.on('jukebox:volume', (data) => dispatch({ type: 'JUKEBOX_VOLUME', payload: data }));
+
+    // NPC events
+    socket.on('npc:created', (data) => dispatch({ type: 'NPC_CREATED', payload: data }));
+    socket.on('npc:updated', (data) => dispatch({ type: 'NPC_UPDATED', payload: data }));
+    socket.on('npc:deleted', (data) => dispatch({ type: 'NPC_DELETED', payload: data }));
 
     return () => {
       socket.removeAllListeners();
@@ -963,6 +986,50 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     jukeboxPlay: (trackData) => emit('jukebox:play', trackData),
     jukeboxStop: () => emit('jukebox:stop', {}),
     jukeboxVolume: (volume) => emit('jukebox:volume', { volume }),
+
+    // NPCs (DM management)
+    listNPCs: async () => {
+      try {
+        const res = await emit('npc:list', {});
+        if (res.success) {
+          dispatch({ type: 'NPCS_LOADED', payload: res.npcs });
+        }
+        return res;
+      } catch (error) {
+        console.error('Error listing NPCs:', error);
+        throw error;
+      }
+    },
+
+    createNPC: async (npcData) => {
+      try {
+        const res = await emit('npc:create', npcData);
+        return res;
+      } catch (error) {
+        console.error('Error creating NPC:', error);
+        throw error;
+      }
+    },
+
+    updateNPC: async (npcId, updates) => {
+      try {
+        const res = await emit('npc:update', { npcId, updates });
+        return res;
+      } catch (error) {
+        console.error('Error updating NPC:', error);
+        throw error;
+      }
+    },
+
+    deleteNPC: async (npcId) => {
+      try {
+        const res = await emit('npc:delete', { npcId });
+        return res;
+      } catch (error) {
+        console.error('Error deleting NPC:', error);
+        throw error;
+      }
+    },
 
     // UI (local only)
     setActiveTool: (tool) => dispatch({ type: 'SET_ACTIVE_TOOL', payload: tool }),
