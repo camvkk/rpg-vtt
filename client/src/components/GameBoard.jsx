@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useGame } from '../contexts/GameContext';
 import { WindowManagerProvider, useWindowManager } from '../contexts/WindowManagerContext';
 import MapCanvas from './MapCanvas';
@@ -1592,6 +1593,27 @@ function ToolbarMenu({ id, icon, label, items, openMenu, setOpenMenu, hasActive 
     setOpenMenu(isOpen ? null : id);
   };
 
+  // Render dropdown via portal to ensure it's above everything
+  const dropdownContent = isOpen && ReactDOM.createPortal(
+    <div className="gb-dropdown" style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}>
+      {items.map((item, i) => {
+        if (item.type === 'divider') return <div key={i} className="gb-dropdown-divider" />;
+        return (
+          <button
+            key={item.id}
+            className={`gb-dropdown-item ${item.active ? 'gb-dropdown-item-active' : ''}`}
+            onClick={item.onClick}
+          >
+            <span className="gb-dropdown-icon">{item.icon}</span>
+            <span className="gb-dropdown-label">{item.label}</span>
+            {item.active && <span className="gb-dropdown-check">●</span>}
+          </button>
+        );
+      })}
+    </div>,
+    document.body
+  );
+
   return (
     <div className="gb-menu-container">
       <button
@@ -1601,24 +1623,7 @@ function ToolbarMenu({ id, icon, label, items, openMenu, setOpenMenu, hasActive 
       >
         {icon} {label} <span className="gb-menu-arrow">{isOpen ? '▴' : '▾'}</span>
       </button>
-      {isOpen && (
-        <div className="gb-dropdown" style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left }}>
-          {items.map((item, i) => {
-            if (item.type === 'divider') return <div key={i} className="gb-dropdown-divider" />;
-            return (
-              <button
-                key={item.id}
-                className={`gb-dropdown-item ${item.active ? 'gb-dropdown-item-active' : ''}`}
-                onClick={item.onClick}
-              >
-                <span className="gb-dropdown-icon">{item.icon}</span>
-                <span className="gb-dropdown-label">{item.label}</span>
-                {item.active && <span className="gb-dropdown-check">●</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {dropdownContent}
     </div>
   );
 }
