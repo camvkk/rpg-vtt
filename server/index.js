@@ -660,8 +660,8 @@ app.get('/api/campaigns/:id/rules', async (req, res) => {
     }
 });
 
-// Health check endpoints
-app.get('/', (req, res) => {
+// Health check endpoint (moved to /health so / can serve frontend)
+app.get('/health', (req, res) => {
     res.json({
         status: 'healthy',
         service: 'RPG VTT Backend',
@@ -670,6 +670,21 @@ app.get('/', (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
+
+// Legacy health check - only if frontend not built
+const clientDistExists = fs.existsSync(path.join(__dirname, '..', 'client', 'dist', 'index.html'));
+if (!clientDistExists) {
+    app.get('/', (req, res) => {
+        res.json({
+            status: 'healthy',
+            service: 'RPG VTT Backend',
+            version: '1.0.0',
+            uptime: process.uptime(),
+            timestamp: new Date().toISOString(),
+            note: 'Frontend not built - access /health for health check'
+        });
+    });
+}
 
 app.get('/api/rooms', async (req, res) => {
     try {
