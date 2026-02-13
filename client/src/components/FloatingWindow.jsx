@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useWindowManager } from '../contexts/WindowManagerContext';
 import '../styles/FloatingWindow.css';
 
@@ -45,45 +45,45 @@ export default function FloatingWindow({
 
   const windowState = windows?.[windowId];
   
-  // Early return AFTER all hooks - this is safe as long as hooks are always called in same order
-  if (!windowState || !windowState.isOpen || windowState.isMinimized) {
-    return null;
-  }
-
-  // Calculate actual position (handle negative values for right-aligned)
-  const getActualPosition = () => {
+  // Memoize computed values (safe to use windowState here, just returns defaults if null)
+  const { actualPosition, actualSize, zIndex, minSize } = useMemo(() => {
+    if (!windowState) {
+      return {
+        actualPosition: { x: 100, y: 100 },
+        actualSize: { width: 320, height: 400 },
+        zIndex: 100,
+        minSize: { width: 200, height: 150 },
+      };
+    }
+    
     const pos = windowState.position || windowState.defaultPosition || { x: 100, y: 100 };
     const size = windowState.size || windowState.defaultSize || { width: 320, height: 400 };
     
     return {
-      x: pos.x < 0 ? window.innerWidth + pos.x - size.width : pos.x,
-      y: pos.y,
+      actualPosition: {
+        x: pos.x < 0 ? window.innerWidth + pos.x - size.width : pos.x,
+        y: pos.y,
+      },
+      actualSize: size,
+      zIndex: windowState.zIndex || 100,
+      minSize: windowState.minSize || { width: 200, height: 150 },
     };
-  };
-
-  const getActualSize = () => {
-    return windowState.size || windowState.defaultSize || { width: 320, height: 400 };
-  };
-
-  const actualPosition = getActualPosition();
-  const actualSize = getActualSize();
-  const zIndex = windowState.zIndex || 100;
+  }, [windowState]);
 
   // Constrain position to viewport
-  const constrainPosition = (x, y) => {
-    const size = getActualSize();
-    const maxX = window.innerWidth - 100; // Leave 100px visible
+  const constrainPosition = useCallback((x, y) => {
+    const maxX = window.innerWidth - 100;
     const maxY = window.innerHeight - 50;
-    const minX = -size.width + 100;
+    const minX = -actualSize.width + 100;
     const minY = 0;
     
     return {
       x: Math.max(minX, Math.min(x, maxX)),
       y: Math.max(minY, Math.min(y, maxY)),
     };
-  };
+  }, [actualSize.width]);
 
-  // Drag handlers
+  // Drag handlers - ALL useCallbacks BEFORE any early return
   const handleDragStart = useCallback((e) => {
     if (e.target.closest('button') || e.target.closest('input') || e.target.closest('textarea')) {
       return;
@@ -109,7 +109,7 @@ export default function FloatingWindow({
     const constrained = constrainPosition(newX, newY);
     
     updatePosition(windowId, constrained);
-  }, [isDragging, windowId, updatePosition]);
+  }, [isDragging, windowId, updatePosition, constrainPosition]);
 
   const handleDragEnd = useCallback(() => {
     setIsDragging(false);
@@ -122,41 +122,59 @@ export default function FloatingWindow({
     setIsResizing(true);
     focusWindow(windowId);
     
-    const size = getActualSize();
     resizeStart.current = {
       x: e.clientX,
       y: e.clientY,
-      width: size.width,
-      height: size.height,
+      width: actualSize.width,
+      height: actualSize.height,
     };
-  }, [windowId, focusWindow]);
+  }, [windowId, focusWindow, actualSize]);
 
   const handleResizeMove = useCallback((e) => {
     if (!isResizing) return;
     
     const deltaX = e.clientX - resizeStart.current.x;
     const deltaY = e.clientY - resizeStart.current.y;
-    const minSize = windowState.minSize || { width: 200, height: 150 };
     
     const newWidth = Math.max(minSize.width, resizeStart.current.width + deltaX);
     const newHeight = Math.max(minSize.height, resizeStart.current.height + deltaY);
     
     // Constrain to viewport
-    const pos = getActualPosition();
-    const maxWidth = window.innerWidth - pos.x - 20;
-    const maxHeight = window.innerHeight - pos.y - 20;
+    const maxWidth = window.innerWidth - actualPosition.x - 20;
+    const maxHeight = window.innerHeight - actualPosition.y - 20;
     
     updateSize(windowId, {
       width: Math.min(newWidth, maxWidth),
       height: Math.min(newHeight, maxHeight),
     });
-  }, [isResizing, windowId, updateSize, windowState.minSize]);
+  }, [isResizing, windowId, updateSize, minSize, actualPosition]);
 
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false);
   }, []);
 
-  // Global mouse events for drag/resize
+  // Handle close
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+    } else {
+      closeWindow(windowId);
+    }
+  }, [onClose, closeWindow, windowId]);
+
+  // Handle minimize
+  const handleMinimize = useCallback(() => {
+    minimizeWindow(windowId);
+  }, [minimizeWindow, windowId]);
+
+  // Handle focus on click
+  const handleFocus = useCallback(() => {
+    if (zIndex < topZIndex) {
+      focusWindow(windowId);
+    }
+  }, [zIndex, topZIndex, focusWindow, windowId]);
+
+  // Global mouse events for drag/resize - useEffects BEFORE early return
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleDragMove);
@@ -179,26 +197,10 @@ export default function FloatingWindow({
     }
   }, [isResizing, handleResizeMove, handleResizeEnd]);
 
-  // Handle close
-  const handleClose = () => {
-    if (onClose) {
-      onClose();
-    } else {
-      closeWindow(windowId);
-    }
-  };
-
-  // Handle minimize
-  const handleMinimize = () => {
-    minimizeWindow(windowId);
-  };
-
-  // Handle focus on click
-  const handleFocus = () => {
-    if (zIndex < topZIndex) {
-      focusWindow(windowId);
-    }
-  };
+  // ═══ EARLY RETURN - AFTER ALL HOOKS ═══
+  if (!windowState || !windowState.isOpen || windowState.isMinimized) {
+    return null;
+  }
 
   return (
     <div
