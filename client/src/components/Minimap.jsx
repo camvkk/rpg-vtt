@@ -76,8 +76,8 @@ export default function Minimap({ viewRef, pixiRef, onNavigate }) {
       onClick={handleClick}
       style={{
         position: 'absolute',
-        bottom: 90, // Above the dice roller button
-        right: 12,
+        bottom: 12,
+        left: 356, // After left panel (320px + margin)
         width: MINIMAP_SIZE,
         height: MINIMAP_SIZE,
         border: '1px solid var(--color-border)',
