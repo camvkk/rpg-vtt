@@ -110,9 +110,12 @@ const CharacterWizard = ({
     return customSteps;
   })();
 
-  // Update wizard data
-  const updateWizardData = (updates) => {
-    setWizardData(prev => ({ ...prev, ...updates }));
+  // Update wizard data - supports both object and function updates
+  const updateWizardData = (updatesOrFn) => {
+    setWizardData(prev => {
+      const updates = typeof updatesOrFn === 'function' ? updatesOrFn(prev) : updatesOrFn;
+      return { ...prev, ...updates };
+    });
   };
 
   // Navigation functions
@@ -164,7 +167,8 @@ const CharacterWizard = ({
 
   const validateSkills = () => {
     if (!wizardData.classData) return false;
-    const required = wizardData.classData.skillsAvailable || 0;
+    // Support both D&D 5e (skillsAvailable) and custom systems (numSkillChoices)
+    const required = wizardData.classData.skillsAvailable || wizardData.classData.numSkillChoices || 0;
     return wizardData.selectedSkills.length >= required;
   };
 
@@ -172,7 +176,8 @@ const CharacterWizard = ({
     if (wizardData.startingGold) return true;
     if (!wizardData.classData) return false;
     
-    const equipment = wizardData.classData.startingEquipment;
+    // Support both D&D 5e (startingEquipment) and custom systems (equipmentChoices)
+    const equipment = wizardData.classData.startingEquipment || wizardData.classData.equipmentChoices;
     if (!equipment || !Array.isArray(equipment)) return true;
     
     // Must select exactly one equipment set
@@ -281,14 +286,17 @@ const CharacterWizard = ({
       });
     }
     
-    // Build equipment list
+    // Build equipment list - support both naming conventions
     const equipment = [];
     if (wizardData.startingGold) {
       equipment.push('Ouro Inicial: 4d4 × 10 po');
-    } else if (wizardData.selectedEquipmentSet && Array.isArray(wizardData.classData.startingEquipment)) {
-      const selectedSet = wizardData.classData.startingEquipment.find(s => s.set === wizardData.selectedEquipmentSet);
-      if (selectedSet && selectedSet.items) {
-        equipment.push(...selectedSet.items);
+    } else {
+      const equipmentSets = wizardData.classData.startingEquipment || wizardData.classData.equipmentChoices;
+      if (wizardData.selectedEquipmentSet && Array.isArray(equipmentSets)) {
+        const selectedSet = equipmentSets.find(s => s.set === wizardData.selectedEquipmentSet);
+        if (selectedSet && selectedSet.items) {
+          equipment.push(...selectedSet.items);
+        }
       }
     }
     
@@ -1198,12 +1206,16 @@ const CharacterWizard = ({
 
   // Step 5 - Skills (FILTERED BY CLASS)
   const Step5Skills = () => {
-    const classSkillsAvailable = wizardData.classData?.skillsAvailable || 0;
+    // Support both D&D 5e naming (classSkills/skillsAvailable) and custom systems (skillChoices/numSkillChoices)
+    const classData = wizardData.classData;
+    const classSkillsAvailable = classData?.skillsAvailable || classData?.numSkillChoices || 0;
     const backgroundSkills = wizardData.background ? 2 : 0;
-    const expertiseCount = wizardData.classData?.expertise || 0;
+    const expertiseCount = classData?.expertise || 0;
     
-    // Only show skills available for this class
-    const classSkillKeys = wizardData.classData?.classSkills || [];
+    // Only show skills available for this class - support both property names
+    // If no class-specific skills defined, show ALL skills (for custom systems)
+    const classSkillKeys = classData?.classSkills || classData?.skillChoices || null;
+    const hasClassSkillFilter = classSkillKeys && classSkillKeys.length > 0;
     const selectedCount = wizardData.selectedSkills.length;
     const requiredCount = classSkillsAvailable;
 
@@ -1219,7 +1231,11 @@ const CharacterWizard = ({
             🎯 Perícias
           </h2>
           <p style={{ color: 'var(--text-dim)' }}>
-            Escolha {requiredCount} perícias da lista disponível para sua classe ({wizardData.classData?.name || 'classe'}).
+            Escolha {requiredCount} perícia{requiredCount !== 1 ? 's' : ''} 
+            {hasClassSkillFilter 
+              ? ` da lista disponível para ${classData?.name || 'sua classe'}`
+              : ' de qualquer perícia'
+            }.
             {backgroundSkills > 0 && <><br/>Seu antecedente já concede perícias adicionais automaticamente.</>}
           </p>
           <div style={{ 
@@ -1236,8 +1252,9 @@ const CharacterWizard = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
           {Object.entries(ABILITIES).map(([abilityKey, ability]) => {
             // Filter to only show skills available for this class
+            // If no class skill filter defined, show all skills for that ability
             const abilitySkills = Object.entries(SKILLS).filter(([skillKey, skill]) => 
-              skill.ability === abilityKey && classSkillKeys.includes(skillKey)
+              skill.ability === abilityKey && (!hasClassSkillFilter || classSkillKeys.includes(skillKey))
             );
             if (abilitySkills.length === 0) return null;
 
@@ -1270,18 +1287,27 @@ const CharacterWizard = ({
                       <div
                         key={skillKey}
                         onClick={() => {
-                          if (isSelected) {
-                            // Unselect skill
-                            updateWizardData({
-                              selectedSkills: wizardData.selectedSkills.filter(s => s !== skillKey),
-                              expertiseSkills: wizardData.expertiseSkills.filter(s => s !== skillKey)
-                            });
-                          } else if (selectedCount < requiredCount) {
-                            // Select skill
-                            updateWizardData({
-                              selectedSkills: [...wizardData.selectedSkills, skillKey]
-                            });
-                          }
+                          // Use functional update to avoid stale closure issues
+                          updateWizardData(prev => {
+                            const isCurrentlySelected = prev.selectedSkills.includes(skillKey);
+                            const currentCount = prev.selectedSkills.length;
+                            // Support both D&D 5e and custom system naming
+                            const maxAllowed = prev.classData?.skillsAvailable || prev.classData?.numSkillChoices || 0;
+                            
+                            if (isCurrentlySelected) {
+                              // Unselect skill
+                              return {
+                                selectedSkills: prev.selectedSkills.filter(s => s !== skillKey),
+                                expertiseSkills: prev.expertiseSkills.filter(s => s !== skillKey)
+                              };
+                            } else if (currentCount < maxAllowed) {
+                              // Select skill
+                              return {
+                                selectedSkills: [...prev.selectedSkills, skillKey]
+                              };
+                            }
+                            return {}; // No change if at max and trying to add
+                          });
                         }}
                         style={{
                           padding: 'var(--spacing-md)',
@@ -1311,15 +1337,22 @@ const CharacterWizard = ({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (hasExpertise) {
-                                    updateWizardData({
-                                      expertiseSkills: wizardData.expertiseSkills.filter(s => s !== skillKey)
-                                    });
-                                  } else if (wizardData.expertiseSkills.length < expertiseCount) {
-                                    updateWizardData({
-                                      expertiseSkills: [...wizardData.expertiseSkills, skillKey]
-                                    });
-                                  }
+                                  // Use functional update to avoid stale closure issues
+                                  updateWizardData(prev => {
+                                    const hasExp = prev.expertiseSkills.includes(skillKey);
+                                    const maxExpertise = prev.classData?.expertise || 0;
+                                    
+                                    if (hasExp) {
+                                      return {
+                                        expertiseSkills: prev.expertiseSkills.filter(s => s !== skillKey)
+                                      };
+                                    } else if (prev.expertiseSkills.length < maxExpertise) {
+                                      return {
+                                        expertiseSkills: [...prev.expertiseSkills, skillKey]
+                                      };
+                                    }
+                                    return {};
+                                  });
                                 }}
                                 style={{
                                   fontSize: '0.7rem',
@@ -1364,7 +1397,8 @@ const CharacterWizard = ({
 
   // Step 6 - Equipment (SELECT ONE SET ONLY)
   const Step6Equipment = () => {
-    const equipmentSets = wizardData.classData?.startingEquipment || [];
+    // Support both D&D 5e (startingEquipment) and custom systems (equipmentChoices)
+    const equipmentSets = wizardData.classData?.startingEquipment || wizardData.classData?.equipmentChoices || [];
 
     return (
       <div style={{ padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
@@ -1547,12 +1581,14 @@ const CharacterWizard = ({
               <div
                 key={background.name}
                 onClick={() => {
-                  // Auto-add background skills
-                  const backgroundSkills = background.skillProficiencies;
-                  const newSelectedSkills = [...new Set([...wizardData.selectedSkills, ...backgroundSkills])];
-                  updateWizardData({ 
-                    background,
-                    selectedSkills: newSelectedSkills
+                  // Auto-add background skills using functional update
+                  updateWizardData(prev => {
+                    const backgroundSkills = background.skillProficiencies;
+                    const newSelectedSkills = [...new Set([...prev.selectedSkills, ...backgroundSkills])];
+                    return { 
+                      background,
+                      selectedSkills: newSelectedSkills
+                    };
                   });
                 }}
                 style={{
