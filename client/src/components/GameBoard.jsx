@@ -230,12 +230,13 @@ function GameBoardInner({ onLeaveRoom }) {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       switch (e.key.toLowerCase()) {
         case 's': actions.setActiveTool('select'); e.preventDefault(); break;
+        case 'm': actions.setActiveTool('measure'); e.preventDefault(); break;
+        case 'h': actions.setActiveTool('move-map'); e.preventDefault(); break;
         case 'f': if (isDM) { actions.setActiveTool('fog'); e.preventDefault(); } break;
         case 'w': if (isDM) { actions.setActiveTool('wall'); e.preventDefault(); } break;
         case 'r': if (isDM) { actions.setActiveTool('door'); e.preventDefault(); } break;
         case 't': if (isDM) { actions.setActiveTool('add-token'); e.preventDefault(); } break;
         case 'a': if (isDM) { actions.setActiveTool('aoe'); e.preventDefault(); } break;
-        case 'm': if (isDM) { actions.setActiveTool('measure'); e.preventDefault(); } break;
         case 'd': if (isDM) { actions.setActiveTool('draw'); e.preventDefault(); } break;
         case 'escape': actions.setActiveTool('select'); e.preventDefault(); break;
       }
@@ -357,6 +358,7 @@ function GameBoardInner({ onLeaveRoom }) {
             items={[
               { id: 'select', icon: '🏹', label: 'Selecionar (S)', type: 'tool', active: ui.activeTool === 'select', onClick: () => { actions.setActiveTool('select'); setOpenMenu(null); } },
               { id: 'measure', icon: '📏', label: 'Medir (M)', type: 'tool', active: ui.activeTool === 'measure', onClick: () => { actions.setActiveTool('measure'); setOpenMenu(null); } },
+              { id: 'move-map', icon: '✋', label: 'Mover Mapa (H)', type: 'tool', active: ui.activeTool === 'move-map', onClick: () => { actions.setActiveTool('move-map'); setOpenMenu(null); } },
               ...(isDM ? [
                 { type: 'divider' },
                 { id: 'draw', icon: '✏️', label: 'Desenhar (D)', type: 'tool', active: ui.activeTool === 'draw', onClick: () => { actions.setActiveTool('draw'); setOpenMenu(null); } },
@@ -365,7 +367,6 @@ function GameBoardInner({ onLeaveRoom }) {
                 { id: 'door', icon: '🚪', label: 'Porta (R)', type: 'tool', active: ui.activeTool === 'door', onClick: () => { actions.setActiveTool('door'); setOpenMenu(null); } },
                 { id: 'aoe', icon: '💥', label: 'AoE Magias (A)', type: 'tool', active: ui.activeTool === 'aoe', onClick: () => { actions.setActiveTool('aoe'); setOpenMenu(null); } },
                 { id: 'add-token', icon: '🎭', label: 'Criar Token (T)', type: 'tool', active: ui.activeTool === 'add-token' || !!tokenAwaitingPlacement, onClick: () => { setShowTokenCreator(true); setOpenMenu(null); } },
-                { id: 'move-map', icon: '🗺️', label: 'Mover Mapa', type: 'tool', active: ui.activeTool === 'move-map', onClick: () => { actions.setActiveTool('move-map'); setOpenMenu(null); } },
                 { type: 'divider' },
                 { id: 'toggle-fog', icon: fogEnabled ? '👁️' : '👁️‍🗨️', label: fogEnabled ? 'Desativar Névoa' : 'Ativar Névoa', type: 'action', onClick: () => { actions.toggleFog(!fogEnabled); setOpenMenu(null); } },
                 { id: 'reset-fog', icon: '🌑', label: 'Resetar Névoa', type: 'action', onClick: () => { if (confirm('Resetar toda a névoa? Tudo será coberto novamente.')) { actions.resetFog(); setOpenMenu(null); } } },
