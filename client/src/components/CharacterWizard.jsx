@@ -494,7 +494,9 @@ const CharacterWizard = ({
       gap: 'var(--spacing-sm)',
       padding: 'var(--spacing-lg)',
       borderBottom: '1px solid var(--border-color)',
-      background: 'var(--surface-light)'
+      background: 'var(--surface-light)',
+      overflowX: 'auto',
+      minWidth: 0
     }}>
       {steps.map((step, index) => (
         <React.Fragment key={step.id}>
@@ -514,11 +516,13 @@ const CharacterWizard = ({
               cursor: 'pointer',
               fontSize: '0.85rem',
               fontWeight: '600',
-              transition: 'all var(--transition-fast)'
+              transition: 'all var(--transition-fast)',
+              flexShrink: 0,
+              whiteSpace: 'nowrap'
             }}
           >
             <span>{step.icon}</span>
-            <span className="step-name">{step.name}</span>
+            <span className="step-name" style={{ whiteSpace: 'nowrap' }}>{step.name}</span>
             {step.id < currentStep && <span>✓</span>}
           </button>
           {index < steps.length - 1 && (
