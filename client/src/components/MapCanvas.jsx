@@ -293,24 +293,11 @@ export default function MapCanvas({
 
   // ── Update map offset when it changes ──
   useEffect(() => {
-    console.log('[MAP DEBUG] useEffect triggered', {
-      isDragging: mapDragRef.current.isDragging,
-      justFinished: mapDragRef.current.justFinished,
-      offsetX: map.offsetX,
-      offsetY: map.offsetY,
-      spriteX: mapSpriteRef.current?.x,
-      spriteY: mapSpriteRef.current?.y
-    });
-    
     // Skip if currently dragging or just finished (prevents visual snap-back during drag
     // and while waiting for server response)
-    if (mapDragRef.current.isDragging || mapDragRef.current.justFinished) {
-      console.log('[MAP DEBUG] SKIPPED - drag in progress');
-      return;
-    }
+    if (mapDragRef.current.isDragging || mapDragRef.current.justFinished) return;
     
     if (mapSpriteRef.current) {
-      console.log('[MAP DEBUG] APPLYING position', map.offsetX, map.offsetY);
       mapSpriteRef.current.position.set(map.offsetX || 0, map.offsetY || 0);
     }
   }, [map.offsetX, map.offsetY]);
@@ -1494,8 +1481,6 @@ export default function MapCanvas({
         const newOffsetX = mapDragRef.current.startOffset.x + dx / v.zoom;
         const newOffsetY = mapDragRef.current.startOffset.y + dy / v.zoom;
         
-        console.log('[MAP DEBUG] pointerup - saving offset', newOffsetX, newOffsetY);
-        
         // Mark as just finished BEFORE dispatch to prevent race condition
         mapDragRef.current.justFinished = true;
         mapDragRef.current.isDragging = false;
@@ -1506,10 +1491,7 @@ export default function MapCanvas({
         canvas.style.cursor = 'default';
         
         // Clear justFinished flag after a delay to allow server response to arrive
-        setTimeout(() => { 
-          console.log('[MAP DEBUG] clearing justFinished flag');
-          mapDragRef.current.justFinished = false; 
-        }, 500);
+        setTimeout(() => { mapDragRef.current.justFinished = false; }, 500);
       }
       
       // Finish ruler measurement
