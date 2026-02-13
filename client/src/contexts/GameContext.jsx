@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useState } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import { io } from 'socket.io-client';
 
 // ── State shape ──
@@ -401,6 +401,10 @@ const defaultServerUrl = (() => {
 export function GameProvider({ children, serverUrl = defaultServerUrl }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socketRef = useRef(null);
+  
+  // Ref to always have current state in memoized callbacks
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // ── Session persistence helpers ──
   const saveSessionData = useCallback((roomCode, playerName, isDM) => {
@@ -677,8 +681,8 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     }, 30000); // 30 second debounce
   }, [emit]);
 
-  // ── Actions ──
-  const actions = {
+  // ── Actions (memoized to prevent re-renders) ──
+  const actions = useMemo(() => ({
     createRoom: async (dmName, system = 'dnd5e') => {
       dispatch({ type: 'SET_LOADING', payload: true });
       try {
@@ -796,9 +800,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     updateCharacter: (characterData) => {
       dispatch({ type: 'CHARACTER_UPDATED', payload: characterData });
       
-      // Auto-save if in a campaign
-      if (state.campaign.id && state.player.name) {
-        saveCharacterDebounced(state.campaign.id, state.player.name, characterData);
+      // Auto-save if in a campaign (use ref to get current state)
+      const currentState = stateRef.current;
+      if (currentState.campaign.id && currentState.player.name) {
+        saveCharacterDebounced(currentState.campaign.id, currentState.player.name, characterData);
       }
     },
 
@@ -966,7 +971,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     toggleRightPanel: () => dispatch({ type: 'TOGGLE_RIGHT_PANEL' }),
     setAoEConfig: (config) => dispatch({ type: 'SET_AOE_CONFIG', payload: config }),
     clearError: () => dispatch({ type: 'SET_ERROR', payload: null }),
-  };
+  }), [emit, dispatch, saveSessionData, saveCharacterDebounced, getSessionData, clearSessionData]);
 
   return (
     <GameContext.Provider value={{ state, actions }}>
