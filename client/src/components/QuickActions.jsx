@@ -405,13 +405,6 @@ export default function QuickActions() {
         )}
       </div>
       
-      {/* Character Info Footer */}
-      <div className="qa-footer">
-        <span className="qa-char-name">{character.name}</span>
-        <span className="qa-char-class">
-          {character.class} {character.level}
-        </span>
-      </div>
     </div>
   );
 }

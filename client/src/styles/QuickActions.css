@@ -10,8 +10,8 @@
   left: 50%;
   transform: translateX(-50%);
   width: auto;
-  min-width: 380px;
-  max-width: min(600px, calc(100vw - 32px));
+  min-width: 400px;
+  max-width: min(750px, calc(100vw - 32px));
   background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
   border: 1px solid rgba(226, 183, 20, 0.3);
   border-radius: 16px;
@@ -20,7 +20,7 @@
     0 0 40px rgba(226, 183, 20, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
-  overflow: hidden;
+  overflow: visible;
   animation: slideUpFadeIn 0.3s ease-out;
 }
 
@@ -177,6 +177,7 @@
 /* ── Content Area ── */
 .qa-content {
   padding: 12px;
+  min-height: 80px;
   max-height: 250px;
   overflow-y: auto;
   overflow-x: hidden;
@@ -231,7 +232,7 @@
 /* ── Button Grid (Skills, Spells, etc) ── */
 .qa-button-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 6px;
 }
 
@@ -509,28 +510,7 @@
   color: #51cf66;
 }
 
-/* ── Footer ── */
-.qa-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border-top: 1px solid rgba(226, 183, 20, 0.1);
-}
-
-.qa-char-name {
-  font-family: 'Cinzel', serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #e2b714;
-}
-
-.qa-char-class {
-  font-size: 0.75rem;
-  color: #8888aa;
-}
+/* Footer removido - info redundante com a ficha */
 
 /* ═══════════════════════════════════════════════
    RESPONSIVE ADJUSTMENTS
