@@ -584,6 +584,7 @@ export function getProficiencyBonus(level) {
 
 // Calculate HP at level 1
 export function calculateLevel1HP(classData, conModifier) {
+  if (!classData?.hitDie) return 10 + conModifier; // Default to d10 if no class data
   const hitDieMax = parseInt(classData.hitDie.slice(1)); // Remove 'd' and get max value
   return hitDieMax + conModifier;
 }
