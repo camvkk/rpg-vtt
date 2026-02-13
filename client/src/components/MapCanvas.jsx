@@ -2050,17 +2050,22 @@ export default function MapCanvas({
       dragging = false;
       c.alpha = 1;
       c.zIndex = 0;
-      // Convert pixel position back to grid coords
+      // Convert pixel position back to grid coords (accounting for map offset)
       const _gs = gridSizeRef.current;
       const gt = gridTypeRef.current;
+      const offsetX = state.map?.offsetX || 0;
+      const offsetY = state.map?.offsetY || 0;
+      // Subtract map offset to get position relative to map, not viewport
+      const relX = c.x - offsetX;
+      const relY = c.y - offsetY;
       let gridX, gridY;
       if (gt === 'hex') {
-        const hex = pixelToHex(c.x, c.y, _gs);
+        const hex = pixelToHex(relX, relY, _gs);
         gridX = hex.col;
         gridY = hex.row;
       } else {
-        gridX = Math.round((c.x - _gs / 2) / _gs);
-        gridY = Math.round((c.y - _gs / 2) / _gs);
+        gridX = Math.round((relX - _gs / 2) / _gs);
+        gridY = Math.round((relY - _gs / 2) / _gs);
       }
       actions.moveToken(token.id, gridX, gridY);
       // Clear dragging ref AFTER moveToken so optimistic update happens first
@@ -2074,14 +2079,19 @@ export default function MapCanvas({
       // FIX: Also save position when releasing outside token bounds!
       const _gs = gridSizeRef.current;
       const gt = gridTypeRef.current;
+      const offsetX = state.map?.offsetX || 0;
+      const offsetY = state.map?.offsetY || 0;
+      // Subtract map offset to get position relative to map, not viewport
+      const relX = c.x - offsetX;
+      const relY = c.y - offsetY;
       let gridX, gridY;
       if (gt === 'hex') {
-        const hex = pixelToHex(c.x, c.y, _gs);
+        const hex = pixelToHex(relX, relY, _gs);
         gridX = hex.col;
         gridY = hex.row;
       } else {
-        gridX = Math.round((c.x - _gs / 2) / _gs);
-        gridY = Math.round((c.y - _gs / 2) / _gs);
+        gridX = Math.round((relX - _gs / 2) / _gs);
+        gridY = Math.round((relY - _gs / 2) / _gs);
       }
       actions.moveToken(token.id, gridX, gridY);
       setTimeout(() => { draggingTokenRef.current = null; }, 50);
@@ -2123,7 +2133,7 @@ export default function MapCanvas({
     });
 
     return c;
-  }, [actions, isDM, state.player.isDM]);
+  }, [actions, isDM, state.player.isDM, state.map]);
 
   // ── Sync tokens to Pixi ──
   useEffect(() => {
@@ -2180,9 +2190,12 @@ export default function MapCanvas({
       } else {
         pos = gridCenterToPixel(token.x || 0, token.y || 0, GRID_SIZE);
       }
-      sprite.position.set(pos.x, pos.y);
+      // Add map offset so tokens move with the map when it's repositioned
+      const offsetX = map.offsetX || 0;
+      const offsetY = map.offsetY || 0;
+      sprite.position.set(pos.x + offsetX, pos.y + offsetY);
     });
-  }, [tokens, createTokenSprite, GRID_SIZE, GRID_TYPE]);
+  }, [tokens, createTokenSprite, GRID_SIZE, GRID_TYPE, map.offsetX, map.offsetY]);
 
   // Minimap navigation
   const handleMinimapNavigate = useCallback((worldX, worldY) => {
