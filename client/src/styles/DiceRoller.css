@@ -18,7 +18,45 @@
   z-index: 1000;
   box-shadow: 0 4px 20px rgba(201, 168, 76, 0.3), inset 0 1px 0 rgba(255,255,255,0.1);
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.dice-toggle-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  border: 1px solid #c9a84c;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c9a84c;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.dice-toggle-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #c9a84c;
+}
+
+.dice-toggle-btn:hover .dice-toggle-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-4px);
+}
+
 .dice-toggle-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 30px rgba(201, 168, 76, 0.5);

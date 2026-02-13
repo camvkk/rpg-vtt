@@ -143,8 +143,14 @@ export default function DiceRoller() {
     <>
       {/* Toggle Button — rendered inline in right panel */}
       {!open && (
-        <button className="dice-toggle-btn" onClick={() => setOpen(true)} title="Abrir Bandeja de Dados">
+        <button 
+          className="dice-toggle-btn" 
+          onClick={() => setOpen(true)} 
+          title="🎲 Rolar Dados 3D — Clique para abrir a bandeja de dados"
+          aria-label="Abrir bandeja de dados 3D"
+        >
           🎲
+          <span className="dice-toggle-tooltip">Dados 3D</span>
         </button>
       )}
 

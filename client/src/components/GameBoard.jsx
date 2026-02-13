@@ -69,6 +69,9 @@ function GameBoardInner({ onLeaveRoom }) {
   // Window manager for floating panels
   const { windows, toggleWindow, openWindow, closeWindow } = useWindowManager();
   
+  // Copy room code feedback
+  const [codeCopied, setCodeCopied] = useState(false);
+  
   const [showCharSheet, setShowCharSheet] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
@@ -343,7 +346,7 @@ function GameBoardInner({ onLeaveRoom }) {
       {/* ── Toolbar ── */}
       <div className="gb-toolbar" ref={menuRef}>
         <div className="gb-toolbar-left">
-          <button className="btn btn-ghost gb-toolbar-btn" onClick={onLeaveRoom}>
+          <button className="gb-leave-btn" onClick={onLeaveRoom}>
             ← Sair
           </button>
           <div className="gb-toolbar-divider" />
@@ -433,10 +436,36 @@ function GameBoardInner({ onLeaveRoom }) {
           {campaign.id ? (
             <div className="gb-campaign-info">
               <span className="gb-campaign-name">{campaign.name}</span>
-              <span className="gb-room-code">#{room.code}</span>
+              <div className="gb-room-code-container">
+                <span className="gb-room-code">#{room.code}</span>
+                <button 
+                  className={`gb-copy-code-btn ${codeCopied ? 'copied' : ''}`}
+                  onClick={() => {
+                    navigator.clipboard.writeText(room.code);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }}
+                  title={codeCopied ? 'Copiado!' : 'Copiar código'}
+                >
+                  {codeCopied ? '✓' : '📋'}
+                </button>
+              </div>
             </div>
           ) : (
-            <span className="gb-room-code">#{room.code}</span>
+            <div className="gb-room-code-container">
+              <span className="gb-room-code">#{room.code}</span>
+              <button 
+                className={`gb-copy-code-btn ${codeCopied ? 'copied' : ''}`}
+                onClick={() => {
+                  navigator.clipboard.writeText(room.code);
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 2000);
+                }}
+                title={codeCopied ? 'Copiado!' : 'Copiar código'}
+              >
+                {codeCopied ? '✓' : '📋'}
+              </button>
+            </div>
           )}
         </div>
 

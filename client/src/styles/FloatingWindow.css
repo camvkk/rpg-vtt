@@ -39,7 +39,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 6px 10px;
   background: linear-gradient(180deg, rgba(45, 55, 72, 0.6), rgba(45, 55, 72, 0.3));
   border-bottom: 1px solid #2d3748;
   cursor: grab;
@@ -67,12 +67,14 @@
 
 .fw-title {
   font-family: 'Cinzel', 'Georgia', serif;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #e2b714;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: none;
+  font-variant: normal;
 }
 
 .fw-controls {
@@ -82,11 +84,11 @@
 }
 
 .fw-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 4px;
   border: none;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -191,8 +193,8 @@
 .minimized-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
+  gap: 5px;
+  padding: 5px 12px;
   background: linear-gradient(135deg, rgba(45, 55, 72, 0.8), rgba(45, 55, 72, 0.5));
   border: 1px solid #4a5568;
   border-radius: 16px;
@@ -225,6 +227,8 @@
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: none;
+  font-variant: normal;
 }
 
 /* ═══════════════════════════════════════════════

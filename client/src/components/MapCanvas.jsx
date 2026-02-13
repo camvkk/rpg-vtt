@@ -313,7 +313,7 @@ export default function MapCanvas({
       const endCol = startCol + Math.ceil(w / v.zoom / horizSpacing) + 3;
       const endRow = startRow + Math.ceil(h / v.zoom / vertSpacing) + 3;
 
-      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.2 });
+      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.25 });
       for (let row = startRow; row < endRow; row++) {
         for (let col = startCol; col < endCol; col++) {
           const center = hexToPixel(col, row, gs);
@@ -333,7 +333,7 @@ export default function MapCanvas({
       const endX = startX + w / v.zoom + gs * 2;
       const endY = startY + h / v.zoom + gs * 2;
 
-      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.2 });
+      g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.25 });
       for (let x = startX; x < endX; x += gs) {
         g.moveTo(x, startY).lineTo(x, endY);
       }

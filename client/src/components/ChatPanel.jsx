@@ -718,19 +718,20 @@ const ChatPanel = ({
       {/* Messages Area */}
       <div style={{
         flex: 1,
-        padding: 'var(--spacing-md)',
+        padding: 'var(--spacing-sm)',
         overflowY: 'auto',
-        maxHeight: '400px'
+        maxHeight: '400px',
+        minHeight: messages.length === 0 ? '80px' : 'auto'
       }}>
         {messages.length === 0 ? (
           <div style={{
             textAlign: 'center',
             color: 'var(--text-dim)',
             fontStyle: 'italic',
-            padding: 'var(--spacing-lg)',
-            fontSize: '0.9rem'
+            padding: 'var(--spacing-sm)',
+            fontSize: '0.8rem'
           }}>
-            Bem-vindo à aventura! Digite uma mensagem ou use comandos de dados como /roll 1d20
+            💬 Use /roll 1d20 para dados
           </div>
         ) : (
           messages.map(renderMessage)
@@ -741,20 +742,20 @@ const ChatPanel = ({
       {/* Input Area */}
       <div style={{
         background: 'var(--surface-light)',
-        padding: 'var(--spacing-md)',
+        padding: 'var(--spacing-sm)',
         borderTop: '1px solid var(--border-color)'
       }}>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 'var(--spacing-xs)' }}>
           <input
             ref={inputRef}
             type="text"
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
-            placeholder={isConnected ? "Digite uma mensagem ou /roll 1d20..." : "Conectando..."}
+            placeholder={isConnected ? "/roll 1d20 ou mensagem..." : "Conectando..."}
             disabled={!isConnected}
             style={{
               flex: 1,
-              padding: 'var(--spacing-sm) var(--spacing-md)',
+              padding: '10px var(--spacing-md)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-md)',
               background: 'var(--surface-primary)',
@@ -767,7 +768,7 @@ const ChatPanel = ({
             type="submit"
             disabled={!isConnected || !messageInput.trim()}
             style={{
-              padding: 'var(--spacing-sm) var(--spacing-md)',
+              padding: '10px var(--spacing-md)',
               border: '1px solid var(--color-primary)',
               borderRadius: 'var(--radius-md)',
               background: 'var(--color-primary)',
@@ -782,14 +783,15 @@ const ChatPanel = ({
           </button>
         </form>
         
-        {/* Help text */}
+        {/* Help text - compact */}
         <div style={{
-          fontSize: '0.7rem',
+          fontSize: '0.65rem',
           color: 'var(--text-dim)',
-          marginTop: 'var(--spacing-sm)',
-          textAlign: 'center'
+          marginTop: '4px',
+          textAlign: 'center',
+          lineHeight: 1.3
         }}>
-          Comandos: /roll 1d20+5, /attack 1d20 Espada, /skill 1d20 Furtividade, /save 1d20 Constituição
+          /roll /attack /skill /save /damage
         </div>
       </div>
 
