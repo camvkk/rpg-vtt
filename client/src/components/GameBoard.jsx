@@ -500,6 +500,13 @@ function GameBoardInner({ onLeaveRoom }) {
           >
             ⚔️
           </button>
+          <button 
+            className={`btn btn-ghost gb-toolbar-btn ${windows.diceRoller?.isOpen && !windows.diceRoller?.isMinimized ? 'active' : ''}`} 
+            onClick={() => toggleWindow('diceRoller')}
+            title="Rolagem de Dados"
+          >
+            🎲
+          </button>
         </div>
       </div>
 
@@ -815,8 +822,15 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* DM Dashboard is now in FloatingWindow above */}
 
-      {/* Floating Dice Tray */}
-      <DiceRoller />
+      {/* Dice Roller */}
+      <FloatingWindow
+        windowId="diceRoller"
+        title="Rolagem de Dados"
+        icon="🎲"
+        resizable={true}
+      >
+        <DiceRoller />
+      </FloatingWindow>
 
       {/* Character Wizard Modal */}
       <CharacterWizard

@@ -46,10 +46,20 @@ const DEFAULT_WINDOWS = {
     defaultSize: { width: 1000, height: 700 },
     minSize: { width: 600, height: 400 },
   },
+  diceRoller: {
+    id: 'diceRoller',
+    title: 'Rolagem de Dados',
+    icon: '🎲',
+    isOpen: false,
+    isMinimized: false,
+    defaultPosition: { x: -380, y: 400 },
+    defaultSize: { width: 360, height: 300 },
+    minSize: { width: 300, height: 200 },
+  },
 };
 
 // Windows that should always start closed (regardless of localStorage)
-const ALWAYS_START_CLOSED = ['initiative', 'dmDashboard'];
+const ALWAYS_START_CLOSED = ['initiative', 'dmDashboard', 'diceRoller'];
 // Windows that should always start open (regardless of localStorage)
 const ALWAYS_START_OPEN = ['leftPanel', 'rightPanel'];
 
