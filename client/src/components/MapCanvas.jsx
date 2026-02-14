@@ -1697,63 +1697,44 @@ export default function MapCanvas({
     
     console.log('[Weather] Created overlay, stage children:', app.stage.children.length, 'overlay index:', app.stage.getChildIndex(weatherOverlay));
     
-    // DEBUG: Add visible test rectangle
-    const debugRect = new Sprite(PIXI.Texture.WHITE);
-    debugRect.width = 300;
-    debugRect.height = 300;
-    debugRect.tint = 0xff0000;
-    debugRect.alpha = 0.5;
-    debugRect.x = 50;
-    debugRect.y = 50;
-    weatherOverlay.addChild(debugRect);
-    console.log('[Weather] DEBUG: Added RED test sprite at (50,50) 300x300');
-    
-    // Create particles using Sprite (more reliable than Graphics in Pixi v8)
+    // Create particles - simplified, no animation for now
     for (let i = 0; i < particleCount; i++) {
       const particle = new Sprite(PIXI.Texture.WHITE);
       
+      // Fixed positions spread across screen
+      particle.x = (i % 15) * 70 + 20;
+      particle.y = Math.floor(i / 15) * 70 + 20;
+      
       if (weather === 'rain') {
-        // Rain: thin blue vertical streaks
-        particle.width = 2;
-        particle.height = 20;
-        particle.tint = 0x88ccff;
-        particle.alpha = 0.7;
-        particle.rotation = -0.3;
-        particle.x = Math.random() * screenW;
-        particle.y = Math.random() * screenH;
-        particle.vx = -4;
-        particle.vy = 14 + Math.random() * 6;
+        particle.width = 3;
+        particle.height = 25;
+        particle.tint = 0x66aaff;
+        particle.alpha = 0.8;
+        particle.rotation = -0.2;
+        particle.vx = -3;
+        particle.vy = 12 + Math.random() * 4;
       } else if (weather === 'snow') {
-        // Snow: small white squares (circles not possible with WHITE texture)
-        const size = 4 + Math.random() * 4;
-        particle.width = size;
-        particle.height = size;
+        particle.width = 8;
+        particle.height = 8;
         particle.tint = 0xffffff;
-        particle.alpha = 0.9;
-        particle.anchor.set(0.5);
-        particle.x = Math.random() * screenW;
-        particle.y = Math.random() * screenH;
-        particle.vx = Math.sin(i) * 0.8;
-        particle.vy = 1.5 + Math.random() * 2;
+        particle.alpha = 0.95;
+        particle.vx = Math.sin(i) * 0.5;
+        particle.vy = 1 + Math.random() * 1.5;
         particle.phase = Math.random() * Math.PI * 2;
       } else if (weather === 'fog') {
-        // Fog: large semi-transparent white blobs
-        const size = 150 + Math.random() * 200;
-        particle.width = size;
-        particle.height = size;
-        particle.tint = 0xaaaaaa;
-        particle.alpha = 0.15;
-        particle.anchor.set(0.5);
+        particle.width = 200;
+        particle.height = 200;
+        particle.tint = 0xcccccc;
+        particle.alpha = 0.2;
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
-        particle.vx = 0.3 + Math.random() * 0.4;
-        particle.vy = Math.sin(i) * 0.15;
+        particle.vx = 0.2;
+        particle.vy = 0;
         particle.phase = Math.random() * Math.PI * 2;
       }
       
-      // Debug first particle
-      if (i === 0) {
-        console.log('[Weather] First particle:', particle.x, particle.y, 'size:', particle.width, 'x', particle.height, 'visible:', particle.visible, 'alpha:', particle.alpha);
+      if (i < 3) {
+        console.log('[Weather] Particle', i, ':', particle.x, particle.y, particle.width, 'x', particle.height, 'alpha:', particle.alpha);
       }
       
       weatherOverlay.addChild(particle);
