@@ -426,6 +426,8 @@ const defaultServerUrl = (() => {
 export function GameProvider({ children, serverUrl = defaultServerUrl }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socketRef = useRef(null);
+  const localRollStartTimeRef = useRef(null); // Track when local player started a roll
+  const MIN_ROLL_DISPLAY_DELAY = 2200; // Match DiceRoller animation timing
   
   // Ref to always have current state in memoized callbacks
   const stateRef = useRef(state);
@@ -613,7 +615,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
         });
       });
       
-      dispatch({ type: 'DICE_RESULT', payload: {
+      const resultPayload = {
         id: data.id || Date.now().toString(),
         author: data.playerName,
         authorId: data.playerId,
@@ -631,7 +633,30 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
           formula: formula
         },
         timestamp: data.timestamp || new Date().toISOString(),
-      }});
+      };
+
+      // Check if this is OUR roll and we need to delay for animation sync
+      const isMyRoll = data.playerId === socketRef.current?.id;
+      const rollStartTime = localRollStartTimeRef.current;
+      
+      if (isMyRoll && rollStartTime) {
+        const elapsed = Date.now() - rollStartTime;
+        const remaining = Math.max(0, MIN_ROLL_DISPLAY_DELAY - elapsed);
+        
+        if (remaining > 0) {
+          // Delay showing in chat to sync with dice animation
+          setTimeout(() => {
+            dispatch({ type: 'DICE_RESULT', payload: resultPayload });
+            localRollStartTimeRef.current = null;
+          }, remaining);
+        } else {
+          dispatch({ type: 'DICE_RESULT', payload: resultPayload });
+          localRollStartTimeRef.current = null;
+        }
+      } else {
+        // Other player's roll - show immediately
+        dispatch({ type: 'DICE_RESULT', payload: resultPayload });
+      }
     });
 
     // Chat message actions
@@ -942,8 +967,10 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     },
 
     // Dice
-    rollDice: (notation, isSecret = false) =>
-      emit('dice:roll', { notation, isSecret }),
+    rollDice: (notation, isSecret = false) => {
+      localRollStartTimeRef.current = Date.now();
+      return emit('dice:roll', { notation, isSecret });
+    },
 
     // Initiative (legacy)
     rollInitiative: (playerId, modifier = 0) =>
