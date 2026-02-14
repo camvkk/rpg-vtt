@@ -1193,8 +1193,9 @@ export default function MapCanvas({
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
     const v = viewRef.current;
-    const { bg, grid, token, wall, lighting, fog, ui } = layersRef.current;
-    [bg, grid, token, wall, lighting, fog, ui].forEach(c => {
+    const { bg, grid, token, wall, lighting, fog, weather, ui } = layersRef.current;
+    // Include weather layer - particles counter-transform in their animation loop
+    [bg, grid, token, wall, lighting, fog, weather, ui].forEach(c => {
       if (!c) return;
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
@@ -1663,17 +1664,15 @@ export default function MapCanvas({
   
   useEffect(() => {
     const app = pixiRef.current;
-    if (!app) {
-      console.log('[Weather] No app');
+    const weatherLayer = layersRef.current.weather;
+    
+    if (!app || !weatherLayer) {
+      console.log('[Weather] No app or weatherLayer');
       return;
     }
     
-    // Remove any existing weather overlay
-    if (app._weatherOverlay) {
-      app.stage.removeChild(app._weatherOverlay);
-      app._weatherOverlay.destroy({ children: true });
-      app._weatherOverlay = null;
-    }
+    // Clear existing weather from the proper layer
+    weatherLayer.removeChildren();
     weatherParticlesRef.current = [];
     if (weatherAnimationRef.current) {
       app.ticker.remove(weatherAnimationRef.current);
@@ -1683,79 +1682,77 @@ export default function MapCanvas({
     console.log('[Weather] Setting weather to:', weather);
     if (!weather || weather === 'none') return;
     
-    const screenW = app.screen.width;
-    const screenH = app.screen.height;
+    // Get actual visible viewport size from the canvas element
+    const canvas = app.canvas;
+    const visibleW = canvas.clientWidth || 1200;
+    const visibleH = canvas.clientHeight || 800;
     
-    console.log('[Weather] Screen size:', screenW, 'x', screenH);
+    console.log('[Weather] Visible viewport:', visibleW, 'x', visibleH);
     
-    // Create overlay on top
-    const weatherOverlay = new Container();
-    weatherOverlay.label = 'weatherOverlay';
-    app.stage.addChild(weatherOverlay);
-    app._weatherOverlay = weatherOverlay;
+    // Weather layer should NOT be affected by pan/zoom - it's a screen overlay
+    // We need to counter the view transform applied in applyTransform
+    const particleCount = weather === 'fog' ? 40 : 200;
+    const particles = [];
     
-    // Use VIEWPORT dimensions (not canvas size which is larger)
-    // The canvas is 2221px but visible area is ~1060px
-    const visibleW = Math.min(screenW, 1200);
-    const visibleH = Math.min(screenH, 900);
-    const particleCount = weather === 'fog' ? 40 : 250;
-    
-    // Create weather particles
+    // Create weather particles using Graphics (more reliable in Pixi v8)
     for (let i = 0; i < particleCount; i++) {
-      const sprite = new Sprite(PIXI.Texture.WHITE);
+      const g = new Graphics();
+      const particle = { graphic: g, x: 0, y: 0, vx: 0, vy: 0, phase: 0, size: 0, baseAlpha: 1 };
       
       if (weather === 'rain') {
         // Rain: blue diagonal streaks
-        sprite.width = 4;
-        sprite.height = 40;
-        sprite.tint = 0x6699ff;
-        sprite.alpha = 0.5;
-        sprite.rotation = -0.2;
-        sprite.x = Math.random() * visibleW * 1.2;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = -3;
-        sprite.vy = 18 + Math.random() * 8;
+        particle.size = 3;
+        particle.x = Math.random() * visibleW * 1.3;
+        particle.y = Math.random() * visibleH;
+        particle.vx = -2;
+        particle.vy = 15 + Math.random() * 8;
+        particle.baseAlpha = 0.6;
+        
+        g.rect(0, 0, particle.size, 30).fill({ color: 0x6699ff, alpha: particle.baseAlpha });
+        g.rotation = -0.2;
       } else if (weather === 'snow') {
-        // Snow: white flakes
-        const size = 8 + Math.random() * 12;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.tint = 0xffffff;
-        sprite.alpha = 0.85;
-        sprite.x = Math.random() * visibleW;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = (Math.random() - 0.5) * 1.5;
-        sprite.vy = 2 + Math.random() * 3;
-        sprite.phase = Math.random() * Math.PI * 2;
+        // Snow: white circles
+        particle.size = 4 + Math.random() * 6;
+        particle.x = Math.random() * visibleW;
+        particle.y = Math.random() * visibleH;
+        particle.vx = (Math.random() - 0.5) * 1.5;
+        particle.vy = 1.5 + Math.random() * 2;
+        particle.phase = Math.random() * Math.PI * 2;
+        particle.baseAlpha = 0.8;
+        
+        g.circle(0, 0, particle.size).fill({ color: 0xffffff, alpha: particle.baseAlpha });
       } else if (weather === 'fog') {
-        // Fog: large translucent blobs
-        const size = 200 + Math.random() * 300;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.tint = 0xcccccc;
-        sprite.alpha = 0.25;
-        sprite.anchor.set(0.5);
-        sprite.x = Math.random() * visibleW;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = 0.4 + Math.random() * 0.4;
-        sprite.vy = (Math.random() - 0.5) * 0.3;
-        sprite.phase = Math.random() * Math.PI * 2;
+        // Fog: large translucent circles
+        particle.size = 150 + Math.random() * 200;
+        particle.x = Math.random() * visibleW;
+        particle.y = Math.random() * visibleH;
+        particle.vx = 0.3 + Math.random() * 0.3;
+        particle.vy = (Math.random() - 0.5) * 0.2;
+        particle.phase = Math.random() * Math.PI * 2;
+        particle.baseAlpha = 0.15;
+        
+        g.circle(0, 0, particle.size).fill({ color: 0xcccccc, alpha: particle.baseAlpha });
       }
+      
+      g.position.set(particle.x, particle.y);
       
       // Log first few particles for debugging
       if (i < 3) {
-        console.log('[Weather] Particle', i, 'at', sprite.x.toFixed(0), sprite.y.toFixed(0), 'size:', sprite.width, 'x', sprite.height);
+        console.log('[Weather] Particle', i, 'at', particle.x.toFixed(0), particle.y.toFixed(0), 'size:', particle.size);
       }
       
-      weatherOverlay.addChild(sprite);
-      weatherParticlesRef.current.push(sprite);
+      weatherLayer.addChild(g);
+      particles.push(particle);
     }
     
-    console.log('[Weather] Created', particleCount, weather, 'particles');
+    weatherParticlesRef.current = particles;
+    console.log('[Weather] Created', particleCount, weather, 'particles in weatherLayer');
     
-    // Animation loop
+    // Animation loop - counter the view transform to keep particles in screen space
     const animate = (delta) => {
-      weatherParticlesRef.current.forEach((p) => {
+      const v = viewRef.current;
+      
+      particles.forEach((p) => {
         if (weather === 'rain') {
           p.x += p.vx * delta;
           p.y += p.vy * delta;
@@ -1765,8 +1762,8 @@ export default function MapCanvas({
             p.y = -50;
           }
         } else if (weather === 'snow') {
-          p.phase += 0.025 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 1.2) * delta;
+          p.phase += 0.02 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 1) * delta;
           p.y += p.vy * delta;
           // Reset when off screen
           if (p.y > visibleH + 30) {
@@ -1776,17 +1773,25 @@ export default function MapCanvas({
           if (p.x < -30) p.x = visibleW + 30;
           if (p.x > visibleW + 30) p.x = -30;
         } else if (weather === 'fog') {
-          p.phase += 0.008 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.2) * delta;
-          p.y += (p.vy + Math.cos(p.phase) * 0.15) * delta;
+          p.phase += 0.006 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.15) * delta;
+          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
           // Fog alpha pulsing
-          p.alpha = 0.2 + Math.sin(p.phase * 0.5) * 0.08;
+          p.graphic.alpha = p.baseAlpha + Math.sin(p.phase * 0.5) * 0.05;
           // Wrap around
-          if (p.x > visibleW + 250) p.x = -250;
-          if (p.x < -250) p.x = visibleW + 250;
-          if (p.y > visibleH + 250) p.y = -250;
-          if (p.y < -250) p.y = visibleH + 250;
+          if (p.x > visibleW + 200) p.x = -200;
+          if (p.x < -200) p.x = visibleW + 200;
+          if (p.y > visibleH + 200) p.y = -200;
+          if (p.y < -200) p.y = visibleH + 200;
         }
+        
+        // Convert screen coords to world coords (counter the view transform)
+        // Screen position = (worldPos * zoom) + pan
+        // So: worldPos = (screenPos - pan) / zoom
+        const worldX = (p.x - v.panX) / v.zoom;
+        const worldY = (p.y - v.panY) / v.zoom;
+        p.graphic.position.set(worldX, worldY);
+        p.graphic.scale.set(1 / v.zoom); // Counter scale so particles stay same screen size
       });
     };
     
