@@ -160,7 +160,7 @@ export default function MapCanvas({
   const [contextMenu, setContextMenu] = useState(null); // { token, x, y }
 
   const { state, actions } = useGame();
-  const { tokens, fogAreas, fogEnabled, drawings, walls, doors, map, ui, aoeEffects, player, gridConfig } = state;
+  const { tokens, fogAreas, fogEnabled, drawings, walls, doors, map, ui, aoeEffects, player, gridConfig, weather } = state;
   const GRID_SIZE = gridConfig.gridSize || 40;
   const GRID_TYPE = gridConfig.gridType || 'square';
   const SNAP_ENABLED = gridConfig.snapEnabled !== false;
@@ -226,11 +226,12 @@ export default function MapCanvas({
       const wallLayer = new Container();
       const lightingLayer = new Container();
       const fogLayer = new Container();
+      const weatherLayer = new Container();
       const uiLayer = new Container();
 
       tokenLayer.sortableChildren = true;
-      app.stage.addChild(bgLayer, gridLayer, tokenLayer, wallLayer, lightingLayer, fogLayer, uiLayer);
-      layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, wall: wallLayer, lighting: lightingLayer, fog: fogLayer, ui: uiLayer };
+      app.stage.addChild(bgLayer, gridLayer, tokenLayer, wallLayer, lightingLayer, fogLayer, weatherLayer, uiLayer);
+      layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, wall: wallLayer, lighting: lightingLayer, fog: fogLayer, weather: weatherLayer, ui: uiLayer };
 
       drawGrid(gridLayer, app.screen.width, app.screen.height);
       setupInteractions(app);
@@ -1656,6 +1657,110 @@ export default function MapCanvas({
     }
   }, [ui.activeTool, clearAoEPreview]);
 
+  // ── Weather Particle System ──
+  const weatherParticlesRef = useRef([]);
+  const weatherAnimationRef = useRef(null);
+  
+  useEffect(() => {
+    const app = pixiRef.current;
+    const weatherLayer = layersRef.current.weather;
+    if (!app || !weatherLayer) return;
+    
+    // Clear previous weather
+    weatherLayer.removeChildren();
+    weatherParticlesRef.current = [];
+    if (weatherAnimationRef.current) {
+      app.ticker.remove(weatherAnimationRef.current);
+      weatherAnimationRef.current = null;
+    }
+    
+    if (!weather || weather === 'none') return;
+    
+    const screenW = app.screen.width;
+    const screenH = app.screen.height;
+    const particleCount = weather === 'fog' ? 20 : 80;
+    
+    // Create particles
+    for (let i = 0; i < particleCount; i++) {
+      const particle = new Graphics();
+      
+      if (weather === 'rain') {
+        // Rain: diagonal blue streaks
+        particle.moveTo(0, 0).lineTo(-3, 12).stroke({ width: 1.5, color: 0x6fa8dc, alpha: 0.6 });
+        particle.x = Math.random() * screenW * 2;
+        particle.y = Math.random() * screenH;
+        particle.vx = -3;
+        particle.vy = 12 + Math.random() * 4;
+      } else if (weather === 'snow') {
+        // Snow: white circles drifting
+        const size = 2 + Math.random() * 3;
+        particle.circle(0, 0, size).fill({ color: 0xffffff, alpha: 0.8 });
+        particle.x = Math.random() * screenW;
+        particle.y = Math.random() * screenH;
+        particle.vx = Math.sin(i) * 0.5;
+        particle.vy = 1 + Math.random() * 1.5;
+        particle.phase = Math.random() * Math.PI * 2;
+      } else if (weather === 'fog') {
+        // Fog: large semi-transparent blobs
+        const size = 100 + Math.random() * 150;
+        particle.circle(0, 0, size).fill({ color: 0xcccccc, alpha: 0.15 });
+        particle.x = Math.random() * screenW;
+        particle.y = Math.random() * screenH;
+        particle.vx = 0.2 + Math.random() * 0.3;
+        particle.vy = Math.sin(i) * 0.1;
+        particle.phase = Math.random() * Math.PI * 2;
+      }
+      
+      weatherLayer.addChild(particle);
+      weatherParticlesRef.current.push(particle);
+    }
+    
+    // Animation loop
+    const animate = (delta) => {
+      const v = viewRef.current;
+      const w = app.screen.width / v.zoom;
+      const h = app.screen.height / v.zoom;
+      
+      weatherParticlesRef.current.forEach((p, i) => {
+        if (weather === 'rain') {
+          p.x += p.vx * delta;
+          p.y += p.vy * delta;
+          // Reset when off screen
+          if (p.y > h + 20 || p.x < -20) {
+            p.x = Math.random() * w * 1.5;
+            p.y = -20;
+          }
+        } else if (weather === 'snow') {
+          p.phase += 0.02 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.3) * delta;
+          p.y += p.vy * delta;
+          if (p.y > h + 10) {
+            p.y = -10;
+            p.x = Math.random() * w;
+          }
+          if (p.x < -10) p.x = w + 10;
+          if (p.x > w + 10) p.x = -10;
+        } else if (weather === 'fog') {
+          p.phase += 0.005 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.1) * delta;
+          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
+          p.alpha = 0.1 + Math.sin(p.phase) * 0.05;
+          if (p.x > w + 200) p.x = -200;
+          if (p.x < -200) p.x = w + 200;
+        }
+      });
+    };
+    
+    app.ticker.add(animate);
+    weatherAnimationRef.current = animate;
+    
+    return () => {
+      if (app.ticker && weatherAnimationRef.current) {
+        app.ticker.remove(weatherAnimationRef.current);
+      }
+    };
+  }, [weather]);
+
   // ── Redraw grid when config changes ──
   useEffect(() => {
     const app = pixiRef.current;
@@ -1740,6 +1845,86 @@ export default function MapCanvas({
     circle.circle(0, 0, baseRadius).fill({ color: fillColor, alpha: fillAlpha }).stroke({ width: 2, color: 0xffffff });
     tokenContainer.addChild(circle);
     tokenRefs.baseElement = circle;
+
+    // ── Level-based Border Ring ──
+    const tokenLevel = token.level || token.hp?.level || 1;
+    let borderColor, borderAlpha, isLegendary;
+    
+    if (tokenLevel >= 17) {
+      // Legendary: Gold/Purple gradient effect
+      borderColor = 0xffd700;
+      borderAlpha = 1;
+      isLegendary = true;
+    } else if (tokenLevel >= 11) {
+      // Gold
+      borderColor = 0xffd700;
+      borderAlpha = 0.9;
+      isLegendary = false;
+    } else if (tokenLevel >= 5) {
+      // Silver
+      borderColor = 0xc0c0c0;
+      borderAlpha = 0.85;
+      isLegendary = false;
+    } else {
+      // Bronze
+      borderColor = 0xcd7f32;
+      borderAlpha = 0.8;
+      isLegendary = false;
+    }
+    
+    // Draw level border ring
+    const levelBorder = new Graphics();
+    levelBorder.circle(0, 0, baseRadius + 3).stroke({ width: 3, color: borderColor, alpha: borderAlpha });
+    tokenRefs.effectsContainer.addChild(levelBorder);
+    
+    // Legendary animated glow effect
+    if (isLegendary && pixiRef.current) {
+      const legendaryGlow = new Graphics();
+      legendaryGlow.circle(0, 0, baseRadius + 6).stroke({ width: 2, color: 0x9b59b6, alpha: 0.5 });
+      tokenRefs.effectsContainer.addChild(legendaryGlow);
+      
+      let glowPhase = 0;
+      const animateLegendary = (delta) => {
+        glowPhase += 0.03 * delta;
+        const pulse = 0.4 + 0.3 * Math.sin(glowPhase);
+        legendaryGlow.alpha = pulse;
+        // Alternate between gold and purple
+        const colorPhase = Math.sin(glowPhase * 0.5);
+        levelBorder.clear();
+        levelBorder.circle(0, 0, baseRadius + 3).stroke({ 
+          width: 3 + Math.sin(glowPhase) * 0.5, 
+          color: colorPhase > 0 ? 0xffd700 : 0x9b59b6, 
+          alpha: 0.9 
+        });
+      };
+      pixiRef.current.ticker.add(animateLegendary);
+      tokenRefs.animations.push(() => pixiRef.current?.ticker.remove(animateLegendary));
+    }
+    
+    // Level badge (small number in corner)
+    if (tokenLevel > 1) {
+      const badgeSize = 10;
+      const badgeX = baseRadius * 0.7;
+      const badgeY = -baseRadius * 0.7;
+      
+      const badge = new Graphics();
+      badge.circle(badgeX, badgeY, badgeSize).fill({ color: borderColor, alpha: 0.9 });
+      badge.circle(badgeX, badgeY, badgeSize).stroke({ width: 1, color: 0x000000, alpha: 0.5 });
+      tokenRefs.effectsContainer.addChild(badge);
+      
+      const levelText = new Text({
+        text: tokenLevel.toString(),
+        style: new TextStyle({
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 9,
+          fill: tokenLevel >= 11 ? 0x000000 : 0xffffff,
+          fontWeight: 'bold',
+        }),
+      });
+      levelText.anchor.set(0.5);
+      levelText.position.set(badgeX, badgeY);
+      tokenRefs.effectsContainer.addChild(levelText);
+    }
 
     const label = new Text({
       text: token.name?.[0]?.toUpperCase() || '?',

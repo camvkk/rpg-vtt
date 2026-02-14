@@ -1383,6 +1383,31 @@ io.on('connection', (socket) => {
             if (callback) callback({ success: false, error: error.message });
         }
     });
+
+    // Weather/Atmosphere
+    socket.on('weather:set', async (data, callback) => {
+        try {
+            const player = connectedPlayers.get(socket.id);
+            if (!player || !player.isDM) throw new Error('Only DM can change weather');
+            
+            const { weather } = data;
+            const validWeather = ['none', 'rain', 'snow', 'fog'];
+            if (!validWeather.includes(weather)) throw new Error('Invalid weather type');
+            
+            // Save to room state
+            await saveRoomState(player.roomId, 'weather', weather);
+            
+            console.log(`🌤️ Weather changed in room ${player.roomId}: ${weather}`);
+            
+            // Broadcast to room
+            io.to(player.roomId).emit('weather:update', { weather });
+            
+            if (callback) callback({ success: true });
+        } catch (error) {
+            console.error('Error setting weather:', error);
+            if (callback) callback({ success: false, error: error.message });
+        }
+    });
     
     // Fog of War
     socket.on('fog:reveal', async (data, callback) => {

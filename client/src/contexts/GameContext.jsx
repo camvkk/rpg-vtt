@@ -24,6 +24,9 @@ const initialState = {
   // Grid config
   gridConfig: { gridType: 'square', gridSize: 40, snapEnabled: true, gridVisible: true },
 
+  // Weather/Atmosphere
+  weather: 'none', // none, rain, snow, fog
+
   // Tokens (array for simplicity — Map doesn't serialize in reducer)
   tokens: [],
 
@@ -235,6 +238,10 @@ function gameReducer(state, action) {
 
     case 'MAP_OFFSET':
       return { ...state, map: { ...state.map, offsetX: action.payload.offsetX, offsetY: action.payload.offsetY } };
+
+    // Weather
+    case 'WEATHER_SET':
+      return { ...state, weather: action.payload };
 
     // Fog
     case 'FOG_REVEAL':
@@ -546,6 +553,9 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Map
     socket.on('map:update', (data) => dispatch({ type: 'MAP_UPDATE', payload: data }));
+
+    // Weather
+    socket.on('weather:update', (data) => dispatch({ type: 'WEATHER_SET', payload: data.weather }));
 
     // Fog
     socket.on('fog:reveal', (data) => dispatch({ type: 'FOG_REVEAL', payload: data }));
@@ -893,6 +903,12 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     setMapOffset: (offsetX, offsetY) => {
       dispatch({ type: 'MAP_OFFSET', payload: { offsetX, offsetY } });
       return emit('map:offset', { offsetX, offsetY });
+    },
+
+    // Weather
+    setWeather: (weather) => {
+      dispatch({ type: 'WEATHER_SET', payload: weather });
+      return emit('weather:set', { weather });
     },
 
     // Fog

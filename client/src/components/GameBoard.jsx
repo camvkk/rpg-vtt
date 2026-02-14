@@ -67,7 +67,7 @@ export default function GameBoardWithErrorBoundary(props) {
 
 function GameBoardInner({ onLeaveRoom }) {
   const { state, actions } = useGame();
-  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled, allCharacters } = state;
+  const { room, player, players, tokens, initiative, chat, ui, connected, campaign, character, systemData, aoeEffects, fogEnabled, allCharacters, weather } = state;
   const isDM = player.isDM;
   
   // Window manager for floating panels
@@ -439,6 +439,11 @@ function GameBoardInner({ onLeaveRoom }) {
               items={[
                 { id: 'dm-dashboard', icon: '👥', label: 'Painel do Grupo', onClick: () => { toggleWindow('dmDashboard'); setOpenMenu(null); }, active: windows.dmDashboard?.isOpen },
                 { id: 'system-import', icon: '📚', label: 'Importar Regras', onClick: () => { setShowSystemImporter(true); setOpenMenu(null); } },
+                { type: 'divider' },
+                { id: 'weather-none', icon: '☀️', label: 'Clima: Limpo', onClick: () => { actions.setWeather('none'); setOpenMenu(null); }, active: weather === 'none' || !weather },
+                { id: 'weather-rain', icon: '🌧️', label: 'Clima: Chuva', onClick: () => { actions.setWeather('rain'); setOpenMenu(null); }, active: weather === 'rain' },
+                { id: 'weather-snow', icon: '❄️', label: 'Clima: Neve', onClick: () => { actions.setWeather('snow'); setOpenMenu(null); }, active: weather === 'snow' },
+                { id: 'weather-fog', icon: '🌫️', label: 'Clima: Neblina', onClick: () => { actions.setWeather('fog'); setOpenMenu(null); }, active: weather === 'fog' },
               ]}
             />
           )}
