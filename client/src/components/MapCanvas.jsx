@@ -1736,7 +1736,7 @@ export default function MapCanvas({
           { type: 'scale', config: { scale: { list: [{ value: 0.15, time: 0 }, { value: 0.1, time: 1 }] } } },
           { type: 'color', config: { color: { list: [{ value: '6699ff', time: 0 }, { value: '4477dd', time: 1 }] } } },
           { type: 'moveSpeed', config: { speed: { list: [{ value: 1000, time: 0 }, { value: 1200, time: 1 }] } } },
-          { type: 'rotationStatic', config: { min: 75, max: 85 } },
+          { type: 'rotationStatic', config: { min: 165, max: 175 } },
           { type: 'spawnShape', config: { type: 'rect', data: { x: -visibleW / 2 - 100, y: 0, w: visibleW + 200, h: 20 } } },
           { type: 'textureSingle', config: { texture: particleTexture } },
         ],
