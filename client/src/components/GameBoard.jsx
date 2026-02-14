@@ -737,11 +737,11 @@ function GameBoardInner({ onLeaveRoom }) {
         }}
       />
       
-      {/* Dice Bubble - Floating dice roller */}
-      <DiceBubble initialPosition={{ x: Math.min(window.innerWidth - 340, window.innerWidth * 0.7), y: 80 }} />
+      {/* Dice Bubble - Floating dice roller (posição direita segura) */}
+      <DiceBubble initialPosition={{ x: Math.max(400, window.innerWidth - 380), y: 80 }} />
       
-      {/* Chat Bubble - Floating chat */}
-      <ChatBubble initialPosition={{ x: Math.min(window.innerWidth - 340, window.innerWidth * 0.7), y: 320 }} />
+      {/* Chat Bubble - Floating chat (abaixo do Dice) */}
+      <ChatBubble initialPosition={{ x: Math.max(400, window.innerWidth - 380), y: 340 }} />
       
       {/* Initiative Bubble - Floating initiative tracker */}
       <InitiativeBubble initialPosition={{ x: 16, y: 80 }} />
