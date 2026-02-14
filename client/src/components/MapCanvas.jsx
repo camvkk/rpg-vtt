@@ -1747,6 +1747,8 @@ export default function MapCanvas({
     
     weatherParticlesRef.current = particles;
     console.log('[Weather] Created', particleCount, weather, 'particles in weatherLayer');
+    console.log('[Weather] Layer visible:', weatherLayer.visible, 'alpha:', weatherLayer.alpha, 'children:', weatherLayer.children.length);
+    console.log('[Weather] Layer position:', weatherLayer.position.x, weatherLayer.position.y, 'scale:', weatherLayer.scale.x);
     
     // Animation loop - particles use screen coordinates directly (weatherLayer not transformed)
     const animate = (delta) => {
