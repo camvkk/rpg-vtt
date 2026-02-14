@@ -865,7 +865,7 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* DM Dashboard is now in FloatingWindow above */}
 
-      {/* Dice Roller */}
+      {/* Dice Roller (REPLACED BY DiceBubble)
       <FloatingWindow
         windowId="diceRoller"
         title="Rolagem de Dados"
@@ -874,6 +874,7 @@ function GameBoardInner({ onLeaveRoom }) {
       >
         <DiceRoller />
       </FloatingWindow>
+      */}
 
       {/* Character Wizard Modal */}
       <CharacterWizard

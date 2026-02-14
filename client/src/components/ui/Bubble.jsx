@@ -77,10 +77,12 @@ const Bubble = ({
 
   const handleDragEnd = (event, info) => {
     setIsDragging(false);
-    setPosition(constrainToViewport({
-      x: position.x + info.offset.x,
-      y: position.y + info.offset.y,
-    }));
+    // Usar info.point para posição absoluta (mais preciso)
+    const newPos = constrainToViewport({
+      x: info.point.x - (minWidth / 2),
+      y: info.point.y - 20, // offset do header
+    });
+    setPosition(newPos);
   };
 
   // Minimized icon view
@@ -92,6 +94,8 @@ const Bubble = ({
         exit={{ scale: 0.8, opacity: 0 }}
         drag
         dragMomentum={false}
+        dragElastic={0}
+        dragConstraints={{ left: 0, top: 0, right: window.innerWidth - 56, bottom: window.innerHeight - 56 }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         style={{
@@ -140,7 +144,8 @@ const Bubble = ({
       drag
       dragControls={dragControls}
       dragMomentum={false}
-      dragElastic={0.1}
+      dragElastic={0}
+      dragConstraints={{ left: 0, top: 0, right: window.innerWidth - minWidth, bottom: window.innerHeight - minHeight }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       dragListener={false}
