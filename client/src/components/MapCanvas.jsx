@@ -1193,9 +1193,9 @@ export default function MapCanvas({
   // ── Update view transform ──
   const applyTransform = useCallback(() => {
     const v = viewRef.current;
-    const { bg, grid, token, wall, lighting, fog, weather, ui } = layersRef.current;
-    // Include weather layer - particles counter-transform in their animation loop
-    [bg, grid, token, wall, lighting, fog, weather, ui].forEach(c => {
+    const { bg, grid, token, wall, lighting, fog, ui } = layersRef.current;
+    // Weather layer is NOT transformed - it's a screen overlay with fixed particles
+    [bg, grid, token, wall, lighting, fog, ui].forEach(c => {
       if (!c) return;
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
@@ -1748,17 +1748,15 @@ export default function MapCanvas({
     weatherParticlesRef.current = particles;
     console.log('[Weather] Created', particleCount, weather, 'particles in weatherLayer');
     
-    // Animation loop - counter the view transform to keep particles in screen space
+    // Animation loop - particles use screen coordinates directly (weatherLayer not transformed)
     const animate = (delta) => {
-      const v = viewRef.current;
-      
       particles.forEach((p) => {
         if (weather === 'rain') {
           p.x += p.vx * delta;
           p.y += p.vy * delta;
           // Reset when off screen
           if (p.y > visibleH + 50 || p.x < -50) {
-            p.x = Math.random() * visibleW * 1.3;
+            p.x = Math.random() * visibleW;
             p.y = -50;
           }
         } else if (weather === 'snow') {
@@ -1785,13 +1783,8 @@ export default function MapCanvas({
           if (p.y < -200) p.y = visibleH + 200;
         }
         
-        // Convert screen coords to world coords (counter the view transform)
-        // Screen position = (worldPos * zoom) + pan
-        // So: worldPos = (screenPos - pan) / zoom
-        const worldX = (p.x - v.panX) / v.zoom;
-        const worldY = (p.y - v.panY) / v.zoom;
-        p.graphic.position.set(worldX, worldY);
-        p.graphic.scale.set(1 / v.zoom); // Counter scale so particles stay same screen size
+        // Direct screen coordinates - no transform needed
+        p.graphic.position.set(p.x, p.y);
       });
     };
     
