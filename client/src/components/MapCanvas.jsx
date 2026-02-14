@@ -1721,47 +1721,25 @@ export default function MapCanvas({
     const visibleH = 800;
     const particleCount = weather === 'fog' ? 30 : 200;
     
-    // Create weather particles with FIXED visible coordinates
+    // Create weather particles - EXACTLY like markers for testing
+    const testColors = [0xff6600, 0x6600ff, 0x00ff66, 0xff0066, 0x0066ff];
     for (let i = 0; i < particleCount; i++) {
       const sprite = new Sprite(PIXI.Texture.WHITE);
       
-      if (weather === 'rain') {
-        // Rain drops - MUCH BIGGER for visibility
-        sprite.width = 8;
-        sprite.height = 50;
-        sprite.tint = 0x44aaff;
-        sprite.alpha = 0.85;
-        sprite.rotation = -0.25;
-        sprite.x = Math.random() * visibleW;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = -4;
-        sprite.vy = 18 + Math.random() * 6;
-      } else if (weather === 'snow') {
-        // Snowflakes - MUCH BIGGER
-        const size = 15 + Math.random() * 15;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.tint = 0xffffff;
-        sprite.alpha = 1;
-        sprite.x = Math.random() * visibleW;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = (Math.random() - 0.5) * 2;
-        sprite.vy = 2 + Math.random() * 2;
-        sprite.phase = Math.random() * Math.PI * 2;
-      } else if (weather === 'fog') {
-        // Fog - MUCH MORE VISIBLE
-        const size = 150 + Math.random() * 200;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.tint = 0xcccccc;
-        sprite.alpha = 0.4;
-        sprite.anchor.set(0.5);
-        sprite.x = Math.random() * visibleW;
-        sprite.y = Math.random() * visibleH;
-        sprite.vx = 0.3 + Math.random() * 0.3;
-        sprite.vy = (Math.random() - 0.5) * 0.2;
-        sprite.phase = Math.random() * Math.PI * 2;
-      }
+      // ALL particles: same as markers (60x60, alpha 0.9, solid color)
+      sprite.width = 40;
+      sprite.height = 40;
+      sprite.tint = testColors[i % 5];
+      sprite.alpha = 0.9;
+      
+      // Grid positions like the working test
+      sprite.x = 50 + (i % 20) * 45;
+      sprite.y = 100 + Math.floor(i / 20) * 45;
+      
+      // Store velocity for animation
+      sprite.vx = 0;
+      sprite.vy = weather === 'rain' ? 8 : (weather === 'snow' ? 2 : 0.3);
+      sprite.phase = Math.random() * Math.PI * 2;
       
       // Log first few particles for debugging
       if (i < 3) {
