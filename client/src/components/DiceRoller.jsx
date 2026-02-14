@@ -55,24 +55,17 @@ export default function DiceRoller() {
   const lastProcessedResultRef = useRef(null); // prevent processing same result twice
   const MIN_ROLL_ANIMATION_MS = 2200; // minimum time to show rolling animation
 
-  // Listen for dice results from server to sync with our pending roll
+  // Listen for dice results from server via latestDiceResult (immediate, before chat delay)
   useEffect(() => {
-    if (!rolling || !rollStartTime || !state.chat?.length) return;
+    if (!rolling || !rollStartTime || !state.latestDiceResult) return;
     
-    // Find dice results that arrived AFTER we started rolling
-    const diceResults = state.chat.filter(msg => msg.type === 'dice_result');
-    
-    // Get the most recent result
-    const recentDiceResult = diceResults[diceResults.length - 1];
-    
-    if (!recentDiceResult) return;
+    const recentDiceResult = state.latestDiceResult;
     
     // Check if this is a NEW result (not one we already processed)
     const resultId = recentDiceResult.id || recentDiceResult.timestamp;
     if (lastProcessedResultRef.current === resultId) return;
     
     // Check if this result arrived after we started rolling
-    // Use timestamp from result or assume it's new if no timestamp
     const resultTime = recentDiceResult.timestamp ? new Date(recentDiceResult.timestamp).getTime() : Date.now();
     
     // Allow 2 second window for server latency
@@ -148,7 +141,7 @@ export default function DiceRoller() {
       setRollStartTime(null);
       setHistory(prev => [rollData, ...prev].slice(0, 10));
     }
-  }, [state.chat, rolling, rollStartTime, tray, modifier, pendingRoll]);
+  }, [state.latestDiceResult, rolling, rollStartTime, tray, modifier, pendingRoll]);
 
   const addDie = useCallback((diceType) => {
     setTray(prev => [...prev, { ...diceType, id: ++trayIdRef.current }]);

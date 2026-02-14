@@ -92,6 +92,9 @@ const initialState = {
   // Loading / error
   loading: false,
   error: null,
+
+  // Latest dice result (for DiceRoller to observe immediately, before chat delay)
+  latestDiceResult: null,
 };
 
 // ── Reducer ──
@@ -323,6 +326,9 @@ function gameReducer(state, action) {
 
     case 'DICE_RESULT':
       return { ...state, chat: [...state.chat, action.payload] };
+
+    case 'DICE_RESULT_IMMEDIATE':
+      return { ...state, latestDiceResult: action.payload };
 
     // Initiative
     case 'INITIATIVE_UPDATE':
@@ -641,6 +647,9 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       const currentPlayerId = stateRef.current?.player?.id;
       const isMyRoll = data.playerId === currentPlayerId;
       const rollStartTime = localRollStartTimeRef.current;
+      
+      // Always dispatch immediate result for DiceRoller to use
+      dispatch({ type: 'DICE_RESULT_IMMEDIATE', payload: resultPayload });
       
       if (isMyRoll && rollStartTime) {
         const elapsed = Date.now() - rollStartTime;
