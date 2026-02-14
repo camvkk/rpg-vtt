@@ -4,6 +4,7 @@ import { useGame } from '../contexts/GameContext';
 import { WindowManagerProvider, useWindowManager } from '../contexts/WindowManagerContext';
 import MapCanvas from './MapCanvas';
 import DiceRoller from './DiceRoller';
+import DiceEffects from './DiceEffects';
 import ChatPanel from './ChatPanel';
 import Initiative from './Initiative';
 import InitiativeTracker from './InitiativeTracker';
@@ -847,6 +848,9 @@ function GameBoardInner({ onLeaveRoom }) {
         system={campaign.system || room.system || 'dnd5e'}
         systemData={systemData}
       />
+
+      {/* Epic Dice Effects Overlay */}
+      <DiceEffects />
     </div>
   );
 }
