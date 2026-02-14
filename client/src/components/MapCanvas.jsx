@@ -1693,37 +1693,42 @@ export default function MapCanvas({
     weatherLayer.scale.set(1);
     weatherLayer.position.set(0, 0);
     
-    console.log('[Weather] weatherLayer transform - scale:', weatherLayer.scale.x, 'pos:', weatherLayer.position.x, weatherLayer.position.y);
-    console.log('[Weather] weatherLayer parent:', weatherLayer.parent?.constructor?.name);
-    
-    // Create particles
+    // Create particles using Sprite (more reliable than Graphics in Pixi v8)
     for (let i = 0; i < particleCount; i++) {
-      const particle = new Graphics();
+      const particle = new Sprite(PIXI.Texture.WHITE);
       
       if (weather === 'rain') {
-        // Rain: diagonal blue streaks - more visible
-        particle.rect(0, 0, 3, 20); // Use rect instead of line for Pixi v8
-        particle.fill({ color: 0x88ccff, alpha: 0.8 });
-        particle.rotation = -0.3; // Slight diagonal
+        // Rain: thin blue vertical streaks
+        particle.width = 2;
+        particle.height = 20;
+        particle.tint = 0x88ccff;
+        particle.alpha = 0.7;
+        particle.rotation = -0.3;
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
         particle.vx = -4;
         particle.vy = 14 + Math.random() * 6;
       } else if (weather === 'snow') {
-        // Snow: white circles drifting - more visible
-        const size = 3 + Math.random() * 4;
-        particle.circle(0, 0, size);
-        particle.fill({ color: 0xffffff, alpha: 0.9 });
+        // Snow: small white squares (circles not possible with WHITE texture)
+        const size = 4 + Math.random() * 4;
+        particle.width = size;
+        particle.height = size;
+        particle.tint = 0xffffff;
+        particle.alpha = 0.9;
+        particle.anchor.set(0.5);
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
         particle.vx = Math.sin(i) * 0.8;
         particle.vy = 1.5 + Math.random() * 2;
         particle.phase = Math.random() * Math.PI * 2;
       } else if (weather === 'fog') {
-        // Fog: large semi-transparent blobs - more visible
+        // Fog: large semi-transparent white blobs
         const size = 150 + Math.random() * 200;
-        particle.circle(0, 0, size);
-        particle.fill({ color: 0xaaaaaa, alpha: 0.25 });
+        particle.width = size;
+        particle.height = size;
+        particle.tint = 0xaaaaaa;
+        particle.alpha = 0.15;
+        particle.anchor.set(0.5);
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
         particle.vx = 0.3 + Math.random() * 0.4;
@@ -1731,9 +1736,9 @@ export default function MapCanvas({
         particle.phase = Math.random() * Math.PI * 2;
       }
       
-      // Debug: log first particle position
+      // Debug first particle
       if (i === 0) {
-        console.log('[Weather] First particle pos:', particle.x, particle.y, 'bounds:', particle.getBounds());
+        console.log('[Weather] First particle:', particle.x, particle.y, 'size:', particle.width, 'x', particle.height, 'visible:', particle.visible, 'alpha:', particle.alpha);
       }
       
       weatherLayer.addChild(particle);
