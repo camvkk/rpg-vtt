@@ -1696,13 +1696,13 @@ export default function MapCanvas({
     
     // Create weather particles using Sprite with texture (more reliable than Graphics in Pixi v8)
     // Create a simple white texture for particles
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, 64, 64);
-    const whiteTexture = Texture.from(canvas);
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 64;
+    tempCanvas.height = 64;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.fillStyle = 'white';
+    tempCtx.fillRect(0, 0, 64, 64);
+    const whiteTexture = Texture.from(tempCanvas);
     
     for (let i = 0; i < particleCount; i++) {
       const sprite = new Sprite(whiteTexture);
