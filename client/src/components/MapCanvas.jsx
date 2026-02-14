@@ -1664,7 +1664,10 @@ export default function MapCanvas({
   useEffect(() => {
     const app = pixiRef.current;
     const weatherLayer = layersRef.current.weather;
-    if (!app || !weatherLayer) return;
+    if (!app || !weatherLayer) {
+      console.log('[Weather] No app or weatherLayer');
+      return;
+    }
     
     // Clear previous weather
     weatherLayer.removeChildren();
@@ -1674,40 +1677,51 @@ export default function MapCanvas({
       weatherAnimationRef.current = null;
     }
     
+    console.log('[Weather] Setting weather to:', weather);
     if (!weather || weather === 'none') return;
     
     const screenW = app.screen.width;
     const screenH = app.screen.height;
-    const particleCount = weather === 'fog' ? 20 : 80;
+    const particleCount = weather === 'fog' ? 25 : 150;
+    
+    console.log('[Weather] Creating', particleCount, 'particles, screen:', screenW, 'x', screenH);
+    
+    // Ensure weatherLayer is on top and visible
+    weatherLayer.visible = true;
+    weatherLayer.alpha = 1;
     
     // Create particles
     for (let i = 0; i < particleCount; i++) {
       const particle = new Graphics();
       
       if (weather === 'rain') {
-        // Rain: diagonal blue streaks
-        particle.moveTo(0, 0).lineTo(-3, 12).stroke({ width: 1.5, color: 0x6fa8dc, alpha: 0.6 });
-        particle.x = Math.random() * screenW * 2;
-        particle.y = Math.random() * screenH;
-        particle.vx = -3;
-        particle.vy = 12 + Math.random() * 4;
-      } else if (weather === 'snow') {
-        // Snow: white circles drifting
-        const size = 2 + Math.random() * 3;
-        particle.circle(0, 0, size).fill({ color: 0xffffff, alpha: 0.8 });
+        // Rain: diagonal blue streaks - more visible
+        particle.moveTo(0, 0);
+        particle.lineTo(-4, 18);
+        particle.stroke({ width: 2, color: 0x88ccff, alpha: 0.7 });
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
-        particle.vx = Math.sin(i) * 0.5;
-        particle.vy = 1 + Math.random() * 1.5;
+        particle.vx = -4;
+        particle.vy = 14 + Math.random() * 6;
+      } else if (weather === 'snow') {
+        // Snow: white circles drifting - more visible
+        const size = 3 + Math.random() * 4;
+        particle.circle(0, 0, size);
+        particle.fill({ color: 0xffffff, alpha: 0.9 });
+        particle.x = Math.random() * screenW;
+        particle.y = Math.random() * screenH;
+        particle.vx = Math.sin(i) * 0.8;
+        particle.vy = 1.5 + Math.random() * 2;
         particle.phase = Math.random() * Math.PI * 2;
       } else if (weather === 'fog') {
-        // Fog: large semi-transparent blobs
-        const size = 100 + Math.random() * 150;
-        particle.circle(0, 0, size).fill({ color: 0xcccccc, alpha: 0.15 });
+        // Fog: large semi-transparent blobs - more visible
+        const size = 150 + Math.random() * 200;
+        particle.circle(0, 0, size);
+        particle.fill({ color: 0xaaaaaa, alpha: 0.25 });
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
-        particle.vx = 0.2 + Math.random() * 0.3;
-        particle.vy = Math.sin(i) * 0.1;
+        particle.vx = 0.3 + Math.random() * 0.4;
+        particle.vy = Math.sin(i) * 0.15;
         particle.phase = Math.random() * Math.PI * 2;
       }
       
@@ -1715,34 +1729,35 @@ export default function MapCanvas({
       weatherParticlesRef.current.push(particle);
     }
     
-    // Animation loop
+    console.log('[Weather] Created', weatherParticlesRef.current.length, 'particles in weatherLayer');
+    
+    // Animation loop - use screen coords (weather is fixed to screen, not world)
     const animate = (delta) => {
-      const v = viewRef.current;
-      const w = app.screen.width / v.zoom;
-      const h = app.screen.height / v.zoom;
+      const w = screenW;
+      const h = screenH;
       
       weatherParticlesRef.current.forEach((p, i) => {
         if (weather === 'rain') {
           p.x += p.vx * delta;
           p.y += p.vy * delta;
           // Reset when off screen
-          if (p.y > h + 20 || p.x < -20) {
-            p.x = Math.random() * w * 1.5;
-            p.y = -20;
+          if (p.y > h + 30 || p.x < -30) {
+            p.x = Math.random() * w + w * 0.3;
+            p.y = -30;
           }
         } else if (weather === 'snow') {
           p.phase += 0.02 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.3) * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.5) * delta;
           p.y += p.vy * delta;
-          if (p.y > h + 10) {
-            p.y = -10;
+          if (p.y > h + 20) {
+            p.y = -20;
             p.x = Math.random() * w;
           }
-          if (p.x < -10) p.x = w + 10;
-          if (p.x > w + 10) p.x = -10;
+          if (p.x < -20) p.x = w + 20;
+          if (p.x > w + 20) p.x = -20;
         } else if (weather === 'fog') {
-          p.phase += 0.005 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.1) * delta;
+          p.phase += 0.008 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.2) * delta;
           p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
           p.alpha = 0.1 + Math.sin(p.phase) * 0.05;
           if (p.x > w + 200) p.x = -200;
