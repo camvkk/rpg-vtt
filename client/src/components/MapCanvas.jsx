@@ -1663,14 +1663,17 @@ export default function MapCanvas({
   
   useEffect(() => {
     const app = pixiRef.current;
-    const weatherLayer = layersRef.current.weather;
-    if (!app || !weatherLayer) {
-      console.log('[Weather] No app or weatherLayer');
+    if (!app) {
+      console.log('[Weather] No app');
       return;
     }
     
-    // Clear previous weather
-    weatherLayer.removeChildren();
+    // Remove any existing weather overlay
+    if (app._weatherOverlay) {
+      app.stage.removeChild(app._weatherOverlay);
+      app._weatherOverlay.destroy({ children: true });
+      app._weatherOverlay = null;
+    }
     weatherParticlesRef.current = [];
     if (weatherAnimationRef.current) {
       app.ticker.remove(weatherAnimationRef.current);
@@ -1686,19 +1689,24 @@ export default function MapCanvas({
     
     console.log('[Weather] Creating', particleCount, 'particles, screen:', screenW, 'x', screenH);
     
-    // Ensure weatherLayer is on top and visible
-    weatherLayer.visible = true;
-    weatherLayer.alpha = 1;
-    // Reset any transform that might have been applied
-    weatherLayer.scale.set(1);
-    weatherLayer.position.set(0, 0);
+    // Create a NEW overlay container and add it as the LAST child of stage (on top of everything)
+    const weatherOverlay = new Container();
+    weatherOverlay.label = 'weatherOverlay';
+    app.stage.addChild(weatherOverlay); // This puts it on TOP of all other layers
+    app._weatherOverlay = weatherOverlay; // Store reference for cleanup
     
-    // DEBUG: Add a big red rectangle to see if the layer renders at all
-    const debugRect = new Graphics();
-    debugRect.rect(100, 100, 200, 200);
-    debugRect.fill({ color: 0xff0000, alpha: 0.8 });
-    weatherLayer.addChild(debugRect);
-    console.log('[Weather] DEBUG: Added red rectangle at (100,100) size 200x200');
+    console.log('[Weather] Created overlay, stage children:', app.stage.children.length, 'overlay index:', app.stage.getChildIndex(weatherOverlay));
+    
+    // DEBUG: Add visible test rectangle
+    const debugRect = new Sprite(PIXI.Texture.WHITE);
+    debugRect.width = 300;
+    debugRect.height = 300;
+    debugRect.tint = 0xff0000;
+    debugRect.alpha = 0.5;
+    debugRect.x = 50;
+    debugRect.y = 50;
+    weatherOverlay.addChild(debugRect);
+    console.log('[Weather] DEBUG: Added RED test sprite at (50,50) 300x300');
     
     // Create particles using Sprite (more reliable than Graphics in Pixi v8)
     for (let i = 0; i < particleCount; i++) {
@@ -1748,11 +1756,11 @@ export default function MapCanvas({
         console.log('[Weather] First particle:', particle.x, particle.y, 'size:', particle.width, 'x', particle.height, 'visible:', particle.visible, 'alpha:', particle.alpha);
       }
       
-      weatherLayer.addChild(particle);
+      weatherOverlay.addChild(particle);
       weatherParticlesRef.current.push(particle);
     }
     
-    console.log('[Weather] Created', weatherParticlesRef.current.length, 'particles in weatherLayer');
+    console.log('[Weather] Created', weatherParticlesRef.current.length, 'particles in overlay');
     
     // Animation loop - use screen coords (weather is fixed to screen, not world)
     const animate = (delta) => {
