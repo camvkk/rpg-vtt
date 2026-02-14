@@ -1694,9 +1694,10 @@ export default function MapCanvas({
     app.stage.addChild(weatherOverlay);
     app._weatherOverlay = weatherOverlay;
     
-    // Use screen dimensions for weather coverage
-    const visibleW = screenW;
-    const visibleH = screenH;
+    // Use VIEWPORT dimensions (not canvas size which is larger)
+    // The canvas is 2221px but visible area is ~1060px
+    const visibleW = Math.min(screenW, 1200);
+    const visibleH = Math.min(screenH, 900);
     const particleCount = weather === 'fog' ? 40 : 250;
     
     // Create weather particles
