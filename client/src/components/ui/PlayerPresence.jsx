@@ -114,6 +114,11 @@ export default function PlayerPresence() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      drag
+      dragMomentum={false}
+      dragElastic={0.1}
+      whileDrag={{ scale: 1.02, cursor: 'grabbing' }}
+      style={{ cursor: 'grab' }}
     >
       <div className="presence-header">
         <span className="presence-count">

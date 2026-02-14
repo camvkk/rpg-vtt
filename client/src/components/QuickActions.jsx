@@ -186,7 +186,8 @@ export default function QuickActions() {
   
   // ⚠️ Early return APÓS todos os hooks (regra do React)
   // Não renderizar se for DM ou não tiver personagem
-  if (player?.isDM || !character) {
+  // DM também pode usar QuickActions para NPCs/players AFK
+  if (!character) {
     return null;
   }
   

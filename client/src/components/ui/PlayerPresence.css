@@ -4,7 +4,7 @@
 
 .player-presence {
   position: fixed;
-  top: var(--spacing-md);
+  top: 80px; /* Abaixo do menu superior */
   right: var(--spacing-md);
   z-index: 100;
   display: flex;
