@@ -427,6 +427,7 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const socketRef = useRef(null);
   const localRollStartTimeRef = useRef(null); // Track when local player started a roll
+  const pendingRollTimeoutRef = useRef(null); // Track pending timeout to cancel on new roll
   const MIN_ROLL_DISPLAY_DELAY = 2200; // Match DiceRoller animation timing
   
   // Ref to always have current state in memoized callbacks
@@ -645,11 +646,18 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
         const elapsed = Date.now() - rollStartTime;
         const remaining = Math.max(0, MIN_ROLL_DISPLAY_DELAY - elapsed);
         
+        // Cancel any pending timeout from previous roll
+        if (pendingRollTimeoutRef.current) {
+          clearTimeout(pendingRollTimeoutRef.current);
+          pendingRollTimeoutRef.current = null;
+        }
+        
         if (remaining > 0) {
           // Delay showing in chat to sync with dice animation
-          setTimeout(() => {
+          pendingRollTimeoutRef.current = setTimeout(() => {
             dispatch({ type: 'DICE_RESULT', payload: resultPayload });
             localRollStartTimeRef.current = null;
+            pendingRollTimeoutRef.current = null;
           }, remaining);
         } else {
           dispatch({ type: 'DICE_RESULT', payload: resultPayload });
@@ -970,6 +978,11 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
 
     // Dice
     rollDice: (notation, isSecret = false) => {
+      // Cancel any pending result display from previous roll
+      if (pendingRollTimeoutRef.current) {
+        clearTimeout(pendingRollTimeoutRef.current);
+        pendingRollTimeoutRef.current = null;
+      }
       localRollStartTimeRef.current = Date.now();
       return emit('dice:roll', { notation, isSecret });
     },
