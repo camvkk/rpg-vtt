@@ -1726,35 +1726,35 @@ export default function MapCanvas({
       const sprite = new Sprite(PIXI.Texture.WHITE);
       
       if (weather === 'rain') {
-        // Rain drops - blue diagonal streaks, BIGGER and more visible
-        sprite.width = 4;
-        sprite.height = 35;
-        sprite.tint = 0x66aaff;
-        sprite.alpha = 0.7;
+        // Rain drops - MUCH BIGGER for visibility
+        sprite.width = 8;
+        sprite.height = 50;
+        sprite.tint = 0x44aaff;
+        sprite.alpha = 0.85;
         sprite.rotation = -0.25;
         sprite.x = Math.random() * visibleW;
         sprite.y = Math.random() * visibleH;
-        sprite.vx = -3;
-        sprite.vy = 15 + Math.random() * 5;
+        sprite.vx = -4;
+        sprite.vy = 18 + Math.random() * 6;
       } else if (weather === 'snow') {
-        // Snowflakes - white squares, BIGGER
-        const size = 6 + Math.random() * 8;
+        // Snowflakes - MUCH BIGGER
+        const size = 15 + Math.random() * 15;
         sprite.width = size;
         sprite.height = size;
         sprite.tint = 0xffffff;
-        sprite.alpha = 0.95;
+        sprite.alpha = 1;
         sprite.x = Math.random() * visibleW;
         sprite.y = Math.random() * visibleH;
         sprite.vx = (Math.random() - 0.5) * 2;
-        sprite.vy = 1.5 + Math.random() * 2;
+        sprite.vy = 2 + Math.random() * 2;
         sprite.phase = Math.random() * Math.PI * 2;
       } else if (weather === 'fog') {
-        // Fog - large translucent blobs
-        const size = 200 + Math.random() * 300;
+        // Fog - MUCH MORE VISIBLE
+        const size = 150 + Math.random() * 200;
         sprite.width = size;
         sprite.height = size;
-        sprite.tint = 0xaaaaaa;
-        sprite.alpha = 0.15;
+        sprite.tint = 0xcccccc;
+        sprite.alpha = 0.4;
         sprite.anchor.set(0.5);
         sprite.x = Math.random() * visibleW;
         sprite.y = Math.random() * visibleH;
