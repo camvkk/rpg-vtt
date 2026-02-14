@@ -28,7 +28,8 @@ import {
   Dock, 
   DiceBubble, 
   ChatBubble, 
-  InitiativeBubble 
+  InitiativeBubble,
+  SessionBubble 
 } from './ui';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
@@ -495,35 +496,12 @@ function GameBoardInner({ onLeaveRoom }) {
         </div>
 
         <div className="gb-toolbar-right">
-          <button 
-            className={`btn btn-ghost gb-toolbar-btn ${windows.leftPanel?.isOpen && !windows.leftPanel?.isMinimized ? 'active' : ''}`} 
-            onClick={() => toggleWindow('leftPanel')}
-            title="Painel Esquerdo"
-          >
-            👥
-          </button>
-          <button 
-            className={`btn btn-ghost gb-toolbar-btn ${windows.rightPanel?.isOpen && !windows.rightPanel?.isMinimized ? 'active' : ''}`} 
-            onClick={() => toggleWindow('rightPanel')}
-            title="Chat & Dados"
-          >
-            💬
-          </button>
-          <button 
-            className={`btn btn-ghost gb-toolbar-btn ${windows.initiative?.isOpen && !windows.initiative?.isMinimized ? 'active' : ''}`} 
-            onClick={() => toggleWindow('initiative')}
-            title="Iniciativa"
-          >
-            ⚔️
-          </button>
-          <button 
-            className={`btn btn-ghost gb-toolbar-btn ${windows.diceRoller?.isOpen && !windows.diceRoller?.isMinimized ? 'active' : ''}`} 
-            onClick={() => toggleWindow('diceRoller')}
-            title="Rolagem de Dados"
-          >
-            🎲
-          </button>
-          <div className="gb-toolbar-divider" />
+          {/* Botões removidos - funcionalidades agora em Bubbles arrastáveis
+          <button ... leftPanel ... /> → SessionBubble
+          <button ... rightPanel ... /> → ChatBubble  
+          <button ... initiative ... /> → InitiativeBubble
+          <button ... diceRoller ... /> → DiceBubble
+          */}
           <ThemeSelector compact />
         </div>
       </div>
@@ -618,94 +596,16 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* ═══ FLOATING WINDOWS ═══ */}
       
-      {/* Left Panel - Players, Scenes, Journal, etc */}
+      {/* Left Panel - MOVED TO DOCK
       <FloatingWindow
         windowId="leftPanel"
         title="Jogadores & Cenas"
         icon="👥"
         resizable={true}
       >
-        <div className="gb-side-panel gb-left-panel">
-          {/* Sidebar Tabs */}
-          <div style={{
-            display: 'flex', gap: 2, background: 'var(--bg-surface-light)',
-            borderRadius: 'var(--radius-md)', padding: 2, marginBottom: 'var(--spacing-sm)',
-          }}>
-            {[
-              { id: 'tokens', icon: '🎭', label: 'Tokens' },
-              { id: 'scenes', icon: '🗺️', label: 'Cenas' },
-              { id: 'journal', icon: '📋', label: 'Diário' },
-              { id: 'jukebox', icon: '🎵', label: 'Jukebox' },
-              { id: 'settings', icon: '⚙️', label: 'Config' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setSidebarTab(tab.id)}
-                title={tab.label}
-                style={{
-                  flex: 1, padding: '6px 4px', border: 'none', borderRadius: 'var(--radius-sm)',
-                  background: sidebarTab === tab.id ? 'var(--color-primary)' : 'transparent',
-                  color: sidebarTab === tab.id ? 'white' : 'var(--color-text-dim)',
-                  cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.15s',
-                }}
-              >
-                {tab.icon}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          {sidebarTab === 'tokens' && (
-            <>
-              {/* Players */}
-              <div className="gb-panel-section">
-                <div className="panel-header">
-                  <h3 className="heading-sm">Jogadores</h3>
-                  <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} conectados</span>
-                </div>
-                <div className="gb-player-list">
-                  {players.map((p) => (
-                    <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
-                      <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
-                      <div className="gb-player-info">
-                        <div className="gb-player-name">{p.name}</div>
-                        <div className="gb-player-role text-dim">
-                          {p.is_dm ? 'Mestre' : 'Jogador'}
-                          {p.id === player.id && ' (Você)'}
-                        </div>
-                      </div>
-                      <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Initiative Toggle */}
-              <button
-                onClick={() => toggleWindow('initiative')}
-                className={`btn ${windows.initiative?.isOpen ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ width: '100%', marginTop: 'var(--spacing-sm)' }}
-              >
-                ⚔️ {windows.initiative?.isOpen ? 'Ocultar' : 'Mostrar'} Iniciativa
-              </button>
-            </>
-          )}
-
-          {sidebarTab === 'scenes' && <ScenesPanel />}
-          {sidebarTab === 'journal' && <JournalPanel />}
-          {sidebarTab === 'jukebox' && <JukeboxPanel />}
-
-          {sidebarTab === 'settings' && (
-            <>
-              {/* Ambiance (DM) */}
-              {isDM && <Ambiance isDM={isDM} />}
-
-              {/* Grid Config (DM) */}
-              {isDM && <GridConfigPanel />}
-            </>
-          )}
-        </div>
+        ... content moved to Dock renderContent ...
       </FloatingWindow>
+      */}
 
       {/* Right Panel - Chat (REPLACED BY ChatBubble)
       <FloatingWindow
@@ -761,7 +661,81 @@ function GameBoardInner({ onLeaveRoom }) {
       {/* ═══ NEW OWLBEAR-STYLE COMPONENTS ═══ */}
       
       {/* Dock - Bottom floating bar */}
-      <Dock />
+      <Dock 
+        renderContent={(tabId) => {
+          switch (tabId) {
+            case 'tokens':
+              return (
+                <div className="dock-content-tokens">
+                  <div className="panel-header" style={{ marginBottom: 'var(--spacing-sm)' }}>
+                    <h3 className="heading-sm">👥 Jogadores</h3>
+                    <span style={{ fontSize: '0.8rem' }} className="text-dim">{players.length} online</span>
+                  </div>
+                  <div className="gb-player-list" style={{ marginBottom: 'var(--spacing-md)' }}>
+                    {players.map((p) => (
+                      <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
+                        <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
+                        <div className="gb-player-info">
+                          <div className="gb-player-name">{p.name}</div>
+                          <div className="gb-player-role text-dim">
+                            {p.is_dm ? 'Mestre' : 'Jogador'}
+                            {p.id === player.id && ' (Você)'}
+                          </div>
+                        </div>
+                        <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            case 'scenes':
+              return <ScenesPanel />;
+            case 'items':
+              return (
+                <div className="dock-content-items">
+                  <div className="panel-header">
+                    <h3 className="heading-sm">📦 Inventário</h3>
+                  </div>
+                  <p className="text-dim" style={{ padding: 'var(--spacing-md)', textAlign: 'center' }}>
+                    Inventário em desenvolvimento...
+                  </p>
+                </div>
+              );
+            case 'search':
+              return (
+                <div className="dock-content-search">
+                  <input 
+                    type="text" 
+                    placeholder="🔍 Buscar tokens, itens, cenas..."
+                    style={{
+                      width: '100%',
+                      padding: 'var(--spacing-sm) var(--spacing-md)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--bg-surface)',
+                      color: 'var(--color-text)',
+                      fontSize: '0.9rem',
+                    }}
+                  />
+                </div>
+              );
+            case 'settings':
+              return (
+                <div className="dock-content-settings">
+                  {isDM && <Ambiance isDM={isDM} />}
+                  {isDM && <GridConfigPanel />}
+                  {!isDM && (
+                    <p className="text-dim" style={{ padding: 'var(--spacing-md)', textAlign: 'center' }}>
+                      Configurações controladas pelo Mestre
+                    </p>
+                  )}
+                </div>
+              );
+            default:
+              return null;
+          }
+        }}
+      />
       
       {/* Dice Bubble - Floating dice roller */}
       <DiceBubble initialPosition={{ x: window.innerWidth - 320, y: 100 }} />
@@ -771,6 +745,9 @@ function GameBoardInner({ onLeaveRoom }) {
       
       {/* Initiative Bubble - Floating initiative tracker */}
       <InitiativeBubble initialPosition={{ x: 16, y: 200 }} />
+      
+      {/* Session Bubble - Players & Scenes */}
+      <SessionBubble initialPosition={{ x: 16, y: 450 }} />
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 

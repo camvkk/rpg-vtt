@@ -17,3 +17,4 @@ export { default as InitiativeBubble } from './InitiativeBubble';
 // Toolbar e Presença
 export { default as ContextualToolbar } from './ContextualToolbar';
 export { default as PlayerPresence } from './PlayerPresence';
+export { default as SessionBubble } from './SessionBubble';
