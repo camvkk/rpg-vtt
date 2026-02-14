@@ -1696,30 +1696,84 @@ export default function MapCanvas({
     
     console.log('[Weather] Overlay created, index:', app.stage.getChildIndex(weatherOverlay), '/', app.stage.children.length);
     
-    // MINIMAL TEST: Just 10 big colorful squares, NO animation
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800, 0x88ff00, 0x0088ff, 0xff0088];
+    const particleCount = weather === 'fog' ? 30 : 200;
     
-    for (let i = 0; i < 10; i++) {
+    // Create weather particles
+    for (let i = 0; i < particleCount; i++) {
       const sprite = new Sprite(PIXI.Texture.WHITE);
-      sprite.width = 50;
-      sprite.height = 50;
-      sprite.x = 100 + (i % 5) * 100;
-      sprite.y = 100 + Math.floor(i / 5) * 100;
-      sprite.tint = colors[i];
-      sprite.alpha = 1;
       
-      console.log('[Weather] Test sprite', i, 'at', sprite.x, sprite.y, 'color:', colors[i].toString(16), 'parent:', weatherOverlay.label);
+      if (weather === 'rain') {
+        // Rain drops - blue diagonal streaks
+        sprite.width = 3;
+        sprite.height = 30;
+        sprite.tint = 0x88bbff;
+        sprite.alpha = 0.6;
+        sprite.rotation = -0.25;
+        sprite.x = Math.random() * screenW;
+        sprite.y = Math.random() * screenH;
+        sprite.vx = -3;
+        sprite.vy = 15 + Math.random() * 5;
+      } else if (weather === 'snow') {
+        // Snowflakes - white squares
+        const size = 4 + Math.random() * 6;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.tint = 0xffffff;
+        sprite.alpha = 0.9;
+        sprite.x = Math.random() * screenW;
+        sprite.y = Math.random() * screenH;
+        sprite.vx = (Math.random() - 0.5) * 2;
+        sprite.vy = 1.5 + Math.random() * 2;
+        sprite.phase = Math.random() * Math.PI * 2;
+      } else if (weather === 'fog') {
+        // Fog - large translucent blobs
+        const size = 200 + Math.random() * 300;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.tint = 0xaaaaaa;
+        sprite.alpha = 0.12;
+        sprite.anchor.set(0.5);
+        sprite.x = Math.random() * screenW;
+        sprite.y = Math.random() * screenH;
+        sprite.vx = 0.3 + Math.random() * 0.3;
+        sprite.vy = (Math.random() - 0.5) * 0.2;
+        sprite.phase = Math.random() * Math.PI * 2;
+      }
       
       weatherOverlay.addChild(sprite);
       weatherParticlesRef.current.push(sprite);
     }
     
-    console.log('[Weather] Added', weatherOverlay.children.length, 'children to overlay');
-    console.log('[Weather] Overlay visible:', weatherOverlay.visible, 'alpha:', weatherOverlay.alpha, 'worldVisible:', weatherOverlay.worldVisible);
+    console.log('[Weather] Created', particleCount, weather, 'particles');
     
-    // NO ANIMATION for this test
+    // Animation loop
     const animate = (delta) => {
-      // Static for debugging
+      weatherParticlesRef.current.forEach((p) => {
+        if (weather === 'rain') {
+          p.x += p.vx * delta;
+          p.y += p.vy * delta;
+          if (p.y > screenH + 40 || p.x < -40) {
+            p.x = Math.random() * screenW * 1.3;
+            p.y = -40;
+          }
+        } else if (weather === 'snow') {
+          p.phase += 0.03 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.8) * delta;
+          p.y += p.vy * delta;
+          if (p.y > screenH + 20) {
+            p.y = -20;
+            p.x = Math.random() * screenW;
+          }
+          if (p.x < -20) p.x = screenW + 20;
+          if (p.x > screenW + 20) p.x = -20;
+        } else if (weather === 'fog') {
+          p.phase += 0.01 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.15) * delta;
+          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
+          if (p.x > screenW + 200) p.x = -200;
+          if (p.x < -200) p.x = screenW + 200;
+        }
+      });
     };
     
     app.ticker.add(animate);
