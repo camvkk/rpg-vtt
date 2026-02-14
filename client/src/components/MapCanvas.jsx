@@ -1689,6 +1689,12 @@ export default function MapCanvas({
     // Ensure weatherLayer is on top and visible
     weatherLayer.visible = true;
     weatherLayer.alpha = 1;
+    // Reset any transform that might have been applied
+    weatherLayer.scale.set(1);
+    weatherLayer.position.set(0, 0);
+    
+    console.log('[Weather] weatherLayer transform - scale:', weatherLayer.scale.x, 'pos:', weatherLayer.position.x, weatherLayer.position.y);
+    console.log('[Weather] weatherLayer parent:', weatherLayer.parent?.constructor?.name);
     
     // Create particles
     for (let i = 0; i < particleCount; i++) {
@@ -1696,9 +1702,9 @@ export default function MapCanvas({
       
       if (weather === 'rain') {
         // Rain: diagonal blue streaks - more visible
-        particle.moveTo(0, 0);
-        particle.lineTo(-4, 18);
-        particle.stroke({ width: 2, color: 0x88ccff, alpha: 0.7 });
+        particle.rect(0, 0, 3, 20); // Use rect instead of line for Pixi v8
+        particle.fill({ color: 0x88ccff, alpha: 0.8 });
+        particle.rotation = -0.3; // Slight diagonal
         particle.x = Math.random() * screenW;
         particle.y = Math.random() * screenH;
         particle.vx = -4;
@@ -1723,6 +1729,11 @@ export default function MapCanvas({
         particle.vx = 0.3 + Math.random() * 0.4;
         particle.vy = Math.sin(i) * 0.15;
         particle.phase = Math.random() * Math.PI * 2;
+      }
+      
+      // Debug: log first particle position
+      if (i === 0) {
+        console.log('[Weather] First particle pos:', particle.x, particle.y, 'bounds:', particle.getBounds());
       }
       
       weatherLayer.addChild(particle);
