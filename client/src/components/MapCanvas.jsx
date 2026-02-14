@@ -1700,36 +1700,36 @@ export default function MapCanvas({
       const particle = { graphic: g, x: 0, y: 0, vx: 0, vy: 0, phase: 0, size: 0, baseAlpha: 1 };
       
       if (weather === 'rain') {
-        // Rain: blue diagonal streaks
-        particle.size = 3;
-        particle.x = Math.random() * visibleW * 1.3;
+        // Rain: blue diagonal streaks - BIGGER and within viewport
+        particle.size = 6;
+        particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
-        particle.vx = -2;
-        particle.vy = 15 + Math.random() * 8;
-        particle.baseAlpha = 0.6;
+        particle.vx = -3;
+        particle.vy = 18 + Math.random() * 8;
+        particle.baseAlpha = 0.7;
         
-        g.rect(0, 0, particle.size, 30).fill({ color: 0x6699ff, alpha: particle.baseAlpha });
+        g.rect(0, 0, particle.size, 45).fill({ color: 0x6699ff, alpha: particle.baseAlpha });
         g.rotation = -0.2;
       } else if (weather === 'snow') {
-        // Snow: white circles
-        particle.size = 4 + Math.random() * 6;
+        // Snow: white circles - BIGGER
+        particle.size = 8 + Math.random() * 10;
         particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
         particle.vx = (Math.random() - 0.5) * 1.5;
-        particle.vy = 1.5 + Math.random() * 2;
+        particle.vy = 2 + Math.random() * 2;
         particle.phase = Math.random() * Math.PI * 2;
-        particle.baseAlpha = 0.8;
+        particle.baseAlpha = 0.9;
         
         g.circle(0, 0, particle.size).fill({ color: 0xffffff, alpha: particle.baseAlpha });
       } else if (weather === 'fog') {
-        // Fog: large translucent circles
+        // Fog: large translucent circles - MORE VISIBLE
         particle.size = 150 + Math.random() * 200;
         particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
         particle.vx = 0.3 + Math.random() * 0.3;
         particle.vy = (Math.random() - 0.5) * 0.2;
         particle.phase = Math.random() * Math.PI * 2;
-        particle.baseAlpha = 0.15;
+        particle.baseAlpha = 0.25;
         
         g.circle(0, 0, particle.size).fill({ color: 0xcccccc, alpha: particle.baseAlpha });
       }
