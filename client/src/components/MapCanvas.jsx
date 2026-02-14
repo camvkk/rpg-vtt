@@ -1693,6 +1693,13 @@ export default function MapCanvas({
     weatherLayer.scale.set(1);
     weatherLayer.position.set(0, 0);
     
+    // DEBUG: Add a big red rectangle to see if the layer renders at all
+    const debugRect = new Graphics();
+    debugRect.rect(100, 100, 200, 200);
+    debugRect.fill({ color: 0xff0000, alpha: 0.8 });
+    weatherLayer.addChild(debugRect);
+    console.log('[Weather] DEBUG: Added red rectangle at (100,100) size 200x200');
+    
     // Create particles using Sprite (more reliable than Graphics in Pixi v8)
     for (let i = 0; i < particleCount; i++) {
       const particle = new Sprite(PIXI.Texture.WHITE);
