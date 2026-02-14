@@ -22,7 +22,14 @@ import FloatingWindow from './FloatingWindow';
 import MinimizedWindowBar from './MinimizedWindowBar';
 import QuickActions from './QuickActions';
 import ThemeSelector from './ThemeSelector';
-import { ContextualToolbar, PlayerPresence } from './ui';
+import { 
+  ContextualToolbar, 
+  PlayerPresence, 
+  Dock, 
+  DiceBubble, 
+  ChatBubble, 
+  InitiativeBubble 
+} from './ui';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
 import '../styles/FloatingWindow.css';
@@ -748,6 +755,20 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* Quick Actions Hotbar (only for players, not DM) */}
       <QuickActions />
+
+      {/* ═══ NEW OWLBEAR-STYLE COMPONENTS ═══ */}
+      
+      {/* Dock - Bottom floating bar */}
+      <Dock />
+      
+      {/* Dice Bubble - Floating dice roller */}
+      <DiceBubble initialPosition={{ x: window.innerWidth - 320, y: 100 }} />
+      
+      {/* Chat Bubble - Floating chat */}
+      <ChatBubble initialPosition={{ x: window.innerWidth - 320, y: 400 }} />
+      
+      {/* Initiative Bubble - Floating initiative tracker */}
+      <InitiativeBubble initialPosition={{ x: 16, y: 200 }} />
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 
