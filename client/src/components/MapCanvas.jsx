@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as PIXI from 'pixi.js';
-const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite } = PIXI;
+const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite, Texture } = PIXI;
 import { useGame } from '../contexts/GameContext';
 import { 
   snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS,
@@ -1694,13 +1694,22 @@ export default function MapCanvas({
     const particleCount = weather === 'fog' ? 40 : 200;
     const particles = [];
     
-    // Create weather particles using Graphics (more reliable in Pixi v8)
+    // Create weather particles using Sprite with texture (more reliable than Graphics in Pixi v8)
+    // Create a simple white texture for particles
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, 64, 64);
+    const whiteTexture = Texture.from(canvas);
+    
     for (let i = 0; i < particleCount; i++) {
-      const g = new Graphics();
-      const particle = { graphic: g, x: 0, y: 0, vx: 0, vy: 0, phase: 0, size: 0, baseAlpha: 1 };
+      const sprite = new Sprite(whiteTexture);
+      const particle = { graphic: sprite, x: 0, y: 0, vx: 0, vy: 0, phase: 0, size: 0, baseAlpha: 1 };
       
       if (weather === 'rain') {
-        // Rain: blue diagonal streaks - BIGGER and within viewport
+        // Rain: blue diagonal streaks
         particle.size = 6;
         particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
@@ -1708,13 +1717,13 @@ export default function MapCanvas({
         particle.vy = 18 + Math.random() * 8;
         particle.baseAlpha = 0.7;
         
-        // Pixi v8 Graphics API
-        g.rect(0, 0, particle.size, 45);
-        g.fill(0x6699ff);
-        g.alpha = particle.baseAlpha;
-        g.rotation = -0.2;
+        sprite.width = particle.size;
+        sprite.height = 45;
+        sprite.tint = 0x6699ff;
+        sprite.alpha = particle.baseAlpha;
+        sprite.rotation = -0.2;
       } else if (weather === 'snow') {
-        // Snow: white circles - BIGGER
+        // Snow: white circles
         particle.size = 8 + Math.random() * 10;
         particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
@@ -1723,11 +1732,12 @@ export default function MapCanvas({
         particle.phase = Math.random() * Math.PI * 2;
         particle.baseAlpha = 0.9;
         
-        g.circle(0, 0, particle.size);
-        g.fill(0xffffff);
-        g.alpha = particle.baseAlpha;
+        sprite.width = particle.size;
+        sprite.height = particle.size;
+        sprite.tint = 0xffffff;
+        sprite.alpha = particle.baseAlpha;
       } else if (weather === 'fog') {
-        // Fog: large translucent circles - MORE VISIBLE
+        // Fog: large translucent circles
         particle.size = 150 + Math.random() * 200;
         particle.x = Math.random() * visibleW;
         particle.y = Math.random() * visibleH;
@@ -1736,19 +1746,20 @@ export default function MapCanvas({
         particle.phase = Math.random() * Math.PI * 2;
         particle.baseAlpha = 0.25;
         
-        g.circle(0, 0, particle.size);
-        g.fill(0xcccccc);
-        g.alpha = particle.baseAlpha;
+        sprite.width = particle.size;
+        sprite.height = particle.size;
+        sprite.tint = 0xcccccc;
+        sprite.alpha = particle.baseAlpha;
       }
       
-      g.position.set(particle.x, particle.y);
+      sprite.position.set(particle.x, particle.y);
       
       // Log first few particles for debugging
       if (i < 3) {
         console.log('[Weather] Particle', i, 'at', particle.x.toFixed(0), particle.y.toFixed(0), 'size:', particle.size);
       }
       
-      weatherLayer.addChild(g);
+      weatherLayer.addChild(sprite);
       particles.push(particle);
     }
     
