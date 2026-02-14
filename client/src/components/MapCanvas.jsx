@@ -1696,6 +1696,26 @@ export default function MapCanvas({
     
     console.log('[Weather] Overlay created, index:', app.stage.getChildIndex(weatherOverlay), '/', app.stage.children.length);
     
+    // DEBUG: Add corner markers to show where the overlay is rendering
+    const markers = [
+      { x: 0, y: 0, color: 0xff0000, label: 'TOP-LEFT (0,0)' },
+      { x: 500, y: 0, color: 0x00ff00, label: 'TOP-CENTER (500,0)' },
+      { x: 0, y: 400, color: 0x0000ff, label: 'LEFT-CENTER (0,400)' },
+      { x: 500, y: 400, color: 0xffff00, label: 'CENTER (500,400)' },
+    ];
+    
+    markers.forEach(m => {
+      const marker = new Sprite(PIXI.Texture.WHITE);
+      marker.width = 60;
+      marker.height = 60;
+      marker.x = m.x;
+      marker.y = m.y;
+      marker.tint = m.color;
+      marker.alpha = 0.9;
+      weatherOverlay.addChild(marker);
+      console.log('[Weather] Marker at', m.label);
+    });
+    
     // Use fixed visible area (not canvas size which may be larger)
     const visibleW = 1000;
     const visibleH = 800;
