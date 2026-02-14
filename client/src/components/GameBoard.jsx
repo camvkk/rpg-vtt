@@ -707,7 +707,7 @@ function GameBoardInner({ onLeaveRoom }) {
         </div>
       </FloatingWindow>
 
-      {/* Right Panel - Chat */}
+      {/* Right Panel - Chat (REPLACED BY ChatBubble)
       <FloatingWindow
         windowId="rightPanel"
         title="Chat & Dados"
@@ -724,8 +724,9 @@ function GameBoardInner({ onLeaveRoom }) {
           onSpellDetected={handleSpellDetected}
         />
       </FloatingWindow>
+      */}
 
-      {/* Initiative Tracker */}
+      {/* Initiative Tracker (REPLACED BY InitiativeBubble)
       <FloatingWindow
         windowId="initiative"
         title="Iniciativa"
@@ -734,6 +735,7 @@ function GameBoardInner({ onLeaveRoom }) {
       >
         <InitiativeTracker />
       </FloatingWindow>
+      */}
 
       {/* DM Dashboard */}
       {isDM && campaign.id && (

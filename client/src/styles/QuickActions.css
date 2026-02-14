@@ -6,7 +6,7 @@
 /* ── Container Principal ── */
 .quick-actions {
   position: fixed;
-  bottom: 16px;
+  bottom: 100px; /* Acima do Dock */
   left: 50%;
   transform: translateX(-50%);
   width: auto;
