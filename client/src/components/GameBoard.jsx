@@ -22,6 +22,7 @@ import FloatingWindow from './FloatingWindow';
 import MinimizedWindowBar from './MinimizedWindowBar';
 import QuickActions from './QuickActions';
 import ThemeSelector from './ThemeSelector';
+import { ContextualToolbar, PlayerPresence } from './ui';
 import '../styles/GameBoard.css';
 import '../styles/dropdown-menu.css';
 import '../styles/FloatingWindow.css';
@@ -578,6 +579,12 @@ function GameBoardInner({ onLeaveRoom }) {
               />
             </CanvasErrorBoundary>
           </div>
+          
+          {/* ── Contextual Toolbar (Owlbear-style) ── */}
+          <ContextualToolbar context={isDM ? 'dm' : 'default'} />
+          
+          {/* ── Player Presence Avatars (Owlbear-style) ── */}
+          <PlayerPresence />
           
           {/* Google Docs Panel */}
           {showGoogleDocs && campaign.googleDocsUrl && (

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGame } from '../contexts/GameContext';
 import CharSheet from './CharSheet';
 import CharacterWizard from './CharacterWizard';
@@ -58,6 +59,68 @@ const SKILLS = {
 // Saving throws
 const SAVES = ['Força', 'Destreza', 'Constituição', 'Inteligência', 'Sabedoria', 'Carisma'];
 
+// Framer Motion variants
+const containerVariants = {
+  hidden: { opacity: 0, scale: 0.98 },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { 
+      duration: 0.3, 
+      ease: 'easeOut',
+      staggerChildren: 0.05
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    scale: 0.98,
+    transition: { duration: 0.2 }
+  }
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 25 }
+  },
+  exit: { 
+    opacity: 0, 
+    y: -10,
+    transition: { duration: 0.2 }
+  },
+  hover: {
+    y: -4,
+    transition: { type: 'spring', stiffness: 400, damping: 10 }
+  }
+};
+
+const tabVariants = {
+  inactive: { opacity: 0.7, scale: 1 },
+  active: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { type: 'spring', stiffness: 300, damping: 25 }
+  }
+};
+
+const menuVariants = {
+  hidden: { opacity: 0, y: -10, scale: 0.95 },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: { type: 'spring', stiffness: 400, damping: 25 }
+  },
+  exit: { 
+    opacity: 0, 
+    y: -10, 
+    scale: 0.95,
+    transition: { duration: 0.15 }
+  }
+};
+
 export default function DMDashboard({ isOpen, onClose }) {
   const { state, actions } = useGame();
   const { player, players, allCharacters, campaign, npcs, systemData } = state;
@@ -85,10 +148,8 @@ export default function DMDashboard({ isOpen, onClose }) {
   const handleCreateNPC = async (characterData) => {
     try {
       if (editingNPC) {
-        // Update existing NPC
         await actions.updateNPC(editingNPC.id, characterData);
       } else {
-        // Create new NPC
         await actions.createNPC(characterData);
       }
       setShowNPCWizard(false);
@@ -131,35 +192,39 @@ export default function DMDashboard({ isOpen, onClose }) {
   };
 
   // Convert allCharacters Map to array for display
-  const charactersArray = allCharacters ? Array.from(allCharacters.entries()).map(([playerName, character]) => ({
-    playerName,
-    character,
-    isOnline: players.some(p => p.name === playerName && p.is_connected !== false)
-  })) : [];
+  const charactersArray = useMemo(() => {
+    return allCharacters ? Array.from(allCharacters.entries()).map(([playerName, character]) => ({
+      playerName,
+      character,
+      isOnline: players.some(p => p.name === playerName && p.is_connected !== false)
+    })) : [];
+  }, [allCharacters, players]);
 
   // Filter and sort characters
-  const filteredCharacters = charactersArray
-    .filter(({ character, playerName }) => {
-      if (!searchFilter) return true;
-      const search = searchFilter.toLowerCase();
-      return (character.name || '').toLowerCase().includes(search) ||
-             playerName.toLowerCase().includes(search) ||
-             (character.class || '').toLowerCase().includes(search) ||
-             (character.race || '').toLowerCase().includes(search);
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'hp':
-          const aHP = (a.character.hp?.current || 0) / (a.character.hp?.max || 1);
-          const bHP = (b.character.hp?.current || 0) / (b.character.hp?.max || 1);
-          return aHP - bHP; // Lowest HP first
-        case 'level':
-          return (b.character.level || 0) - (a.character.level || 0); // Highest level first
-        case 'name':
-        default:
-          return (a.character.name || '').localeCompare(b.character.name || '');
-      }
-    });
+  const filteredCharacters = useMemo(() => {
+    return charactersArray
+      .filter(({ character, playerName }) => {
+        if (!searchFilter) return true;
+        const search = searchFilter.toLowerCase();
+        return (character.name || '').toLowerCase().includes(search) ||
+               playerName.toLowerCase().includes(search) ||
+               (character.class || '').toLowerCase().includes(search) ||
+               (character.race || '').toLowerCase().includes(search);
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'hp':
+            const aHP = (a.character.hp?.current || 0) / (a.character.hp?.max || 1);
+            const bHP = (b.character.hp?.current || 0) / (b.character.hp?.max || 1);
+            return aHP - bHP;
+          case 'level':
+            return (b.character.level || 0) - (a.character.level || 0);
+          case 'name':
+          default:
+            return (a.character.name || '').localeCompare(b.character.name || '');
+        }
+      });
+  }, [charactersArray, searchFilter, sortBy]);
 
   // Get HP percentage and color
   const getHPPercentage = (character) => {
@@ -194,7 +259,6 @@ export default function DMDashboard({ isOpen, onClose }) {
     try {
       await actions.dmUpdateCharacter(campaign.id, playerName, updatedCharacter);
       
-      // Also update the corresponding token on the map if it exists
       const correspondingToken = state.tokens.find(token => 
         token.name === character.name || 
         token.characterName === playerName ||
@@ -204,7 +268,7 @@ export default function DMDashboard({ isOpen, onClose }) {
       if (correspondingToken) {
         await actions.updateToken(correspondingToken.id, {
           hp: updatedHP,
-          conditions: character.conditions // Also sync conditions
+          conditions: character.conditions
         });
       }
     } catch (error) {
@@ -219,10 +283,8 @@ export default function DMDashboard({ isOpen, onClose }) {
     
     let newConditions;
     if (hasCondition) {
-      // Remove condition
       newConditions = conditions.filter(c => c.name !== conditionName);
     } else {
-      // Add condition
       const condition = CONDITIONS.find(c => c.name === conditionName);
       newConditions = [...conditions, condition];
     }
@@ -235,7 +297,6 @@ export default function DMDashboard({ isOpen, onClose }) {
     try {
       await actions.dmUpdateCharacter(campaign.id, playerName, updatedCharacter);
       
-      // Also update the corresponding token on the map if it exists
       const correspondingToken = state.tokens.find(token => 
         token.name === character.name || 
         token.characterName === playerName ||
@@ -245,7 +306,7 @@ export default function DMDashboard({ isOpen, onClose }) {
       if (correspondingToken) {
         await actions.updateToken(correspondingToken.id, {
           conditions: newConditions,
-          hp: character.hp // Also sync HP data
+          hp: character.hp
         });
       }
     } catch (error) {
@@ -271,18 +332,18 @@ export default function DMDashboard({ isOpen, onClose }) {
     }
   };
 
-  // Create token from character (for testing and quick token creation)
+  // Create token from character
   const handleCreateTokenFromCharacter = async (playerName, character) => {
     try {
       const tokenData = {
         name: character.name || playerName,
         characterName: playerName,
         playerId: playerName,
-        x: 5, // Place at grid 5,5 by default
+        x: 5,
         y: 5,
         conditions: character.conditions || [],
         hp: character.hp || null,
-        color: 0x3b82f6, // Default blue
+        color: 0x3b82f6,
         size: 'medium'
       };
       
@@ -301,211 +362,374 @@ export default function DMDashboard({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="dm-dashboard">
+    <motion.div 
+      className="dm-dashboard"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
       {/* Header */}
-      <div className="dm-dashboard-header">
+      <motion.div 
+        className="dm-dashboard-header"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
         <div className="dm-dashboard-title">
-          <h2>👥 Painel do Mestre</h2>
+          <h2>
+            <motion.span 
+              className="title-icon"
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+            >
+              👥
+            </motion.span>
+            {' '}Painel do Mestre
+          </h2>
           <span className="character-count">
-            {filteredCharacters.length} personagem{filteredCharacters.length !== 1 ? 's' : ''}
+            <motion.span
+              key={filteredCharacters.length}
+              initial={{ scale: 1.5, color: 'var(--color-primary)' }}
+              animate={{ scale: 1, color: 'var(--color-text-dim)' }}
+              transition={{ duration: 0.3 }}
+            >
+              {filteredCharacters.length}
+            </motion.span>
+            {' '}personagem{filteredCharacters.length !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="dm-dashboard-controls">
-          {viewMode === 'detail' && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setViewMode('overview');
-                setSelectedCharacter(null);
-                setSelectedPlayerName(null);
-                setIsEditing(false);
-              }}
-            >
-              ← Voltar
-            </button>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>
+          <AnimatePresence mode="wait">
+            {viewMode === 'detail' && (
+              <motion.button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setViewMode('overview');
+                  setSelectedCharacter(null);
+                  setSelectedPlayerName(null);
+                  setIsEditing(false);
+                }}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                ← Voltar
+              </motion.button>
+            )}
+          </AnimatePresence>
+          <motion.button 
+            className="btn btn-ghost btn-sm" 
+            onClick={onClose}
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
+          >
             ✕
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Tab Navigation */}
-      <div className="dm-dashboard-tabs">
-        <button
+      <motion.div 
+        className="dm-dashboard-tabs"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.15 }}
+      >
+        <motion.button
           className={`dm-tab ${viewMode === 'overview' || viewMode === 'detail' ? 'active' : ''}`}
           onClick={() => setViewMode('overview')}
+          variants={tabVariants}
+          animate={viewMode === 'overview' || viewMode === 'detail' ? 'active' : 'inactive'}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
           👥 Personagens dos Jogadores
-        </button>
-        <button
+          {viewMode === 'overview' || viewMode === 'detail' ? (
+            <motion.div
+              className="tab-indicator"
+              layoutId="tabIndicator"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          ) : null}
+        </motion.button>
+        <motion.button
           className={`dm-tab ${viewMode === 'npcs' ? 'active' : ''}`}
           onClick={() => setViewMode('npcs')}
+          variants={tabVariants}
+          animate={viewMode === 'npcs' ? 'active' : 'inactive'}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
           🎭 NPCs/Personagens do Mestre ({npcs?.length || 0})
-        </button>
-      </div>
+          {viewMode === 'npcs' ? (
+            <motion.div
+              className="tab-indicator"
+              layoutId="tabIndicator"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          ) : null}
+        </motion.button>
+      </motion.div>
 
       {/* Content */}
       <div className="dm-dashboard-content">
-        {/* NPCs Tab */}
-        {viewMode === 'npcs' ? (
-          <div className="dm-npcs-section">
-            {/* NPC Controls */}
-            <div className="dm-dashboard-filters">
-              <div className="filter-row">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setEditingNPC(null);
-                    setShowNPCWizard(true);
-                  }}
-                >
-                  ➕ Criar NPC/Personagem
-                </button>
-              </div>
-            </div>
-
-            {/* NPCs Grid */}
-            <div className="dm-characters dm-characters-grid">
-              {(!npcs || npcs.length === 0) ? (
-                <div className="dm-no-characters">
-                  <p>🎭 Nenhum NPC criado ainda</p>
-                  <span>Clique em "Criar NPC/Personagem" para adicionar NPCs com fichas completas.</span>
-                </div>
-              ) : (
-                npcs.map((npc) => (
-                  <NPCCard
-                    key={npc.id}
-                    npc={npc}
-                    onEdit={() => {
-                      setEditingNPC(npc);
+        <AnimatePresence mode="wait">
+          {/* NPCs Tab */}
+          {viewMode === 'npcs' && (
+            <motion.div 
+              key="npcs"
+              className="dm-npcs-section"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* NPC Controls */}
+              <div className="dm-dashboard-filters">
+                <div className="filter-row">
+                  <motion.button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setEditingNPC(null);
                       setShowNPCWizard(true);
                     }}
-                    onDelete={() => handleDeleteNPC(npc.id)}
-                    onCreateToken={() => handleCreateTokenFromNPC(npc)}
-                    onViewDetails={() => {
-                      setSelectedCharacter(npc);
-                      setSelectedPlayerName(`NPC: ${npc.name}`);
-                      setViewMode('detail');
-                    }}
-                    getHPPercentage={getHPPercentage}
-                    getHPColor={getHPColor}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ) : viewMode === 'overview' ? (
-          <>
-            {/* Controls */}
-            <div className="dm-dashboard-filters">
-              <div className="filter-row">
-                <input
-                  type="text"
-                  placeholder="🔍 Buscar personagem, jogador, classe..."
-                  className="input dm-search"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                />
-                
-                <select
-                  className="input dm-sort"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                >
-                  <option value="name">Ordenar por Nome</option>
-                  <option value="hp">Ordenar por HP</option>
-                  <option value="level">Ordenar por Nível</option>
-                </select>
-
-                <div className="view-toggle">
-                  <button
-                    className={`btn btn-sm ${displayMode === 'card' ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setDisplayMode('card')}
-                    title="Visualização em Cards"
+                    whileHover={{ scale: 1.02, boxShadow: '0 0 20px var(--color-primary)' }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    ▦
-                  </button>
-                  <button
-                    className={`btn btn-sm ${displayMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setDisplayMode('list')}
-                    title="Visualização em Lista"
-                  >
-                    ☰
-                  </button>
+                    <motion.span
+                      animate={{ rotate: [0, 180, 360] }}
+                      transition={{ duration: 0.5, delay: 0 }}
+                    >
+                      ➕
+                    </motion.span>
+                    {' '}Criar NPC/Personagem
+                  </motion.button>
                 </div>
               </div>
-            </div>
 
-            {/* Characters Grid/List */}
-            <div className={`dm-characters ${displayMode === 'list' ? 'dm-characters-list' : 'dm-characters-grid'}`}>
-              {filteredCharacters.length === 0 ? (
-                <div className="dm-no-characters">
-                  <p>📝 Nenhum personagem encontrado</p>
-                  <span>Os jogadores precisam criar e salvar seus personagens primeiro.</span>
-                </div>
-              ) : (
-                filteredCharacters.map(({ playerName, character, isOnline }) => (
-                  <CharacterCard
-                    key={playerName}
-                    playerName={playerName}
-                    character={character}
-                    isOnline={isOnline}
-                    displayMode={displayMode}
-                    onHPChange={(delta) => handleHPChange(playerName, character, delta)}
-                    onConditionToggle={(condition) => handleConditionToggle(playerName, character, condition)}
-                    onRequestTest={(type, name) => handleRequestTest(playerName, character, type, name)}
-                    onCreateToken={() => handleCreateTokenFromCharacter(playerName, character)}
-                    onViewDetails={() => {
-                      setSelectedCharacter(character);
-                      setSelectedPlayerName(playerName);
-                      setViewMode('detail');
-                    }}
-                    getHPPercentage={getHPPercentage}
-                    getHPColor={getHPColor}
-                    getModifier={getModifier}
-                  />
-                ))
-              )}
-            </div>
-          </>
-        ) : viewMode === 'detail' ? (
-          /* Detail View */
-          <div className="dm-character-detail">
-            {selectedCharacter && (
-              <>
-                <div className="detail-header">
-                  <div className="detail-player-info">
-                    <span className="detail-player-name">
-                      {players.find(p => p.name === selectedPlayerName)?.is_connected !== false ? '🟢' : '🔴'} {selectedPlayerName}
-                    </span>
-                    <h3>{selectedCharacter.name}</h3>
-                  </div>
-                  <div className="detail-actions">
-                    <button
-                      className={`btn btn-sm ${isEditing ? 'btn-accent' : 'btn-secondary'}`}
-                      onClick={() => setIsEditing(!isEditing)}
+              {/* NPCs Grid */}
+              <motion.div 
+                className="dm-characters dm-characters-grid"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                {(!npcs || npcs.length === 0) ? (
+                  <motion.div 
+                    className="dm-no-characters"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
+                    <motion.p
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{ duration: 2, repeat: Infinity }}
                     >
-                      {isEditing ? '👁️ Visualizar' : '✏️ Editar'}
-                    </button>
+                      🎭 Nenhum NPC criado ainda
+                    </motion.p>
+                    <span>Clique em "Criar NPC/Personagem" para adicionar NPCs com fichas completas.</span>
+                  </motion.div>
+                ) : (
+                  <AnimatePresence>
+                    {npcs.map((npc, index) => (
+                      <NPCCard
+                        key={npc.id}
+                        npc={npc}
+                        index={index}
+                        onEdit={() => {
+                          setEditingNPC(npc);
+                          setShowNPCWizard(true);
+                        }}
+                        onDelete={() => handleDeleteNPC(npc.id)}
+                        onCreateToken={() => handleCreateTokenFromNPC(npc)}
+                        onViewDetails={() => {
+                          setSelectedCharacter(npc);
+                          setSelectedPlayerName(`NPC: ${npc.name}`);
+                          setViewMode('detail');
+                        }}
+                        getHPPercentage={getHPPercentage}
+                        getHPColor={getHPColor}
+                      />
+                    ))}
+                  </AnimatePresence>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Overview Tab */}
+          {viewMode === 'overview' && (
+            <motion.div
+              key="overview"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+            >
+              {/* Controls */}
+              <div className="dm-dashboard-filters">
+                <div className="filter-row">
+                  <motion.input
+                    type="text"
+                    placeholder="🔍 Buscar personagem, jogador, classe..."
+                    className="input dm-search"
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    whileFocus={{ boxShadow: '0 0 0 3px rgba(226, 183, 20, 0.2)' }}
+                  />
+                  
+                  <select
+                    className="input dm-sort"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="name">Ordenar por Nome</option>
+                    <option value="hp">Ordenar por HP</option>
+                    <option value="level">Ordenar por Nível</option>
+                  </select>
+
+                  <div className="view-toggle">
+                    <motion.button
+                      className={`btn btn-sm ${displayMode === 'card' ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setDisplayMode('card')}
+                      title="Visualização em Cards"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      ▦
+                    </motion.button>
+                    <motion.button
+                      className={`btn btn-sm ${displayMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setDisplayMode('list')}
+                      title="Visualização em Lista"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      ☰
+                    </motion.button>
                   </div>
                 </div>
-                
-                <div className="detail-charsheet">
-                  <CharSheet
-                    character={selectedCharacter}
-                    isEditable={isEditing}
-                    onUpdateCharacter={handleCharacterUpdate}
-                    onRollDice={handleDiceRoll}
-                    system={campaign.system || 'dnd5e'}
-                    systemData={state.systemData}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        ) : null}
+              </div>
+
+              {/* Characters Grid/List */}
+              <motion.div 
+                className={`dm-characters ${displayMode === 'list' ? 'dm-characters-list' : 'dm-characters-grid'}`}
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                {filteredCharacters.length === 0 ? (
+                  <motion.div 
+                    className="dm-no-characters"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                  >
+                    <motion.p
+                      animate={{ y: [0, -5, 0] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      📝 Nenhum personagem encontrado
+                    </motion.p>
+                    <span>Os jogadores precisam criar e salvar seus personagens primeiro.</span>
+                  </motion.div>
+                ) : (
+                  <AnimatePresence>
+                    {filteredCharacters.map(({ playerName, character, isOnline }, index) => (
+                      <CharacterCard
+                        key={playerName}
+                        playerName={playerName}
+                        character={character}
+                        isOnline={isOnline}
+                        displayMode={displayMode}
+                        index={index}
+                        onHPChange={(delta) => handleHPChange(playerName, character, delta)}
+                        onConditionToggle={(condition) => handleConditionToggle(playerName, character, condition)}
+                        onRequestTest={(type, name) => handleRequestTest(playerName, character, type, name)}
+                        onCreateToken={() => handleCreateTokenFromCharacter(playerName, character)}
+                        onViewDetails={() => {
+                          setSelectedCharacter(character);
+                          setSelectedPlayerName(playerName);
+                          setViewMode('detail');
+                        }}
+                        getHPPercentage={getHPPercentage}
+                        getHPColor={getHPColor}
+                        getModifier={getModifier}
+                      />
+                    ))}
+                  </AnimatePresence>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Detail View */}
+          {viewMode === 'detail' && (
+            <motion.div 
+              key="detail"
+              className="dm-character-detail"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              {selectedCharacter && (
+                <>
+                  <motion.div 
+                    className="detail-header"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <div className="detail-player-info">
+                      <span className="detail-player-name">
+                        <motion.span
+                          animate={{ 
+                            scale: [1, 1.2, 1],
+                            opacity: [0.7, 1, 0.7]
+                          }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        >
+                          {players.find(p => p.name === selectedPlayerName)?.is_connected !== false ? '🟢' : '🔴'}
+                        </motion.span>
+                        {' '}{selectedPlayerName}
+                      </span>
+                      <h3>{selectedCharacter.name}</h3>
+                    </div>
+                    <div className="detail-actions">
+                      <motion.button
+                        className={`btn btn-sm ${isEditing ? 'btn-accent' : 'btn-secondary'}`}
+                        onClick={() => setIsEditing(!isEditing)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        {isEditing ? '👁️ Visualizar' : '✏️ Editar'}
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                  
+                  <motion.div 
+                    className="detail-charsheet"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <CharSheet
+                      character={selectedCharacter}
+                      isEditable={isEditing}
+                      onUpdateCharacter={handleCharacterUpdate}
+                      onRollDice={handleDiceRoll}
+                      system={campaign.system || 'dnd5e'}
+                      systemData={state.systemData}
+                    />
+                  </motion.div>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* NPC Character Wizard Modal */}
@@ -521,16 +745,17 @@ export default function DMDashboard({ isOpen, onClose }) {
         mode="npc"
         existingCharacter={editingNPC}
       />
-    </div>
+    </motion.div>
   );
 }
 
-// Character Card Component
+// Character Card Component with animations
 function CharacterCard({
   playerName,
   character,
   isOnline,
   displayMode,
+  index,
   onHPChange,
   onConditionToggle,
   onRequestTest,
@@ -547,7 +772,6 @@ function CharacterCard({
   const hpPercentage = getHPPercentage(character);
   const hpColor = getHPColor(hpPercentage);
 
-  // Handle manual HP input
   const handleHPInput = (e) => {
     e.preventDefault();
     const delta = parseInt(hpInput) || 0;
@@ -559,12 +783,26 @@ function CharacterCard({
 
   if (displayMode === 'list') {
     return (
-      <div className="character-card character-card-list">
+      <motion.div 
+        className="character-card character-card-list"
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        whileHover="hover"
+        layout
+        custom={index}
+        transition={{ delay: index * 0.03 }}
+      >
         <div className="card-header-list">
           <div className="player-status">
-            <span className={`online-indicator ${isOnline ? 'online' : 'offline'}`}>
+            <motion.span 
+              className={`online-indicator ${isOnline ? 'online' : 'offline'}`}
+              animate={isOnline ? { scale: [1, 1.2, 1] } : {}}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
               {isOnline ? '🟢' : '🔴'}
-            </span>
+            </motion.span>
             <span className="player-name">{playerName}</span>
           </div>
           <div className="character-basic">
@@ -582,9 +820,12 @@ function CharacterCard({
               {character.hp?.current || 0}/{character.hp?.max || 0}
             </span>
             <div className="hp-bar-small">
-              <div
+              <motion.div
                 className="hp-fill"
-                style={{ width: `${hpPercentage}%`, backgroundColor: hpColor }}
+                initial={{ width: 0 }}
+                animate={{ width: `${hpPercentage}%` }}
+                transition={{ duration: 0.5, delay: index * 0.05 }}
+                style={{ backgroundColor: hpColor }}
               />
             </div>
           </div>
@@ -601,18 +842,35 @@ function CharacterCard({
             />
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="character-card">
+    <motion.div 
+      className="character-card"
+      variants={cardVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      whileHover="hover"
+      layout
+      custom={index}
+      transition={{ delay: index * 0.05 }}
+    >
       {/* Header */}
       <div className="card-header">
         <div className="player-status">
-          <span className={`online-indicator ${isOnline ? 'online' : 'offline'}`}>
+          <motion.span 
+            className={`online-indicator ${isOnline ? 'online' : 'offline'}`}
+            animate={isOnline ? { 
+              scale: [1, 1.3, 1],
+              boxShadow: ['0 0 0px #51cf66', '0 0 10px #51cf66', '0 0 0px #51cf66']
+            } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
             {isOnline ? '🟢' : '🔴'}
-          </span>
+          </motion.span>
           <span className="player-name">{playerName}</span>
         </div>
       </div>
@@ -638,41 +896,77 @@ function CharacterCard({
           <span className="hp-text">
             ❤️ {character.hp?.current || 0}/{character.hp?.max || 0}
             {character.hp?.temp && character.hp.temp > 0 && (
-              <span className="temp-hp"> (+{character.hp.temp})</span>
+              <motion.span 
+                className="temp-hp"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+              >
+                {' '}(+{character.hp.temp})
+              </motion.span>
             )}
           </span>
           <span className="ac-text">🛡️ {character.ac || 10}</span>
         </div>
         <div className="hp-bar">
-          <div
+          <motion.div
             className="hp-fill"
-            style={{ width: `${hpPercentage}%`, backgroundColor: hpColor }}
+            initial={{ width: 0 }}
+            animate={{ width: `${hpPercentage}%` }}
+            transition={{ duration: 0.6, ease: 'easeOut', delay: index * 0.05 }}
+            style={{ backgroundColor: hpColor }}
           />
         </div>
       </div>
 
       {/* Stats */}
       {character.attributes && (
-        <div className="stats-section">
-          {Object.entries(character.attributes).map(([stat, value]) => (
-            <div key={stat} className="stat-badge">
+        <motion.div 
+          className="stats-section"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 + index * 0.05 }}
+        >
+          {Object.entries(character.attributes).map(([stat, value], statIndex) => (
+            <motion.div 
+              key={stat} 
+              className="stat-badge"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.3 + statIndex * 0.05 }}
+              whileHover={{ scale: 1.1, y: -2 }}
+            >
               <span className="stat-name">{stat.toUpperCase()}</span>
               <span className="stat-value">{value}</span>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* Conditions */}
-      {character.conditions && character.conditions.length > 0 && (
-        <div className="conditions-section">
-          {character.conditions.map((condition, index) => (
-            <span key={index} className="condition-badge">
-              {condition.icon} {condition.name}
-            </span>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {character.conditions && character.conditions.length > 0 && (
+          <motion.div 
+            className="conditions-section"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            {character.conditions.map((condition, condIndex) => (
+              <motion.span 
+                key={condIndex} 
+                className="condition-badge"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{ delay: condIndex * 0.05 }}
+                whileHover={{ scale: 1.1 }}
+              >
+                {condition.icon} {condition.name}
+              </motion.span>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Actions */}
       <div className="card-actions">
@@ -685,11 +979,11 @@ function CharacterCard({
           onViewDetails={onViewDetails}
         />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// Quick Actions Component
+// Quick Actions Component with animations
 function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest, onCreateToken, onViewDetails, compact = false }) {
   const [showHPInput, setShowHPInput] = useState(false);
   const [hpInput, setHpInput] = useState('');
@@ -709,55 +1003,97 @@ function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest,
   if (compact) {
     return (
       <div className="quick-actions-compact">
-        <button className="action-btn" onClick={() => setShowHPInput(!showHPInput)} title="Modificar HP">
+        <motion.button 
+          className="action-btn" 
+          onClick={() => setShowHPInput(!showHPInput)} 
+          title="Modificar HP"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+        >
           ❤️
-        </button>
-        <button className="action-btn" onClick={() => setShowConditionsMenu(!showConditionsMenu)} title="Condições">
+        </motion.button>
+        <motion.button 
+          className="action-btn" 
+          onClick={() => setShowConditionsMenu(!showConditionsMenu)} 
+          title="Condições"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+        >
           ⚔️
-        </button>
-        <button className="action-btn" onClick={() => setShowTestsMenu(!showTestsMenu)} title="Pedir Teste">
+        </motion.button>
+        <motion.button 
+          className="action-btn" 
+          onClick={() => setShowTestsMenu(!showTestsMenu)} 
+          title="Pedir Teste"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+        >
           🎲
-        </button>
-        <button className="action-btn" onClick={onCreateToken} title="Criar Token no Mapa">
+        </motion.button>
+        <motion.button 
+          className="action-btn" 
+          onClick={onCreateToken} 
+          title="Criar Token no Mapa"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+        >
           🎭
-        </button>
-        <button className="action-btn" onClick={onViewDetails} title="Ver Ficha">
+        </motion.button>
+        <motion.button 
+          className="action-btn" 
+          onClick={onViewDetails} 
+          title="Ver Ficha"
+          whileHover={{ scale: 1.15 }}
+          whileTap={{ scale: 0.9 }}
+        >
           👁️
-        </button>
+        </motion.button>
 
         {/* HP Input */}
-        {showHPInput && (
-          <div className="action-popup hp-popup">
-            <form onSubmit={handleHPSubmit}>
-              <input
-                type="number"
-                placeholder="±HP"
-                value={hpInput}
-                onChange={(e) => setHpInput(e.target.value)}
-                className="hp-input"
-                autoFocus
-              />
-            </form>
-          </div>
-        )}
+        <AnimatePresence>
+          {showHPInput && (
+            <motion.div 
+              className="action-popup hp-popup"
+              variants={menuVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <form onSubmit={handleHPSubmit}>
+                <input
+                  type="number"
+                  placeholder="±HP"
+                  value={hpInput}
+                  onChange={(e) => setHpInput(e.target.value)}
+                  className="hp-input"
+                  autoFocus
+                />
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Conditions Menu */}
-        {showConditionsMenu && (
-          <ConditionsMenu
-            character={character}
-            onConditionToggle={onConditionToggle}
-            onClose={() => setShowConditionsMenu(false)}
-          />
-        )}
+        <AnimatePresence>
+          {showConditionsMenu && (
+            <ConditionsMenu
+              character={character}
+              onConditionToggle={onConditionToggle}
+              onClose={() => setShowConditionsMenu(false)}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Tests Menu */}
-        {showTestsMenu && (
-          <TestsMenu
-            character={character}
-            onRequestTest={onRequestTest}
-            onClose={() => setShowTestsMenu(false)}
-          />
-        )}
+        <AnimatePresence>
+          {showTestsMenu && (
+            <TestsMenu
+              character={character}
+              onRequestTest={onRequestTest}
+              onClose={() => setShowTestsMenu(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -765,162 +1101,257 @@ function QuickActions({ character, onHPChange, onConditionToggle, onRequestTest,
   return (
     <div className="quick-actions">
       <div className="action-group">
-        <button
+        <motion.button
           className="action-btn hp-btn"
           onClick={() => setShowHPInput(!showHPInput)}
           title="Curar/Dano"
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.95 }}
         >
           ❤️ HP
-        </button>
+        </motion.button>
         
-        {showHPInput && (
-          <form className="hp-input-form" onSubmit={handleHPSubmit}>
-            <input
-              type="number"
-              placeholder="±"
-              value={hpInput}
-              onChange={(e) => setHpInput(e.target.value)}
-              className="hp-input"
-              autoFocus
-            />
-            <button type="submit" className="hp-apply">✓</button>
-          </form>
-        )}
+        <AnimatePresence>
+          {showHPInput && (
+            <motion.form 
+              className="hp-input-form" 
+              onSubmit={handleHPSubmit}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <input
+                type="number"
+                placeholder="±"
+                value={hpInput}
+                onChange={(e) => setHpInput(e.target.value)}
+                className="hp-input"
+                autoFocus
+              />
+              <motion.button 
+                type="submit" 
+                className="hp-apply"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                ✓
+              </motion.button>
+            </motion.form>
+          )}
+        </AnimatePresence>
       </div>
 
-      <button
+      <motion.button
         className="action-btn condition-btn"
         onClick={() => setShowConditionsMenu(!showConditionsMenu)}
         title="Condições"
+        whileHover={{ scale: 1.05, y: -2 }}
+        whileTap={{ scale: 0.95 }}
       >
         ⚔️ Condição
-      </button>
+      </motion.button>
 
-      <button
+      <motion.button
         className="action-btn test-btn"
         onClick={() => setShowTestsMenu(!showTestsMenu)}
         title="Pedir Teste"
+        whileHover={{ scale: 1.05, y: -2 }}
+        whileTap={{ scale: 0.95 }}
       >
         🎲 Teste
-      </button>
+      </motion.button>
 
-      <button
+      <motion.button
         className="action-btn token-btn"
         onClick={onCreateToken}
         title="Criar Token no Mapa"
+        whileHover={{ scale: 1.05, y: -2 }}
+        whileTap={{ scale: 0.95 }}
       >
         🎭 Token
-      </button>
+      </motion.button>
 
-      <button
+      <motion.button
         className="action-btn view-btn"
         onClick={onViewDetails}
         title="Ver Ficha Completa"
+        whileHover={{ scale: 1.05, y: -2 }}
+        whileTap={{ scale: 0.95 }}
       >
         👁️ Ficha
-      </button>
+      </motion.button>
 
       {/* Conditions Dropdown */}
-      {showConditionsMenu && (
-        <ConditionsMenu
-          character={character}
-          onConditionToggle={onConditionToggle}
-          onClose={() => setShowConditionsMenu(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showConditionsMenu && (
+          <ConditionsMenu
+            character={character}
+            onConditionToggle={onConditionToggle}
+            onClose={() => setShowConditionsMenu(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Tests Dropdown */}
-      {showTestsMenu && (
-        <TestsMenu
-          character={character}
-          onRequestTest={onRequestTest}
-          onClose={() => setShowTestsMenu(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showTestsMenu && (
+          <TestsMenu
+            character={character}
+            onRequestTest={onRequestTest}
+            onClose={() => setShowTestsMenu(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// Conditions Menu Component
+// Conditions Menu Component with animations
 function ConditionsMenu({ character, onConditionToggle, onClose }) {
   const activeConditions = character.conditions || [];
 
   return (
-    <div className="conditions-menu">
+    <motion.div 
+      className="conditions-menu"
+      variants={menuVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
       <div className="menu-header">
         <span>Condições</span>
-        <button onClick={onClose} className="menu-close">✕</button>
+        <motion.button 
+          onClick={onClose} 
+          className="menu-close"
+          whileHover={{ scale: 1.2, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+        >
+          ✕
+        </motion.button>
       </div>
       <div className="menu-content">
-        {CONDITIONS.map((condition) => {
+        {CONDITIONS.map((condition, index) => {
           const isActive = activeConditions.some(c => c.name === condition.name);
           return (
-            <button
+            <motion.button
               key={condition.name}
               className={`condition-item ${isActive ? 'active' : ''}`}
               onClick={() => onConditionToggle(condition.name)}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.02 }}
+              whileHover={{ x: 5, backgroundColor: 'var(--bg-surface-light)' }}
+              whileTap={{ scale: 0.98 }}
             >
               <span className="condition-icon">{condition.icon}</span>
               <span className="condition-name">{condition.name}</span>
-              {isActive && <span className="condition-check">✓</span>}
-            </button>
+              {isActive && (
+                <motion.span 
+                  className="condition-check"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                >
+                  ✓
+                </motion.span>
+              )}
+            </motion.button>
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// Tests Menu Component  
+// Tests Menu Component with animations
 function TestsMenu({ character, onRequestTest, onClose }) {
   return (
-    <div className="tests-menu">
+    <motion.div 
+      className="tests-menu"
+      variants={menuVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+    >
       <div className="menu-header">
         <span>Pedir Testes</span>
-        <button onClick={onClose} className="menu-close">✕</button>
+        <motion.button 
+          onClick={onClose} 
+          className="menu-close"
+          whileHover={{ scale: 1.2, rotate: 90 }}
+          whileTap={{ scale: 0.9 }}
+        >
+          ✕
+        </motion.button>
       </div>
       <div className="menu-content">
         <div className="menu-section">
           <h5>Salvaguardas</h5>
-          {SAVES.map((save) => (
-            <button
+          {SAVES.map((save, index) => (
+            <motion.button
               key={save}
               className="test-item"
               onClick={() => onRequestTest('save', save)}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.02 }}
+              whileHover={{ x: 5, backgroundColor: 'var(--bg-surface-light)' }}
+              whileTap={{ scale: 0.98 }}
             >
               💾 {save}
-            </button>
+            </motion.button>
           ))}
         </div>
         
         <div className="menu-section">
           <h5>Perícias</h5>
-          {Object.keys(SKILLS).map((skill) => (
-            <button
+          {Object.keys(SKILLS).map((skill, index) => (
+            <motion.button
               key={skill}
               className="test-item"
               onClick={() => onRequestTest('skill', skill)}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.12 + index * 0.02 }}
+              whileHover={{ x: 5, backgroundColor: 'var(--bg-surface-light)' }}
+              whileTap={{ scale: 0.98 }}
             >
               🎯 {skill}
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-// NPC Card Component
-function NPCCard({ npc, onEdit, onDelete, onCreateToken, onViewDetails, getHPPercentage, getHPColor }) {
+// NPC Card Component with animations
+function NPCCard({ npc, index, onEdit, onDelete, onCreateToken, onViewDetails, getHPPercentage, getHPColor }) {
   const hpPercentage = getHPPercentage(npc);
   const hpColor = getHPColor(hpPercentage);
 
   return (
-    <div className="character-card npc-card">
+    <motion.div 
+      className="character-card npc-card"
+      variants={cardVariants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      whileHover="hover"
+      layout
+      custom={index}
+      transition={{ delay: index * 0.05 }}
+    >
       {/* Header */}
       <div className="card-header npc-header">
         <div className="player-status">
-          <span className="npc-indicator">🎭</span>
+          <motion.span 
+            className="npc-indicator"
+            animate={{ rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, repeatDelay: 2 }}
+          >
+            🎭
+          </motion.span>
           <span className="player-name">NPC</span>
         </div>
       </div>
@@ -950,9 +1381,12 @@ function NPCCard({ npc, onEdit, onDelete, onCreateToken, onViewDetails, getHPPer
             <span className="ac-text">🛡️ {npc.ac || 10}</span>
           </div>
           <div className="hp-bar">
-            <div
+            <motion.div
               className="hp-fill"
-              style={{ width: `${hpPercentage}%`, backgroundColor: hpColor }}
+              initial={{ width: 0 }}
+              animate={{ width: `${hpPercentage}%` }}
+              transition={{ duration: 0.6, ease: 'easeOut', delay: index * 0.05 }}
+              style={{ backgroundColor: hpColor }}
             />
           </div>
         </div>
@@ -960,31 +1394,67 @@ function NPCCard({ npc, onEdit, onDelete, onCreateToken, onViewDetails, getHPPer
 
       {/* Stats */}
       {npc.attributes && (
-        <div className="stats-section">
-          {Object.entries(npc.attributes).map(([stat, value]) => (
-            <div key={stat} className="stat-badge">
+        <motion.div 
+          className="stats-section"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 + index * 0.05 }}
+        >
+          {Object.entries(npc.attributes).map(([stat, value], statIndex) => (
+            <motion.div 
+              key={stat} 
+              className="stat-badge"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.3 + statIndex * 0.05 }}
+              whileHover={{ scale: 1.1, y: -2 }}
+            >
               <span className="stat-name">{stat.toUpperCase()}</span>
               <span className="stat-value">{value}</span>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* Actions */}
       <div className="card-actions npc-actions">
-        <button className="action-btn edit-btn" onClick={onEdit} title="Editar NPC">
+        <motion.button 
+          className="action-btn edit-btn" 
+          onClick={onEdit} 
+          title="Editar NPC"
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.95 }}
+        >
           ✏️ Editar
-        </button>
-        <button className="action-btn token-btn" onClick={onCreateToken} title="Colocar no Mapa">
+        </motion.button>
+        <motion.button 
+          className="action-btn token-btn" 
+          onClick={onCreateToken} 
+          title="Colocar no Mapa"
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.95 }}
+        >
           🗺️ Mapa
-        </button>
-        <button className="action-btn view-btn" onClick={onViewDetails} title="Ver Ficha">
+        </motion.button>
+        <motion.button 
+          className="action-btn view-btn" 
+          onClick={onViewDetails} 
+          title="Ver Ficha"
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.95 }}
+        >
           👁️ Ficha
-        </button>
-        <button className="action-btn delete-btn" onClick={onDelete} title="Deletar NPC">
+        </motion.button>
+        <motion.button 
+          className="action-btn delete-btn" 
+          onClick={onDelete} 
+          title="Deletar NPC"
+          whileHover={{ scale: 1.1, backgroundColor: 'var(--color-accent)' }}
+          whileTap={{ scale: 0.9 }}
+        >
           🗑️
-        </button>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }

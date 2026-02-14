@@ -1,0 +1,220 @@
+/*
+ * Bubble.css - Estilos do container flutuante
+ */
+
+.bubble {
+  /* Layout */
+  display: flex;
+  flex-direction: column;
+  
+  /* Visual base */
+  background: var(--bubble-bg, #232342);
+  border: 1px solid var(--bubble-border, rgba(255, 255, 255, 0.1));
+  border-radius: var(--bubble-radius, 14px);
+  box-shadow: var(--bubble-shadow, 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1));
+  
+  /* Transições */
+  transition: box-shadow 0.2s ease;
+  
+  /* Prevent text selection while dragging */
+  user-select: none;
+  
+  /* Overflow */
+  overflow: hidden;
+}
+
+/* Variantes */
+.bubble--default {
+  background: var(--bg-elevated, #232342);
+}
+
+.bubble--glass {
+  background: rgba(35, 35, 66, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bubble--solid {
+  background: var(--bg-secondary, #16213e);
+  border-color: var(--border-default, rgba(255, 255, 255, 0.1));
+}
+
+/* Estado de arrasto */
+.bubble--dragging {
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.5),
+    0 0 1px rgba(255, 255, 255, 0.15),
+    var(--shadow-glow, 0 0 20px rgba(99, 102, 241, 0.2));
+  cursor: grabbing !important;
+}
+
+/* ===== HEADER ===== */
+.bubble__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  
+  height: var(--bubble-header-height, 36px);
+  min-height: var(--bubble-header-height, 36px);
+  padding: 0 var(--space-3, 12px);
+  
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.bubble__header:active {
+  cursor: grabbing;
+}
+
+.bubble__header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  
+  overflow: hidden;
+}
+
+.bubble__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  width: 20px;
+  height: 20px;
+  
+  color: var(--accent-primary, #6366f1);
+  font-size: var(--text-sm, 14px);
+  flex-shrink: 0;
+}
+
+.bubble__title {
+  font-size: var(--text-sm, 14px);
+  font-weight: var(--font-medium, 500);
+  color: var(--text-primary, #f3f4f6);
+  
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== HEADER ACTIONS ===== */
+.bubble__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  
+  margin-left: var(--space-2, 8px);
+  flex-shrink: 0;
+}
+
+.bubble__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  width: 22px;
+  height: 22px;
+  
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  
+  color: var(--text-secondary, #9ca3af);
+  font-size: 10px;
+  
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bubble__action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #f3f4f6);
+}
+
+.bubble__action-btn--close:hover {
+  background: var(--accent-danger, #ef4444);
+  color: white;
+}
+
+/* ===== BODY ===== */
+.bubble__body {
+  padding: var(--space-3, 12px);
+  
+  color: var(--text-primary, #f3f4f6);
+  font-size: var(--text-sm, 14px);
+  line-height: var(--leading-normal, 1.5);
+  
+  /* Scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default, rgba(255, 255, 255, 0.1)) transparent;
+}
+
+.bubble__body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bubble__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bubble__body::-webkit-scrollbar-thumb {
+  background: var(--border-default, rgba(255, 255, 255, 0.1));
+  border-radius: 3px;
+}
+
+.bubble__body::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted, #6b7280);
+}
+
+/* ===== RESIZE HANDLE ===== */
+.bubble__resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  
+  width: 16px;
+  height: 16px;
+  
+  cursor: se-resize;
+  
+  /* Visual indicator */
+  background: linear-gradient(
+    135deg,
+    transparent 50%,
+    var(--border-default, rgba(255, 255, 255, 0.1)) 50%
+  );
+  border-radius: 0 0 var(--bubble-radius, 14px) 0;
+  
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.bubble:hover .bubble__resize-handle {
+  opacity: 1;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .bubble {
+    /* Em mobile, bubbles ocupam mais espaço */
+    min-width: 280px !important;
+    max-width: calc(100vw - 32px) !important;
+  }
+  
+  .bubble__header {
+    height: 40px;
+    min-height: 40px;
+  }
+  
+  .bubble__body {
+    padding: var(--space-4, 16px);
+  }
+}
+
+/* ===== DARK MODE OVERRIDES (caso precise) ===== */
+@media (prefers-color-scheme: light) {
+  /* O VTT é sempre dark, mas deixamos isso aqui caso queira light mode */
+}

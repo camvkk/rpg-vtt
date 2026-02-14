@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@spd789562/particle-emitter": "^1.0.2",
+    "framer-motion": "^12.34.0",
+    "lucide-react": "^0.564.0",
     "pixi.js": "^8.16.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

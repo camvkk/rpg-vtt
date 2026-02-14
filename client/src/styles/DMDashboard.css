@@ -1,13 +1,17 @@
-/* ── DM Dashboard ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   DM Dashboard - Redesign Owlbear Rodeo Style
+   ══════════════════════════════════════════════════════════════════════════ */
+
 .dm-dashboard {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-primary) 100%);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  animation: scaleIn 0.3s ease-out;
+  box-shadow: var(--shadow-lg), 0 0 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--color-border);
 }
 
 /* ── Header ── */
@@ -36,6 +40,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.title-icon {
+  display: inline-block;
 }
 
 .character-count {
@@ -80,6 +91,23 @@
   background: var(--color-primary);
   color: var(--bg-primary);
   font-weight: 600;
+  position: relative;
+}
+
+/* Tab indicator para animação com framer-motion */
+.dm-tab {
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+  border-radius: 3px 3px 0 0;
 }
 
 /* ── Content ── */
@@ -178,8 +206,27 @@
 
 .character-card:hover {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
+  box-shadow: 
+    var(--shadow-md),
+    0 0 20px rgba(226, 183, 20, 0.15),
+    inset 0 0 30px rgba(226, 183, 20, 0.02);
+}
+
+/* Efeito de brilho no hover (via framer-motion, não transform) */
+.character-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.character-card:hover::before {
+  opacity: 1;
 }
 
 /* Card Header */
@@ -839,4 +886,320 @@
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: white;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Melhorias Visuais - Owlbear Rodeo Style
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Efeito de glow nos avatares online */
+.online-indicator.online {
+  filter: drop-shadow(0 0 4px var(--color-success));
+}
+
+/* HP Bar com gradiente e glow */
+.hp-fill {
+  background: linear-gradient(
+    90deg,
+    currentColor 0%,
+    color-mix(in srgb, currentColor 80%, white) 100%
+  );
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* Efeito especial quando HP está crítico */
+.hp-fill[style*="var(--color-accent)"] {
+  animation: criticalHP 1s ease-in-out infinite;
+}
+
+@keyframes criticalHP {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 8px var(--color-accent);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 15px var(--color-accent);
+  }
+}
+
+/* Stat badges com hover effect */
+.stat-badge {
+  transition: all var(--transition-fast);
+  cursor: default;
+}
+
+.stat-badge:hover {
+  background: var(--bg-surface-light);
+  border-color: var(--color-primary);
+}
+
+/* Condition badges animados */
+.condition-badge {
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.condition-badge:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Menu items com visual melhorado */
+.condition-item,
+.test-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.condition-item::before,
+.test-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-primary);
+  transform: scaleY(0);
+  transition: transform var(--transition-fast);
+}
+
+.condition-item:hover::before,
+.test-item:hover::before {
+  transform: scaleY(1);
+}
+
+/* Scrollbar estilizada para os menus */
+.menu-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.menu-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.menu-content::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.menu-content::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Loading shimmer para cards */
+.character-card.loading {
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface) 25%,
+    var(--bg-surface-light) 50%,
+    var(--bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Search input com ícone animado */
+.dm-search {
+  padding-left: var(--spacing-lg);
+  position: relative;
+}
+
+.dm-search:focus {
+  box-shadow: 0 0 0 3px rgba(226, 183, 20, 0.15);
+}
+
+/* View toggle com visual melhorado */
+.view-toggle {
+  background: var(--bg-surface);
+  padding: 2px;
+}
+
+.view-toggle .btn-primary {
+  box-shadow: inset 0 0 10px rgba(226, 183, 20, 0.2);
+}
+
+/* Detail view com visual melhorado */
+.detail-header {
+  background: linear-gradient(135deg, var(--bg-surface-light) 0%, var(--bg-surface) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+}
+
+.detail-player-info h3 {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* NPC Card com visual diferenciado */
+.npc-card {
+  background: linear-gradient(135deg, var(--bg-surface-light) 0%, var(--bg-surface) 100%);
+}
+
+.npc-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle at top right, rgba(155, 89, 182, 0.15), transparent);
+  pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Responsividade Mobile Melhorada
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .dm-dashboard {
+    border-radius: 0;
+  }
+  
+  .dm-dashboard-tabs {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+  }
+  
+  .dm-tab {
+    border-radius: var(--radius-md);
+    text-align: center;
+    padding: var(--spacing-md);
+  }
+  
+  .tab-indicator {
+    display: none;
+  }
+  
+  .character-card {
+    touch-action: manipulation;
+  }
+  
+  .quick-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .action-btn {
+    flex: 1;
+    min-width: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dm-dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  
+  .dm-dashboard-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .dm-dashboard-title h2 {
+    font-size: 1.1rem;
+  }
+  
+  .character-count {
+    font-size: 0.75rem;
+  }
+  
+  .dm-tab {
+    font-size: 0.85rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  
+  .detail-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+  
+  .detail-actions {
+    width: 100%;
+  }
+  
+  .detail-actions .btn {
+    width: 100%;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Touch-friendly Mobile
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (hover: none) and (pointer: coarse) {
+  .action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: var(--spacing-sm);
+  }
+  
+  .condition-item,
+  .test-item {
+    min-height: 44px;
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+  
+  .quick-actions-compact .action-btn {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .hp-input {
+    min-height: 40px;
+    font-size: 1rem;
+  }
+  
+  .menu-close {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Preferências de Movimento Reduzido
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .character-card,
+  .action-btn,
+  .condition-badge,
+  .stat-badge,
+  .dm-tab,
+  .hp-fill {
+    transition: none !important;
+    animation: none !important;
+  }
+  
+  .character-card::before,
+  .condition-item::before,
+  .test-item::before {
+    display: none;
+  }
+  
+  @keyframes criticalHP {
+    0%, 100% { opacity: 1; }
+  }
 }
