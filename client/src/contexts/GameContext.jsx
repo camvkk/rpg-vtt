@@ -636,7 +636,9 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       };
 
       // Check if this is OUR roll and we need to delay for animation sync
-      const isMyRoll = data.playerId === socketRef.current?.id;
+      // Compare with state.player.id (UUID from server), not socket.id
+      const currentPlayerId = stateRef.current?.player?.id;
+      const isMyRoll = data.playerId === currentPlayerId;
       const rollStartTime = localRollStartTimeRef.current;
       
       if (isMyRoll && rollStartTime) {
