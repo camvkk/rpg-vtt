@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as PIXI from 'pixi.js';
-const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite, Texture } = PIXI;
+const { Application, Graphics, Container, Text, TextStyle, Assets, Sprite, Texture, ParticleContainer } = PIXI;
+import { Emitter } from '@spd789562/particle-emitter';
 import { useGame } from '../contexts/GameContext';
 import { 
   snapToGrid, pixelToGrid, gridCenterToPixel, GRID_CONSTANTS,
@@ -1658,22 +1659,28 @@ export default function MapCanvas({
     }
   }, [ui.activeTool, clearAoEPreview]);
 
-  // ── Weather Particle System ──
-  const weatherParticlesRef = useRef([]);
+  // ── Weather Particle System (using @spd789562/particle-emitter for Pixi v8) ──
+  const weatherEmitterRef = useRef(null);
+  const weatherContainerRef = useRef(null);
   const weatherAnimationRef = useRef(null);
   
   useEffect(() => {
     const app = pixiRef.current;
-    const weatherLayer = layersRef.current.weather;
     
-    if (!app || !weatherLayer) {
-      console.log('[Weather] No app or weatherLayer');
+    if (!app) {
+      console.log('[Weather] No app');
       return;
     }
     
-    // Clear existing weather from the proper layer
-    weatherLayer.removeChildren();
-    weatherParticlesRef.current = [];
+    // Cleanup previous weather
+    if (weatherEmitterRef.current) {
+      weatherEmitterRef.current.destroy();
+      weatherEmitterRef.current = null;
+    }
+    if (weatherContainerRef.current) {
+      weatherContainerRef.current.destroy();
+      weatherContainerRef.current = null;
+    }
     if (weatherAnimationRef.current) {
       app.ticker.remove(weatherAnimationRef.current);
       weatherAnimationRef.current = null;
@@ -1682,138 +1689,135 @@ export default function MapCanvas({
     console.log('[Weather] Setting weather to:', weather);
     if (!weather || weather === 'none') return;
     
-    // Get actual visible viewport size from the canvas element
-    const canvas = app.canvas;
-    const visibleW = canvas.clientWidth || 1200;
-    const visibleH = canvas.clientHeight || 800;
-    
+    // Get viewport size
+    const visibleW = app.canvas.clientWidth || 1200;
+    const visibleH = app.canvas.clientHeight || 800;
     console.log('[Weather] Visible viewport:', visibleW, 'x', visibleH);
     
-    // Weather layer should NOT be affected by pan/zoom - it's a screen overlay
-    // We need to counter the view transform applied in applyTransform
-    const particleCount = weather === 'fog' ? 40 : 200;
-    const particles = [];
+    // Create particle container with dynamic properties (CRITICAL for Pixi v8!)
+    const particleContainer = new ParticleContainer({
+      dynamicProperties: {
+        position: true,
+        rotation: true,
+        scale: true,
+        color: true,
+        uvs: false,
+        vertex: false,
+      },
+    });
+    weatherContainerRef.current = particleContainer;
     
-    // Create weather particles using Sprite with texture (more reliable than Graphics in Pixi v8)
-    // Create a simple white texture for particles
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = 64;
-    tempCanvas.height = 64;
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.fillStyle = 'white';
-    tempCtx.fillRect(0, 0, 64, 64);
-    const whiteTexture = Texture.from(tempCanvas);
+    // Add to stage (on top of everything)
+    app.stage.addChild(particleContainer);
     
-    for (let i = 0; i < particleCount; i++) {
-      const sprite = new Sprite(whiteTexture);
-      const particle = { graphic: sprite, x: 0, y: 0, vx: 0, vy: 0, phase: 0, size: 0, baseAlpha: 1 };
-      
-      if (weather === 'rain') {
-        // Rain: blue diagonal streaks
-        particle.size = 6;
-        particle.x = Math.random() * visibleW;
-        particle.y = Math.random() * visibleH;
-        particle.vx = -3;
-        particle.vy = 18 + Math.random() * 8;
-        particle.baseAlpha = 0.7;
-        
-        sprite.width = particle.size;
-        sprite.height = 45;
-        sprite.tint = 0x6699ff;
-        sprite.alpha = particle.baseAlpha;
-        sprite.rotation = -0.2;
-      } else if (weather === 'snow') {
-        // Snow: white circles
-        particle.size = 8 + Math.random() * 10;
-        particle.x = Math.random() * visibleW;
-        particle.y = Math.random() * visibleH;
-        particle.vx = (Math.random() - 0.5) * 1.5;
-        particle.vy = 2 + Math.random() * 2;
-        particle.phase = Math.random() * Math.PI * 2;
-        particle.baseAlpha = 0.9;
-        
-        sprite.width = particle.size;
-        sprite.height = particle.size;
-        sprite.tint = 0xffffff;
-        sprite.alpha = particle.baseAlpha;
-      } else if (weather === 'fog') {
-        // Fog: large translucent circles
-        particle.size = 150 + Math.random() * 200;
-        particle.x = Math.random() * visibleW;
-        particle.y = Math.random() * visibleH;
-        particle.vx = 0.3 + Math.random() * 0.3;
-        particle.vy = (Math.random() - 0.5) * 0.2;
-        particle.phase = Math.random() * Math.PI * 2;
-        particle.baseAlpha = 0.25;
-        
-        sprite.width = particle.size;
-        sprite.height = particle.size;
-        sprite.tint = 0xcccccc;
-        sprite.alpha = particle.baseAlpha;
-      }
-      
-      sprite.position.set(particle.x, particle.y);
-      
-      // Log first few particles for debugging
-      if (i < 3) {
-        console.log('[Weather] Particle', i, 'at', particle.x.toFixed(0), particle.y.toFixed(0), 'size:', particle.size);
-      }
-      
-      weatherLayer.addChild(sprite);
-      particles.push(particle);
+    // Create particle texture (small white rectangle/circle)
+    const textureGraphics = new Graphics();
+    if (weather === 'rain') {
+      textureGraphics.rect(0, 0, 3, 20);
+      textureGraphics.fill(0xffffff);
+    } else {
+      textureGraphics.circle(8, 8, 8);
+      textureGraphics.fill(0xffffff);
+    }
+    const particleTexture = app.renderer.generateTexture(textureGraphics);
+    textureGraphics.destroy();
+    
+    // Weather configs for emitter
+    const configs = {
+      rain: {
+        lifetime: { min: 0.4, max: 0.8 },
+        frequency: 0.001,
+        spawnChance: 1,
+        particlesPerWave: 10,
+        maxParticles: 800,
+        pos: { x: visibleW / 2, y: -30 },
+        behaviors: [
+          { type: 'alpha', config: { alpha: { list: [{ value: 0.6, time: 0 }, { value: 0.2, time: 1 }] } } },
+          { type: 'scale', config: { scale: { list: [{ value: 0.15, time: 0 }, { value: 0.1, time: 1 }] } } },
+          { type: 'color', config: { color: { list: [{ value: '6699ff', time: 0 }, { value: '4477dd', time: 1 }] } } },
+          { type: 'moveSpeed', config: { speed: { list: [{ value: 1000, time: 0 }, { value: 1200, time: 1 }] } } },
+          { type: 'rotationStatic', config: { min: 75, max: 85 } },
+          { type: 'spawnShape', config: { type: 'rect', data: { x: -visibleW / 2 - 100, y: 0, w: visibleW + 200, h: 20 } } },
+          { type: 'textureSingle', config: { texture: particleTexture } },
+        ],
+      },
+      snow: {
+        lifetime: { min: 4, max: 8 },
+        frequency: 0.03,
+        spawnChance: 1,
+        particlesPerWave: 2,
+        maxParticles: 300,
+        pos: { x: visibleW / 2, y: -20 },
+        behaviors: [
+          { type: 'alpha', config: { alpha: { list: [{ value: 0, time: 0 }, { value: 0.9, time: 0.1 }, { value: 0.9, time: 0.9 }, { value: 0, time: 1 }] } } },
+          { type: 'scale', config: { scale: { list: [{ value: 0.1, time: 0 }, { value: 0.15, time: 1 }] }, minMult: 0.3 } },
+          { type: 'color', config: { color: { list: [{ value: 'ffffff', time: 0 }, { value: 'ddddff', time: 1 }] } } },
+          { type: 'moveSpeed', config: { speed: { list: [{ value: 60, time: 0 }, { value: 100, time: 1 }] } } },
+          { type: 'rotationStatic', config: { min: 160, max: 200 } },
+          { type: 'rotation', config: { accel: 0, minSpeed: 20, maxSpeed: 60, minStart: 0, maxStart: 360 } },
+          { type: 'spawnShape', config: { type: 'rect', data: { x: -visibleW / 2, y: 0, w: visibleW, h: 10 } } },
+          { type: 'textureSingle', config: { texture: particleTexture } },
+        ],
+      },
+      fog: {
+        lifetime: { min: 8, max: 15 },
+        frequency: 0.3,
+        spawnChance: 1,
+        particlesPerWave: 1,
+        maxParticles: 40,
+        pos: { x: visibleW / 2, y: visibleH / 2 },
+        behaviors: [
+          { type: 'alpha', config: { alpha: { list: [{ value: 0, time: 0 }, { value: 0.15, time: 0.2 }, { value: 0.15, time: 0.8 }, { value: 0, time: 1 }] } } },
+          { type: 'scale', config: { scale: { list: [{ value: 8, time: 0 }, { value: 12, time: 1 }] }, minMult: 0.5 } },
+          { type: 'color', config: { color: { list: [{ value: 'cccccc', time: 0 }, { value: 'aaaaaa', time: 1 }] } } },
+          { type: 'moveSpeed', config: { speed: { list: [{ value: 15, time: 0 }, { value: 25, time: 1 }] } } },
+          { type: 'rotationStatic', config: { min: -20, max: 20 } },
+          { type: 'spawnShape', config: { type: 'rect', data: { x: -visibleW / 2 - 100, y: -visibleH / 2 - 100, w: visibleW + 200, h: visibleH + 200 } } },
+          { type: 'textureSingle', config: { texture: particleTexture } },
+        ],
+      },
+    };
+    
+    const config = configs[weather];
+    if (!config) {
+      console.log('[Weather] Unknown weather type:', weather);
+      return;
     }
     
-    weatherParticlesRef.current = particles;
-    console.log('[Weather] Created', particleCount, weather, 'particles in weatherLayer');
-    console.log('[Weather] Layer visible:', weatherLayer.visible, 'alpha:', weatherLayer.alpha, 'children:', weatherLayer.children.length);
-    console.log('[Weather] Layer position:', weatherLayer.position.x, weatherLayer.position.y, 'scale:', weatherLayer.scale.x);
+    // Create emitter with Pixi v8 compatible API
+    const emitter = new Emitter(particleContainer, config);
+    weatherEmitterRef.current = emitter;
+    emitter.emit = true;
     
-    // Animation loop - particles use screen coordinates directly (weatherLayer not transformed)
-    const animate = (delta) => {
-      particles.forEach((p) => {
-        if (weather === 'rain') {
-          p.x += p.vx * delta;
-          p.y += p.vy * delta;
-          // Reset when off screen
-          if (p.y > visibleH + 50 || p.x < -50) {
-            p.x = Math.random() * visibleW;
-            p.y = -50;
-          }
-        } else if (weather === 'snow') {
-          p.phase += 0.02 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 1) * delta;
-          p.y += p.vy * delta;
-          // Reset when off screen
-          if (p.y > visibleH + 30) {
-            p.y = -30;
-            p.x = Math.random() * visibleW;
-          }
-          if (p.x < -30) p.x = visibleW + 30;
-          if (p.x > visibleW + 30) p.x = -30;
-        } else if (weather === 'fog') {
-          p.phase += 0.006 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.15) * delta;
-          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
-          // Fog alpha pulsing
-          p.graphic.alpha = p.baseAlpha + Math.sin(p.phase * 0.5) * 0.05;
-          // Wrap around
-          if (p.x > visibleW + 200) p.x = -200;
-          if (p.x < -200) p.x = visibleW + 200;
-          if (p.y > visibleH + 200) p.y = -200;
-          if (p.y < -200) p.y = visibleH + 200;
-        }
-        
-        // Direct screen coordinates - no transform needed
-        p.graphic.position.set(p.x, p.y);
-      });
+    console.log('[Weather] Emitter created for', weather);
+    
+    // Update loop
+    let lastTime = Date.now();
+    const animate = () => {
+      const now = Date.now();
+      const delta = (now - lastTime) * 0.001; // Convert to seconds
+      lastTime = now;
+      emitter.update(delta);
     };
     
     app.ticker.add(animate);
     weatherAnimationRef.current = animate;
     
+    console.log('[Weather] Animation started');
+    
     return () => {
+      if (weatherEmitterRef.current) {
+        weatherEmitterRef.current.destroy();
+        weatherEmitterRef.current = null;
+      }
+      if (weatherContainerRef.current && weatherContainerRef.current.parent) {
+        weatherContainerRef.current.parent.removeChild(weatherContainerRef.current);
+        weatherContainerRef.current.destroy();
+        weatherContainerRef.current = null;
+      }
       if (app.ticker && weatherAnimationRef.current) {
         app.ticker.remove(weatherAnimationRef.current);
+        weatherAnimationRef.current = null;
       }
     };
   }, [weather]);
