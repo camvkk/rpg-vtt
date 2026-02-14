@@ -1694,52 +1694,52 @@ export default function MapCanvas({
     app.stage.addChild(weatherOverlay);
     app._weatherOverlay = weatherOverlay;
     
-    console.log('[Weather] Overlay created, index:', app.stage.getChildIndex(weatherOverlay), '/', app.stage.children.length);
+    // Use screen dimensions for weather coverage
+    const visibleW = screenW;
+    const visibleH = screenH;
+    const particleCount = weather === 'fog' ? 40 : 250;
     
-    // DEBUG: Add corner markers to show where the overlay is rendering
-    const markers = [
-      { x: 0, y: 0, color: 0xff0000, label: 'TOP-LEFT (0,0)' },
-      { x: 500, y: 0, color: 0x00ff00, label: 'TOP-CENTER (500,0)' },
-      { x: 0, y: 400, color: 0x0000ff, label: 'LEFT-CENTER (0,400)' },
-      { x: 500, y: 400, color: 0xffff00, label: 'CENTER (500,400)' },
-    ];
-    
-    markers.forEach(m => {
-      const marker = new Sprite(PIXI.Texture.WHITE);
-      marker.width = 60;
-      marker.height = 60;
-      marker.x = m.x;
-      marker.y = m.y;
-      marker.tint = m.color;
-      marker.alpha = 0.9;
-      weatherOverlay.addChild(marker);
-      console.log('[Weather] Marker at', m.label);
-    });
-    
-    // Use fixed visible area (not canvas size which may be larger)
-    const visibleW = 1000;
-    const visibleH = 800;
-    const particleCount = weather === 'fog' ? 30 : 200;
-    
-    // Create weather particles - EXACTLY like markers for testing
-    const testColors = [0xff6600, 0x6600ff, 0x00ff66, 0xff0066, 0x0066ff];
+    // Create weather particles
     for (let i = 0; i < particleCount; i++) {
       const sprite = new Sprite(PIXI.Texture.WHITE);
       
-      // ALL particles: same as markers (60x60, alpha 0.9, solid color)
-      sprite.width = 40;
-      sprite.height = 40;
-      sprite.tint = testColors[i % 5];
-      sprite.alpha = 0.9;
-      
-      // Grid positions like the working test
-      sprite.x = 50 + (i % 20) * 45;
-      sprite.y = 100 + Math.floor(i / 20) * 45;
-      
-      // Store velocity for animation
-      sprite.vx = 0;
-      sprite.vy = weather === 'rain' ? 8 : (weather === 'snow' ? 2 : 0.3);
-      sprite.phase = Math.random() * Math.PI * 2;
+      if (weather === 'rain') {
+        // Rain: blue diagonal streaks
+        sprite.width = 4;
+        sprite.height = 40;
+        sprite.tint = 0x6699ff;
+        sprite.alpha = 0.5;
+        sprite.rotation = -0.2;
+        sprite.x = Math.random() * visibleW * 1.2;
+        sprite.y = Math.random() * visibleH;
+        sprite.vx = -3;
+        sprite.vy = 18 + Math.random() * 8;
+      } else if (weather === 'snow') {
+        // Snow: white flakes
+        const size = 8 + Math.random() * 12;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.tint = 0xffffff;
+        sprite.alpha = 0.85;
+        sprite.x = Math.random() * visibleW;
+        sprite.y = Math.random() * visibleH;
+        sprite.vx = (Math.random() - 0.5) * 1.5;
+        sprite.vy = 2 + Math.random() * 3;
+        sprite.phase = Math.random() * Math.PI * 2;
+      } else if (weather === 'fog') {
+        // Fog: large translucent blobs
+        const size = 200 + Math.random() * 300;
+        sprite.width = size;
+        sprite.height = size;
+        sprite.tint = 0xcccccc;
+        sprite.alpha = 0.25;
+        sprite.anchor.set(0.5);
+        sprite.x = Math.random() * visibleW;
+        sprite.y = Math.random() * visibleH;
+        sprite.vx = 0.4 + Math.random() * 0.4;
+        sprite.vy = (Math.random() - 0.5) * 0.3;
+        sprite.phase = Math.random() * Math.PI * 2;
+      }
       
       // Log first few particles for debugging
       if (i < 3) {
@@ -1750,7 +1750,7 @@ export default function MapCanvas({
       weatherParticlesRef.current.push(sprite);
     }
     
-    console.log('[Weather] Created', particleCount, weather, 'particles in visible area', visibleW, 'x', visibleH);
+    console.log('[Weather] Created', particleCount, weather, 'particles');
     
     // Animation loop
     const animate = (delta) => {
@@ -1758,26 +1758,33 @@ export default function MapCanvas({
         if (weather === 'rain') {
           p.x += p.vx * delta;
           p.y += p.vy * delta;
-          if (p.y > visibleH + 40 || p.x < -40) {
+          // Reset when off screen
+          if (p.y > visibleH + 50 || p.x < -50) {
             p.x = Math.random() * visibleW * 1.3;
-            p.y = -40;
+            p.y = -50;
           }
         } else if (weather === 'snow') {
-          p.phase += 0.03 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.8) * delta;
+          p.phase += 0.025 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 1.2) * delta;
           p.y += p.vy * delta;
-          if (p.y > visibleH + 20) {
-            p.y = -20;
+          // Reset when off screen
+          if (p.y > visibleH + 30) {
+            p.y = -30;
             p.x = Math.random() * visibleW;
           }
-          if (p.x < -20) p.x = visibleW + 20;
-          if (p.x > visibleW + 20) p.x = -20;
+          if (p.x < -30) p.x = visibleW + 30;
+          if (p.x > visibleW + 30) p.x = -30;
         } else if (weather === 'fog') {
-          p.phase += 0.01 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.15) * delta;
-          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
-          if (p.x > visibleW + 200) p.x = -200;
-          if (p.x < -200) p.x = visibleW + 200;
+          p.phase += 0.008 * delta;
+          p.x += (p.vx + Math.sin(p.phase) * 0.2) * delta;
+          p.y += (p.vy + Math.cos(p.phase) * 0.15) * delta;
+          // Fog alpha pulsing
+          p.alpha = 0.2 + Math.sin(p.phase * 0.5) * 0.08;
+          // Wrap around
+          if (p.x > visibleW + 250) p.x = -250;
+          if (p.x < -250) p.x = visibleW + 250;
+          if (p.y > visibleH + 250) p.y = -250;
+          if (p.y < -250) p.y = visibleH + 250;
         }
       });
     };
