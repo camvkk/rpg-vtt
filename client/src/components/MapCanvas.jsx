@@ -1685,78 +1685,41 @@ export default function MapCanvas({
     
     const screenW = app.screen.width;
     const screenH = app.screen.height;
-    const particleCount = weather === 'fog' ? 25 : 150;
     
-    console.log('[Weather] Creating', particleCount, 'particles, screen:', screenW, 'x', screenH);
+    console.log('[Weather] Screen size:', screenW, 'x', screenH);
     
-    // Create a NEW overlay container and add it as the LAST child of stage (on top of everything)
+    // Create overlay on top
     const weatherOverlay = new Container();
     weatherOverlay.label = 'weatherOverlay';
-    app.stage.addChild(weatherOverlay); // This puts it on TOP of all other layers
-    app._weatherOverlay = weatherOverlay; // Store reference for cleanup
+    app.stage.addChild(weatherOverlay);
+    app._weatherOverlay = weatherOverlay;
     
-    console.log('[Weather] Created overlay, stage children:', app.stage.children.length, 'overlay index:', app.stage.getChildIndex(weatherOverlay));
+    console.log('[Weather] Overlay created, index:', app.stage.getChildIndex(weatherOverlay), '/', app.stage.children.length);
     
-    // Create particles - simplified, no animation for now
-    for (let i = 0; i < particleCount; i++) {
-      const particle = new Sprite(PIXI.Texture.WHITE);
+    // MINIMAL TEST: Just 10 big colorful squares, NO animation
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xff8800, 0x88ff00, 0x0088ff, 0xff0088];
+    
+    for (let i = 0; i < 10; i++) {
+      const sprite = new Sprite(PIXI.Texture.WHITE);
+      sprite.width = 50;
+      sprite.height = 50;
+      sprite.x = 100 + (i % 5) * 100;
+      sprite.y = 100 + Math.floor(i / 5) * 100;
+      sprite.tint = colors[i];
+      sprite.alpha = 1;
       
-      // Fixed positions spread across screen
-      particle.x = (i % 15) * 70 + 20;
-      particle.y = Math.floor(i / 15) * 70 + 20;
+      console.log('[Weather] Test sprite', i, 'at', sprite.x, sprite.y, 'color:', colors[i].toString(16), 'parent:', weatherOverlay.label);
       
-      if (weather === 'rain') {
-        particle.width = 3;
-        particle.height = 25;
-        particle.tint = 0x66aaff;
-        particle.alpha = 0.8;
-        particle.rotation = -0.2;
-        particle.vx = -3;
-        particle.vy = 12 + Math.random() * 4;
-      } else if (weather === 'snow') {
-        particle.width = 8;
-        particle.height = 8;
-        particle.tint = 0xffffff;
-        particle.alpha = 0.95;
-        particle.vx = Math.sin(i) * 0.5;
-        particle.vy = 1 + Math.random() * 1.5;
-        particle.phase = Math.random() * Math.PI * 2;
-      } else if (weather === 'fog') {
-        particle.width = 200;
-        particle.height = 200;
-        particle.tint = 0xcccccc;
-        particle.alpha = 0.2;
-        particle.x = Math.random() * screenW;
-        particle.y = Math.random() * screenH;
-        particle.vx = 0.2;
-        particle.vy = 0;
-        particle.phase = Math.random() * Math.PI * 2;
-      }
-      
-      if (i < 3) {
-        console.log('[Weather] Particle', i, ':', particle.x, particle.y, particle.width, 'x', particle.height, 'alpha:', particle.alpha);
-      }
-      
-      weatherOverlay.addChild(particle);
-      weatherParticlesRef.current.push(particle);
+      weatherOverlay.addChild(sprite);
+      weatherParticlesRef.current.push(sprite);
     }
     
-    console.log('[Weather] Created', weatherParticlesRef.current.length, 'particles in overlay');
+    console.log('[Weather] Added', weatherOverlay.children.length, 'children to overlay');
+    console.log('[Weather] Overlay visible:', weatherOverlay.visible, 'alpha:', weatherOverlay.alpha, 'worldVisible:', weatherOverlay.worldVisible);
     
-    // Animation loop - use screen coords (weather is fixed to screen, not world)
+    // NO ANIMATION - just static squares
     const animate = (delta) => {
-      const w = screenW;
-      const h = screenH;
-      
-      weatherParticlesRef.current.forEach((p, i) => {
-        if (weather === 'rain') {
-          p.x += p.vx * delta;
-          p.y += p.vy * delta;
-          // Reset when off screen
-          if (p.y > h + 30 || p.x < -30) {
-            p.x = Math.random() * w + w * 0.3;
-            p.y = -30;
-          }
+      // Empty for now - no movement
         } else if (weather === 'snow') {
           p.phase += 0.02 * delta;
           p.x += (p.vx + Math.sin(p.phase) * 0.5) * delta;
