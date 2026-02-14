@@ -1708,7 +1708,10 @@ export default function MapCanvas({
         particle.vy = 18 + Math.random() * 8;
         particle.baseAlpha = 0.7;
         
-        g.rect(0, 0, particle.size, 45).fill({ color: 0x6699ff, alpha: particle.baseAlpha });
+        // Pixi v8 Graphics API
+        g.rect(0, 0, particle.size, 45);
+        g.fill(0x6699ff);
+        g.alpha = particle.baseAlpha;
         g.rotation = -0.2;
       } else if (weather === 'snow') {
         // Snow: white circles - BIGGER
@@ -1720,7 +1723,9 @@ export default function MapCanvas({
         particle.phase = Math.random() * Math.PI * 2;
         particle.baseAlpha = 0.9;
         
-        g.circle(0, 0, particle.size).fill({ color: 0xffffff, alpha: particle.baseAlpha });
+        g.circle(0, 0, particle.size);
+        g.fill(0xffffff);
+        g.alpha = particle.baseAlpha;
       } else if (weather === 'fog') {
         // Fog: large translucent circles - MORE VISIBLE
         particle.size = 150 + Math.random() * 200;
@@ -1731,7 +1736,9 @@ export default function MapCanvas({
         particle.phase = Math.random() * Math.PI * 2;
         particle.baseAlpha = 0.25;
         
-        g.circle(0, 0, particle.size).fill({ color: 0xcccccc, alpha: particle.baseAlpha });
+        g.circle(0, 0, particle.size);
+        g.fill(0xcccccc);
+        g.alpha = particle.baseAlpha;
       }
       
       g.position.set(particle.x, particle.y);
