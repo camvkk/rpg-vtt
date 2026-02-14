@@ -1717,28 +1717,9 @@ export default function MapCanvas({
     console.log('[Weather] Added', weatherOverlay.children.length, 'children to overlay');
     console.log('[Weather] Overlay visible:', weatherOverlay.visible, 'alpha:', weatherOverlay.alpha, 'worldVisible:', weatherOverlay.worldVisible);
     
-    // NO ANIMATION - just static squares
+    // NO ANIMATION for this test
     const animate = (delta) => {
-      // Empty for now - no movement
-        } else if (weather === 'snow') {
-          p.phase += 0.02 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.5) * delta;
-          p.y += p.vy * delta;
-          if (p.y > h + 20) {
-            p.y = -20;
-            p.x = Math.random() * w;
-          }
-          if (p.x < -20) p.x = w + 20;
-          if (p.x > w + 20) p.x = -20;
-        } else if (weather === 'fog') {
-          p.phase += 0.008 * delta;
-          p.x += (p.vx + Math.sin(p.phase) * 0.2) * delta;
-          p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
-          p.alpha = 0.1 + Math.sin(p.phase) * 0.05;
-          if (p.x > w + 200) p.x = -200;
-          if (p.x < -200) p.x = w + 200;
-        }
-      });
+      // Static for debugging
     };
     
     app.ticker.add(animate);
