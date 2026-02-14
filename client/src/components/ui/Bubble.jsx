@@ -23,6 +23,7 @@ const Bubble = ({
   className = '',
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
+  const [wasDragged, setWasDragged] = useState(false);
   const dragControls = useDragControls();
   const constraintsRef = useRef(null);
 
@@ -32,7 +33,11 @@ const Bubble = ({
   };
 
   const handleExpand = () => {
-    setIsMinimized(false);
+    // Só expande se não foi um drag (evita abrir ao soltar)
+    if (!wasDragged) {
+      setIsMinimized(false);
+    }
+    setWasDragged(false);
   };
 
   // Minimized icon view
@@ -63,6 +68,7 @@ const Bubble = ({
             cursor: 'grab',
           }}
           whileDrag={{ cursor: 'grabbing', scale: 1.1 }}
+          onDragEnd={() => setWasDragged(true)}
           onClick={handleExpand}
           className="bubble-minimized"
         >
