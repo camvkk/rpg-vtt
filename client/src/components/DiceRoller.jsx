@@ -49,77 +49,86 @@ export default function DiceRoller() {
   const [rollContext, setRollContext] = useState(''); // e.g., "Ataque com Espada Longa"
   const [contextType, setContextType] = useState('other'); // attack, damage, skill, save, other
   const [pendingRoll, setPendingRoll] = useState(null); // formula we're waiting for
+  const [rollStartTime, setRollStartTime] = useState(null); // timestamp when roll was initiated
   const trayIdRef = useRef(0);
+  const lastProcessedResultRef = useRef(null); // prevent processing same result twice
 
   // Listen for dice results from server to sync with our pending roll
   useEffect(() => {
-    if (!pendingRoll || !state.chat?.length || !rolling) return;
+    if (!rolling || !rollStartTime || !state.chat?.length) return;
     
-    // Find the MOST RECENT dice result (last in array) that matches our pending roll
+    // Find dice results that arrived AFTER we started rolling
     const diceResults = state.chat.filter(msg => msg.type === 'dice_result');
-    const recentDiceResult = [...diceResults].reverse().find(msg => {
-      // Match if it's our roll (same formula base, ignoring spaces)
-      const msgFormula = (msg.formula || '').replace(/\s/g, '').toLowerCase();
-      const pendingFormula = pendingRoll.replace(/\s/g, '').toLowerCase();
-      // Check if formulas match (allowing for context text in formula)
-      return msgFormula === pendingFormula || 
-             msgFormula.startsWith(pendingFormula) || 
-             pendingFormula.startsWith(msgFormula);
+    
+    // Get the most recent result
+    const recentDiceResult = diceResults[diceResults.length - 1];
+    
+    if (!recentDiceResult) return;
+    
+    // Check if this is a NEW result (not one we already processed)
+    const resultId = recentDiceResult.id || recentDiceResult.timestamp;
+    if (lastProcessedResultRef.current === resultId) return;
+    
+    // Check if this result arrived after we started rolling
+    // Use timestamp from result or assume it's new if no timestamp
+    const resultTime = recentDiceResult.timestamp ? new Date(recentDiceResult.timestamp).getTime() : Date.now();
+    
+    // Allow 2 second window for server latency
+    if (resultTime < rollStartTime - 2000) return;
+    
+    // Mark as processed
+    lastProcessedResultRef.current = resultId;
+    
+    // Get individual dice values from server
+    const serverIndividual = recentDiceResult.breakdown?.individual || 
+                             recentDiceResult.rollDetails?.individual || 
+                             [];
+    
+    // Filter to only kept dice (not dropped by advantage/disadvantage)
+    const keptServerRolls = serverIndividual.filter(r => r.kept !== false && !r.dropped);
+    
+    // Build dice results matching the tray
+    const displayDice = tray.map((dieInfo, i) => {
+      let value = 0;
+      
+      if (keptServerRolls[i] !== undefined) {
+        const serverRoll = keptServerRolls[i];
+        value = serverRoll.value || serverRoll.roll || (typeof serverRoll === 'number' ? serverRoll : 0);
+      }
+      
+      // Fallback for single die: calculate from total minus modifier
+      if (value === 0 && recentDiceResult.total && tray.length === 1) {
+        value = recentDiceResult.total - modifier;
+      }
+      
+      return {
+        sides: dieInfo.sides,
+        value: value,
+        roll: value,
+        color: dieInfo.color,
+        icon: dieInfo.icon,
+        label: dieInfo.label,
+        isCrit: dieInfo.sides === 20 && value === 20,
+        isFumble: dieInfo.sides === 20 && value === 1,
+        kept: true,
+        dropped: false,
+      };
     });
 
-    if (recentDiceResult) {
-      // Get individual dice values from server
-      // Server format: breakdown.individual or rollDetails.individual
-      const serverIndividual = recentDiceResult.breakdown?.individual || 
-                               recentDiceResult.rollDetails?.individual || 
-                               [];
-      
-      // Build dice results matching the tray
-      // Filter to only kept dice (not dropped by advantage/disadvantage)
-      const keptServerRolls = serverIndividual.filter(r => r.kept !== false && !r.dropped);
-      
-      const displayDice = tray.map((dieInfo, i) => {
-        // Get corresponding server value
-        let value = 0;
-        
-        if (keptServerRolls[i] !== undefined) {
-          const serverRoll = keptServerRolls[i];
-          value = serverRoll.value || serverRoll.roll || (typeof serverRoll === 'number' ? serverRoll : 0);
-        }
-        
-        // Fallback for single die: calculate from total minus modifier
-        if (value === 0 && recentDiceResult.total && tray.length === 1) {
-          value = recentDiceResult.total - modifier;
-        }
-        
-        return {
-          sides: dieInfo.sides,
-          value: value,
-          roll: value,
-          color: dieInfo.color,
-          icon: dieInfo.icon,
-          label: dieInfo.label,
-          isCrit: dieInfo.sides === 20 && value === 20,
-          isFumble: dieInfo.sides === 20 && value === 1,
-          kept: true,
-          dropped: false,
-        };
-      });
-
-      const rollData = { 
-        dice: displayDice, 
-        total: recentDiceResult.total, 
-        formula: recentDiceResult.formula || pendingRoll,
-        rollContext: recentDiceResult.rollContext || '',
-        timestamp: new Date().toISOString() 
-      };
-      
-      setResults(rollData);
-      setRolling(false);
-      setPendingRoll(null);
-      setHistory(prev => [rollData, ...prev].slice(0, 10));
-    }
-  }, [state.chat, pendingRoll, rolling, tray, modifier]);
+    const rollData = { 
+      dice: displayDice, 
+      total: recentDiceResult.total, 
+      formula: recentDiceResult.formula || pendingRoll || '',
+      rollContext: recentDiceResult.rollContext || '',
+      timestamp: recentDiceResult.timestamp || new Date().toISOString() 
+    };
+    
+    setResults(rollData);
+    setRolling(false);
+    setPendingRoll(null);
+    setRollStartTime(null);
+    setHistory(prev => [rollData, ...prev].slice(0, 10));
+  }, [state.chat, rolling, rollStartTime, tray, modifier, pendingRoll]);
 
   const addDie = useCallback((diceType) => {
     setTray(prev => [...prev, { ...diceType, id: ++trayIdRef.current }]);
@@ -140,8 +149,13 @@ export default function DiceRoller() {
 
   const handleRoll = useCallback(async () => {
     if (tray.length === 0 || rolling) return;
+    
+    // Mark the start time BEFORE changing state
+    const startTime = Date.now();
+    
     setRolling(true);
     setResults(null);
+    setRollStartTime(startTime);
 
     const formula = buildFormula(tray, modifier);
 
@@ -166,6 +180,7 @@ export default function DiceRoller() {
       console.error('Failed to send dice roll:', e);
       setRolling(false);
       setPendingRoll(null);
+      setRollStartTime(null);
     }
 
     // Timeout fallback - if server doesn't respond in 5s, stop rolling animation
@@ -173,6 +188,7 @@ export default function DiceRoller() {
       setRolling(prev => {
         if (prev) {
           setPendingRoll(null);
+          setRollStartTime(null);
           return false;
         }
         return prev;
