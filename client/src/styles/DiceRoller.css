@@ -309,27 +309,33 @@
 
 /* Rolling animation */
 .dice-in-tray.dice-rolling {
-  animation: diceRoll3D 1.5s ease-in-out;
+  animation: diceRoll3D 2.5s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 @keyframes diceRoll3D {
   0% {
     transform: perspective(200px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
   }
-  15% {
-    transform: perspective(200px) rotateX(180deg) rotateY(90deg) rotateZ(45deg) scale(1.2) translateY(-10px);
+  10% {
+    transform: perspective(200px) rotateX(120deg) rotateY(60deg) rotateZ(30deg) scale(1.15) translateY(-8px);
   }
-  30% {
-    transform: perspective(200px) rotateX(360deg) rotateY(180deg) rotateZ(90deg) scale(1.1) translateY(-15px);
+  25% {
+    transform: perspective(200px) rotateX(300deg) rotateY(180deg) rotateZ(90deg) scale(1.25) translateY(-18px);
   }
-  50% {
-    transform: perspective(200px) rotateX(540deg) rotateY(360deg) rotateZ(180deg) scale(1.15) translateY(-8px);
+  40% {
+    transform: perspective(200px) rotateX(480deg) rotateY(320deg) rotateZ(160deg) scale(1.2) translateY(-15px);
+  }
+  55% {
+    transform: perspective(200px) rotateX(600deg) rotateY(480deg) rotateZ(220deg) scale(1.15) translateY(-10px);
   }
   70% {
-    transform: perspective(200px) rotateX(660deg) rotateY(540deg) rotateZ(270deg) scale(1.05) translateY(-3px);
+    transform: perspective(200px) rotateX(680deg) rotateY(600deg) rotateZ(300deg) scale(1.08) translateY(-5px);
   }
   85% {
-    transform: perspective(200px) rotateX(710deg) rotateY(690deg) rotateZ(350deg) scale(1.02);
+    transform: perspective(200px) rotateX(705deg) rotateY(690deg) rotateZ(345deg) scale(1.03) translateY(-2px);
+  }
+  95% {
+    transform: perspective(200px) rotateX(718deg) rotateY(715deg) rotateZ(358deg) scale(1.01);
   }
   100% {
     transform: perspective(200px) rotateX(720deg) rotateY(720deg) rotateZ(360deg) scale(1);

@@ -50,8 +50,10 @@ export default function DiceRoller() {
   const [contextType, setContextType] = useState('other'); // attack, damage, skill, save, other
   const [pendingRoll, setPendingRoll] = useState(null); // formula we're waiting for
   const [rollStartTime, setRollStartTime] = useState(null); // timestamp when roll was initiated
+  const [pendingResult, setPendingResult] = useState(null); // result waiting for animation to finish
   const trayIdRef = useRef(0);
   const lastProcessedResultRef = useRef(null); // prevent processing same result twice
+  const MIN_ROLL_ANIMATION_MS = 2200; // minimum time to show rolling animation
 
   // Listen for dice results from server to sync with our pending roll
   useEffect(() => {
@@ -123,11 +125,29 @@ export default function DiceRoller() {
       timestamp: recentDiceResult.timestamp || new Date().toISOString() 
     };
     
-    setResults(rollData);
-    setRolling(false);
-    setPendingRoll(null);
-    setRollStartTime(null);
-    setHistory(prev => [rollData, ...prev].slice(0, 10));
+    // Calculate how long we've been rolling
+    const elapsedMs = Date.now() - rollStartTime;
+    const remainingMs = Math.max(0, MIN_ROLL_ANIMATION_MS - elapsedMs);
+    
+    if (remainingMs > 0) {
+      // Wait for animation to complete before showing result
+      setPendingResult(rollData);
+      setTimeout(() => {
+        setResults(rollData);
+        setRolling(false);
+        setPendingRoll(null);
+        setRollStartTime(null);
+        setPendingResult(null);
+        setHistory(prev => [rollData, ...prev].slice(0, 10));
+      }, remainingMs);
+    } else {
+      // Animation already finished, show immediately
+      setResults(rollData);
+      setRolling(false);
+      setPendingRoll(null);
+      setRollStartTime(null);
+      setHistory(prev => [rollData, ...prev].slice(0, 10));
+    }
   }, [state.chat, rolling, rollStartTime, tray, modifier, pendingRoll]);
 
   const addDie = useCallback((diceType) => {
