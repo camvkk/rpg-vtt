@@ -1696,32 +1696,35 @@ export default function MapCanvas({
     
     console.log('[Weather] Overlay created, index:', app.stage.getChildIndex(weatherOverlay), '/', app.stage.children.length);
     
+    // Use fixed visible area (not canvas size which may be larger)
+    const visibleW = 1000;
+    const visibleH = 800;
     const particleCount = weather === 'fog' ? 30 : 200;
     
-    // Create weather particles
+    // Create weather particles with FIXED visible coordinates
     for (let i = 0; i < particleCount; i++) {
       const sprite = new Sprite(PIXI.Texture.WHITE);
       
       if (weather === 'rain') {
-        // Rain drops - blue diagonal streaks
-        sprite.width = 3;
-        sprite.height = 30;
-        sprite.tint = 0x88bbff;
-        sprite.alpha = 0.6;
+        // Rain drops - blue diagonal streaks, BIGGER and more visible
+        sprite.width = 4;
+        sprite.height = 35;
+        sprite.tint = 0x66aaff;
+        sprite.alpha = 0.7;
         sprite.rotation = -0.25;
-        sprite.x = Math.random() * screenW;
-        sprite.y = Math.random() * screenH;
+        sprite.x = Math.random() * visibleW;
+        sprite.y = Math.random() * visibleH;
         sprite.vx = -3;
         sprite.vy = 15 + Math.random() * 5;
       } else if (weather === 'snow') {
-        // Snowflakes - white squares
-        const size = 4 + Math.random() * 6;
+        // Snowflakes - white squares, BIGGER
+        const size = 6 + Math.random() * 8;
         sprite.width = size;
         sprite.height = size;
         sprite.tint = 0xffffff;
-        sprite.alpha = 0.9;
-        sprite.x = Math.random() * screenW;
-        sprite.y = Math.random() * screenH;
+        sprite.alpha = 0.95;
+        sprite.x = Math.random() * visibleW;
+        sprite.y = Math.random() * visibleH;
         sprite.vx = (Math.random() - 0.5) * 2;
         sprite.vy = 1.5 + Math.random() * 2;
         sprite.phase = Math.random() * Math.PI * 2;
@@ -1731,20 +1734,25 @@ export default function MapCanvas({
         sprite.width = size;
         sprite.height = size;
         sprite.tint = 0xaaaaaa;
-        sprite.alpha = 0.12;
+        sprite.alpha = 0.15;
         sprite.anchor.set(0.5);
-        sprite.x = Math.random() * screenW;
-        sprite.y = Math.random() * screenH;
+        sprite.x = Math.random() * visibleW;
+        sprite.y = Math.random() * visibleH;
         sprite.vx = 0.3 + Math.random() * 0.3;
         sprite.vy = (Math.random() - 0.5) * 0.2;
         sprite.phase = Math.random() * Math.PI * 2;
+      }
+      
+      // Log first few particles for debugging
+      if (i < 3) {
+        console.log('[Weather] Particle', i, 'at', sprite.x.toFixed(0), sprite.y.toFixed(0), 'size:', sprite.width, 'x', sprite.height);
       }
       
       weatherOverlay.addChild(sprite);
       weatherParticlesRef.current.push(sprite);
     }
     
-    console.log('[Weather] Created', particleCount, weather, 'particles');
+    console.log('[Weather] Created', particleCount, weather, 'particles in visible area', visibleW, 'x', visibleH);
     
     // Animation loop
     const animate = (delta) => {
@@ -1752,26 +1760,26 @@ export default function MapCanvas({
         if (weather === 'rain') {
           p.x += p.vx * delta;
           p.y += p.vy * delta;
-          if (p.y > screenH + 40 || p.x < -40) {
-            p.x = Math.random() * screenW * 1.3;
+          if (p.y > visibleH + 40 || p.x < -40) {
+            p.x = Math.random() * visibleW * 1.3;
             p.y = -40;
           }
         } else if (weather === 'snow') {
           p.phase += 0.03 * delta;
           p.x += (p.vx + Math.sin(p.phase) * 0.8) * delta;
           p.y += p.vy * delta;
-          if (p.y > screenH + 20) {
+          if (p.y > visibleH + 20) {
             p.y = -20;
-            p.x = Math.random() * screenW;
+            p.x = Math.random() * visibleW;
           }
-          if (p.x < -20) p.x = screenW + 20;
-          if (p.x > screenW + 20) p.x = -20;
+          if (p.x < -20) p.x = visibleW + 20;
+          if (p.x > visibleW + 20) p.x = -20;
         } else if (weather === 'fog') {
           p.phase += 0.01 * delta;
           p.x += (p.vx + Math.sin(p.phase) * 0.15) * delta;
           p.y += (p.vy + Math.cos(p.phase) * 0.1) * delta;
-          if (p.x > screenW + 200) p.x = -200;
-          if (p.x < -200) p.x = screenW + 200;
+          if (p.x > visibleW + 200) p.x = -200;
+          if (p.x < -200) p.x = visibleW + 200;
         }
       });
     };
