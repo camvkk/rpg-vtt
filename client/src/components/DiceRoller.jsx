@@ -53,40 +53,41 @@ export default function DiceRoller() {
 
   // Listen for dice results from server to sync with our pending roll
   useEffect(() => {
-    if (!pendingRoll || !state.chat?.length) return;
+    if (!pendingRoll || !state.chat?.length || !rolling) return;
     
-    // Find the most recent dice result that matches our pending roll
-    const recentDiceResult = state.chat
-      .filter(msg => msg.type === 'dice_result')
-      .find(msg => {
-        // Match if it's our roll (same formula base, ignoring spaces)
-        const msgFormula = (msg.formula || '').replace(/\s/g, '').toLowerCase();
-        const pendingFormula = pendingRoll.replace(/\s/g, '').toLowerCase();
-        // Simple check: both should have same dice notation at the start
-        return msgFormula === pendingFormula || 
-               msgFormula.includes(pendingFormula) || 
-               pendingFormula.includes(msgFormula);
-      });
+    // Find the MOST RECENT dice result (last in array) that matches our pending roll
+    const diceResults = state.chat.filter(msg => msg.type === 'dice_result');
+    const recentDiceResult = [...diceResults].reverse().find(msg => {
+      // Match if it's our roll (same formula base, ignoring spaces)
+      const msgFormula = (msg.formula || '').replace(/\s/g, '').toLowerCase();
+      const pendingFormula = pendingRoll.replace(/\s/g, '').toLowerCase();
+      // Check if formulas match (allowing for context text in formula)
+      return msgFormula === pendingFormula || 
+             msgFormula.startsWith(pendingFormula) || 
+             pendingFormula.startsWith(msgFormula);
+    });
 
-    if (recentDiceResult && rolling) {
-      // Parse the server result into our display format
-      // Server sends rollDetails array with {results, keptResults, droppedResults}
-      const serverRollDetails = recentDiceResult.rollDetails?.individual || 
-                                recentDiceResult.breakdown?.individual || 
-                                [];
+    if (recentDiceResult) {
+      // Get individual dice values from server
+      // Server format: breakdown.individual or rollDetails.individual
+      const serverIndividual = recentDiceResult.breakdown?.individual || 
+                               recentDiceResult.rollDetails?.individual || 
+                               [];
       
-      // Flatten all individual dice results from server
-      // Each tray die corresponds to a result
-      const diceResults = tray.map((dieInfo, i) => {
-        // Try to find the corresponding server roll value
+      // Build dice results matching the tray
+      // Filter to only kept dice (not dropped by advantage/disadvantage)
+      const keptServerRolls = serverIndividual.filter(r => r.kept !== false && !r.dropped);
+      
+      const displayDice = tray.map((dieInfo, i) => {
+        // Get corresponding server value
         let value = 0;
         
-        if (Array.isArray(serverRollDetails) && serverRollDetails[i] !== undefined) {
-          const serverRoll = serverRollDetails[i];
-          value = serverRoll.value || serverRoll.roll || serverRoll || 0;
+        if (keptServerRolls[i] !== undefined) {
+          const serverRoll = keptServerRolls[i];
+          value = serverRoll.value || serverRoll.roll || (typeof serverRoll === 'number' ? serverRoll : 0);
         }
         
-        // Fallback: if we don't have individual values, calculate from total
+        // Fallback for single die: calculate from total minus modifier
         if (value === 0 && recentDiceResult.total && tray.length === 1) {
           value = recentDiceResult.total - modifier;
         }
@@ -106,7 +107,7 @@ export default function DiceRoller() {
       });
 
       const rollData = { 
-        dice: diceResults, 
+        dice: displayDice, 
         total: recentDiceResult.total, 
         formula: recentDiceResult.formula || pendingRoll,
         rollContext: recentDiceResult.rollContext || '',
