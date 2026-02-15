@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { 
   RACES, 
   CLASSES, 
@@ -288,12 +288,13 @@ const CharacterWizard = ({
   })();
 
   // Update wizard data - supports both object and function updates
-  const updateWizardData = (updatesOrFn) => {
+  // useCallback evita re-render dos Steps (memo) que causava perda de foco nos inputs
+  const updateWizardData = useCallback((updatesOrFn) => {
     setWizardData(prev => {
       const updates = typeof updatesOrFn === 'function' ? updatesOrFn(prev) : updatesOrFn;
       return { ...prev, ...updates };
     });
-  };
+  }, []);
 
   // Navigation functions
   const nextStep = () => {
