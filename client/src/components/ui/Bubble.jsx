@@ -14,6 +14,7 @@ const Bubble = ({
   initialPosition = { x: 100, y: 100 },
   minimizable = true,
   onMinimize,
+  onExpand,
   onClose,
   closable = false,
   minWidth = 280,
@@ -21,6 +22,7 @@ const Bubble = ({
   maxWidth = 500,
   accentColor = '#e2b714',
   className = '',
+  badge = 0,
 }) => {
   const [isMinimized, setIsMinimized] = useState(true);
   const [wasDragged, setWasDragged] = useState(false);
@@ -36,6 +38,7 @@ const Bubble = ({
     // Só expande se não foi um drag (evita abrir ao soltar)
     if (!wasDragged) {
       setIsMinimized(false);
+      onExpand?.();
     }
     setWasDragged(false);
   };
@@ -85,12 +88,39 @@ const Bubble = ({
               fontSize: '1.4rem',
               boxShadow: `0 4px 20px ${accentColor}33, 0 8px 32px rgba(0,0,0,0.4)`,
               backdropFilter: 'blur(8px)',
+              position: 'relative',
             }}
             whileHover={{ scale: 1.1, boxShadow: `0 6px 28px ${accentColor}55` }}
             whileTap={{ scale: 0.95 }}
             title={`Expandir ${title}`}
           >
             {icon}
+            {/* Badge de notificação */}
+            {badge > 0 && (
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  minWidth: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  background: '#ef4444',
+                  color: '#fff',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 5px',
+                  boxShadow: '0 2px 8px rgba(239,68,68,0.5)',
+                }}
+              >
+                {badge > 99 ? '99+' : badge}
+              </motion.div>
+            )}
           </motion.div>
         </motion.div>
       </>

@@ -49,10 +49,26 @@ const DiceBubble = ({
   const [shakeIntensity, setShakeIntensity] = useState(0);
   const [holdingButton, setHoldingButton] = useState(null);
   const [rollStartTime, setRollStartTime] = useState(null);
+  const [unseenRolls, setUnseenRolls] = useState(0);
+  const isExpandedRef = useRef(false);
   const trayIdRef = useRef(0);
   const holdTimerRef = useRef(null);
   const lastProcessedResultRef = useRef(null);
+  const lastSeenResultRef = useRef(null);
   const MIN_ROLL_ANIMATION_MS = 2200;
+  
+  // Track unseen dice rolls from others
+  useEffect(() => {
+    if (!state.latestDiceResult) return;
+    const resultId = state.latestDiceResult.id || state.latestDiceResult.timestamp;
+    if (lastSeenResultRef.current === resultId) return;
+    lastSeenResultRef.current = resultId;
+    
+    // Se não é minha rolagem e bubble está minimizado, incrementa
+    if (state.latestDiceResult.authorId !== state.player?.id && !isExpandedRef.current) {
+      setUnseenRolls(prev => prev + 1);
+    }
+  }, [state.latestDiceResult, state.player?.id]);
 
   // Listen for dice results from server
   useEffect(() => {
@@ -194,7 +210,9 @@ const DiceBubble = ({
       title="Dados"
       icon="🎲"
       initialPosition={initialPosition}
-      onMinimize={onMinimize}
+      onMinimize={() => { isExpandedRef.current = false; onMinimize?.(); }}
+      onExpand={() => { isExpandedRef.current = true; setUnseenRolls(0); }}
+      badge={unseenRolls}
       minWidth={300}
       minHeight={380}
       accentColor="#f1c40f"

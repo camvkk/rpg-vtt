@@ -11,12 +11,30 @@ const ChatBubble = ({
   const { chat, player, connected } = state;
   const [messageInput, setMessageInput] = useState('');
   const [hoveredMessage, setHoveredMessage] = useState(null);
+  const [unseenMessages, setUnseenMessages] = useState(0);
+  const isExpandedRef = useRef(false);
+  const lastSeenCountRef = useRef(0);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chat]);
+  
+  // Track unseen messages
+  useEffect(() => {
+    if (!chat || chat.length === 0) return;
+    
+    const newCount = chat.length;
+    if (newCount > lastSeenCountRef.current) {
+      const newMessages = newCount - lastSeenCountRef.current;
+      // Se bubble minimizado, incrementa contador
+      if (!isExpandedRef.current) {
+        setUnseenMessages(prev => prev + newMessages);
+      }
+      lastSeenCountRef.current = newCount;
+    }
   }, [chat]);
 
   const handleSubmit = useCallback((e) => {
@@ -317,7 +335,9 @@ const ChatBubble = ({
       title="Chat"
       icon="💬"
       initialPosition={initialPosition}
-      onMinimize={onMinimize}
+      onMinimize={() => { isExpandedRef.current = false; onMinimize?.(); }}
+      onExpand={() => { isExpandedRef.current = true; setUnseenMessages(0); }}
+      badge={unseenMessages}
       minWidth={320}
       minHeight={400}
       maxWidth={450}

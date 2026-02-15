@@ -741,7 +741,8 @@ function GameBoardInner({ onLeaveRoom }) {
       <DiceBubble initialPosition={{ x: 70, y: 220 }} />
       <InitiativeBubble initialPosition={{ x: 70, y: 280 }} />
       <ChatBubble initialPosition={{ x: 70, y: 340 }} />
-      <SessionBubble initialPosition={{ x: 70, y: 400 }} />
+      {/* SessionBubble apenas para DM */}
+      {isDM && <SessionBubble initialPosition={{ x: 70, y: 400 }} />}
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 
