@@ -152,6 +152,232 @@ const Step1Identity = memo(({ wizardData, updateWizardData, fileInputRef, isUplo
   </div>
 ));
 
+// Step 7 - Details (extracted to prevent re-mounting on parent re-render - fixes textarea focus loss)
+const Step7Details = memo(({ wizardData, updateWizardData, ALIGNMENTS, BACKGROUNDS, SKILLS }) => (
+  <div style={{ 
+    padding: 'var(--spacing-lg)', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: 'var(--spacing-lg)',
+    maxHeight: '100%',
+    overflow: 'hidden'
+  }}>
+    <div style={{ textAlign: 'center', flexShrink: 0 }}>
+      <h2 style={{ 
+        fontFamily: 'var(--font-fantasy)', 
+        color: 'var(--color-primary)', 
+        fontSize: '1.5rem',
+        marginBottom: 'var(--spacing-sm)'
+      }}>
+        📝 Detalhes do Personagem
+      </h2>
+      <p style={{ color: 'var(--text-dim)' }}>
+        Complete a personalidade e história do seu personagem.
+      </p>
+    </div>
+
+    <div style={{ 
+      flex: 1, 
+      overflowY: 'auto', 
+      overflowX: 'hidden',
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 'var(--spacing-lg)',
+      paddingRight: 'var(--spacing-sm)'
+    }}>
+      {/* Alignment */}
+      <div>
+        <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
+          Alinhamento *
+        </h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: 'var(--spacing-sm)',
+          maxWidth: '600px'
+        }}>
+          {ALIGNMENTS.map(alignment => (
+            <button
+              key={alignment.short}
+              onClick={() => updateWizardData({ alignment })}
+              style={{
+                padding: 'var(--spacing-md)',
+                background: wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--surface-light)',
+                color: wizardData.alignment?.short === alignment.short ? 'var(--bg-primary)' : 'var(--text-primary)',
+                border: `2px solid ${wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)',
+                textAlign: 'center'
+              }}
+            >
+              <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{alignment.short}</div>
+              <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.9 }}>{alignment.name}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Background */}
+      <div>
+        <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
+          Antecedente *
+        </h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: 'var(--spacing-sm)',
+          maxHeight: '250px',
+          overflowY: 'auto'
+        }}>
+          {BACKGROUNDS.map(background => (
+            <div
+              key={background.name}
+              onClick={() => {
+                updateWizardData(prev => {
+                  const backgroundSkills = background.skillProficiencies;
+                  const newSelectedSkills = [...new Set([...prev.selectedSkills, ...backgroundSkills])];
+                  return { background, selectedSkills: newSelectedSkills };
+                });
+              }}
+              style={{
+                padding: 'var(--spacing-md)',
+                background: wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--surface-light)',
+                color: wizardData.background?.name === background.name ? 'var(--bg-primary)' : 'var(--text-primary)',
+                border: `2px solid ${wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              <h4 style={{ margin: '0 0 var(--spacing-sm) 0', fontFamily: 'var(--font-fantasy)' }}>
+                {background.name}
+              </h4>
+              <p style={{ fontSize: '0.9rem', marginBottom: 'var(--spacing-sm)', opacity: 0.9, lineHeight: 1.4 }}>
+                {background.description}
+              </p>
+              <div style={{ fontSize: '0.8rem' }}>
+                <strong>Perícias:</strong> {background.skillProficiencies.map(skill => SKILLS[skill]?.name || skill).join(', ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Personality Fields */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+        <div>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+            Traços de Personalidade
+          </label>
+          <textarea
+            value={wizardData.personality || ''}
+            onChange={(e) => updateWizardData({ personality: e.target.value })}
+            placeholder="Como seu personagem age e se comporta..."
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: 'var(--spacing-sm)',
+              background: 'var(--surface-light)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+            Ideais
+          </label>
+          <textarea
+            value={wizardData.ideals || ''}
+            onChange={(e) => updateWizardData({ ideals: e.target.value })}
+            placeholder="Princípios que motivam seu personagem..."
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: 'var(--spacing-sm)',
+              background: 'var(--surface-light)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+            Vínculos
+          </label>
+          <textarea
+            value={wizardData.bonds || ''}
+            onChange={(e) => updateWizardData({ bonds: e.target.value })}
+            placeholder="Pessoas, lugares ou coisas importantes..."
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: 'var(--spacing-sm)',
+              background: 'var(--surface-light)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+            Defeitos
+          </label>
+          <textarea
+            value={wizardData.flaws || ''}
+            onChange={(e) => updateWizardData({ flaws: e.target.value })}
+            placeholder="Fraquezas ou vícios do seu personagem..."
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              padding: 'var(--spacing-sm)',
+              background: 'var(--surface-light)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--text-primary)',
+              resize: 'vertical'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
+          História e Notas Adicionais
+        </label>
+        <textarea
+          value={wizardData.notes || ''}
+          onChange={(e) => updateWizardData({ notes: e.target.value })}
+          placeholder="História de fundo, objetivos, ou outras notas sobre seu personagem..."
+          style={{
+            width: '100%',
+            minHeight: '120px',
+            padding: 'var(--spacing-md)',
+            background: 'var(--surface-light)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--text-primary)',
+            resize: 'vertical',
+            fontSize: '0.95rem',
+            lineHeight: 1.5
+          }}
+        />
+      </div>
+    </div>
+  </div>
+));
+
 const CharacterWizard = ({ 
   isOpen, 
   onClose, 
@@ -1546,236 +1772,7 @@ const CharacterWizard = ({
     );
   };
 
-  // Step 7 - Details (WITH OVERFLOW FIX)
-  const Step7Details = () => (
-    <div style={{ 
-      padding: 'var(--spacing-lg)', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      gap: 'var(--spacing-lg)',
-      maxHeight: '100%',
-      overflow: 'hidden'
-    }}>
-      <div style={{ textAlign: 'center', flexShrink: 0 }}>
-        <h2 style={{ 
-          fontFamily: 'var(--font-fantasy)', 
-          color: 'var(--color-primary)', 
-          fontSize: '1.5rem',
-          marginBottom: 'var(--spacing-sm)'
-        }}>
-          📝 Detalhes do Personagem
-        </h2>
-        <p style={{ color: 'var(--text-dim)' }}>
-          Complete a personalidade e história do seu personagem.
-        </p>
-      </div>
-
-      {/* Scrollable content area */}
-      <div style={{ 
-        flex: 1, 
-        overflowY: 'auto', 
-        overflowX: 'hidden',
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: 'var(--spacing-lg)',
-        paddingRight: 'var(--spacing-sm)'
-      }}>
-        {/* Alignment */}
-        <div>
-          <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
-            Alinhamento *
-          </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 'var(--spacing-sm)',
-            maxWidth: '600px'
-          }}>
-            {ALIGNMENTS.map(alignment => (
-              <button
-                key={alignment.short}
-                onClick={() => updateWizardData({ alignment })}
-                style={{
-                  padding: 'var(--spacing-md)',
-                  background: wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--surface-light)',
-                  color: wizardData.alignment?.short === alignment.short ? 'var(--bg-primary)' : 'var(--text-primary)',
-                  border: `2px solid ${wizardData.alignment?.short === alignment.short ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)',
-                  textAlign: 'center'
-                }}
-              >
-                <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{alignment.short}</div>
-                <div style={{ fontSize: '0.8rem', marginTop: '4px', opacity: 0.9 }}>{alignment.name}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Background */}
-        <div>
-          <h3 style={{ fontFamily: 'var(--font-fantasy)', color: 'var(--color-primary)', marginBottom: 'var(--spacing-md)' }}>
-            Antecedente *
-          </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 'var(--spacing-sm)',
-            maxHeight: '250px',
-            overflowY: 'auto'
-          }}>
-            {BACKGROUNDS.map(background => (
-              <div
-                key={background.name}
-                onClick={() => {
-                  // Auto-add background skills using functional update
-                  updateWizardData(prev => {
-                    const backgroundSkills = background.skillProficiencies;
-                    const newSelectedSkills = [...new Set([...prev.selectedSkills, ...backgroundSkills])];
-                    return { 
-                      background,
-                      selectedSkills: newSelectedSkills
-                    };
-                  });
-                }}
-                style={{
-                  padding: 'var(--spacing-md)',
-                  background: wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--surface-light)',
-                  color: wizardData.background?.name === background.name ? 'var(--bg-primary)' : 'var(--text-primary)',
-                  border: `2px solid ${wizardData.background?.name === background.name ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)'
-                }}
-              >
-                <h4 style={{ margin: '0 0 var(--spacing-sm) 0', fontFamily: 'var(--font-fantasy)' }}>
-                  {background.name}
-                </h4>
-                <p style={{ fontSize: '0.9rem', marginBottom: 'var(--spacing-sm)', opacity: 0.9, lineHeight: 1.4 }}>
-                  {background.description}
-                </p>
-                <div style={{ fontSize: '0.8rem' }}>
-                  <strong>Perícias:</strong> {background.skillProficiencies.map(skill => SKILLS[skill]?.name || skill).join(', ')}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Personality Fields */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
-          <div>
-            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-              Traços de Personalidade
-            </label>
-            <textarea
-              value={wizardData.personality}
-              onChange={(e) => updateWizardData({ personality: e.target.value })}
-              placeholder="Como seu personagem age e se comporta..."
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: 'var(--spacing-sm)',
-                background: 'var(--surface-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-              Ideais
-            </label>
-            <textarea
-              value={wizardData.ideals}
-              onChange={(e) => updateWizardData({ ideals: e.target.value })}
-              placeholder="Princípios que motivam seu personagem..."
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: 'var(--spacing-sm)',
-                background: 'var(--surface-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-              Vínculos
-            </label>
-            <textarea
-              value={wizardData.bonds}
-              onChange={(e) => updateWizardData({ bonds: e.target.value })}
-              placeholder="Pessoas, lugares ou coisas importantes..."
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: 'var(--spacing-sm)',
-                background: 'var(--surface-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-              Defeitos
-            </label>
-            <textarea
-              value={wizardData.flaws}
-              onChange={(e) => updateWizardData({ flaws: e.target.value })}
-              placeholder="Fraquezas ou vícios do seu personagem..."
-              style={{
-                width: '100%',
-                minHeight: '80px',
-                padding: 'var(--spacing-sm)',
-                background: 'var(--surface-light)',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-primary)',
-                resize: 'vertical'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Notes */}
-        <div>
-          <label style={{ display: 'block', fontWeight: '600', marginBottom: 'var(--spacing-sm)' }}>
-            História e Notas Adicionais
-          </label>
-          <textarea
-            value={wizardData.notes}
-            onChange={(e) => updateWizardData({ notes: e.target.value })}
-            placeholder="História de fundo, objetivos, ou outras notas sobre seu personagem..."
-            style={{
-              width: '100%',
-              minHeight: '120px',
-              padding: 'var(--spacing-md)',
-              background: 'var(--surface-light)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-primary)',
-              resize: 'vertical',
-              fontSize: '0.95rem',
-              lineHeight: 1.5
-            }}
-          />
-        </div>
-      </div>{/* End scrollable content */}
-    </div>
-  );
+  // Step 7 - Details (now uses memo component defined outside - fixes textarea focus loss)
 
   // Step 8 - Summary
   const Step8Summary = () => {
@@ -2103,7 +2100,7 @@ const CharacterWizard = ({
               {currentStep === 4 && <Step4Attributes />}
               {currentStep === 5 && <Step5Skills />}
               {currentStep === 6 && <Step6Equipment />}
-              {currentStep === 7 && <Step7Details />}
+              {currentStep === 7 && <Step7Details wizardData={wizardData} updateWizardData={updateWizardData} ALIGNMENTS={ALIGNMENTS} BACKGROUNDS={BACKGROUNDS} SKILLS={SKILLS} />}
               {currentStep === 8 && <Step8Summary />}
             </>
           ) : (
