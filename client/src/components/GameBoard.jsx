@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useGame } from '../contexts/GameContext';
 import { WindowManagerProvider, useWindowManager } from '../contexts/WindowManagerContext';
+import { BubbleZIndexProvider } from '../contexts/BubbleZIndexContext';
 import MapCanvas from './MapCanvas';
 import DiceRoller from './DiceRoller';
 import DiceEffects from './DiceEffects';
@@ -67,9 +68,11 @@ class CanvasErrorBoundary extends Component {
 export default function GameBoardWithErrorBoundary(props) {
   return (
     <WindowManagerProvider>
-      <GameBoardErrorBoundary>
-        <GameBoardInner {...props} />
-      </GameBoardErrorBoundary>
+      <BubbleZIndexProvider>
+        <GameBoardErrorBoundary>
+          <GameBoardInner {...props} />
+        </GameBoardErrorBoundary>
+      </BubbleZIndexProvider>
     </WindowManagerProvider>
   );
 }
@@ -738,11 +741,11 @@ function GameBoardInner({ onLeaveRoom }) {
       />
       
       {/* Bubbles - Coluna esquerda após o menu de ferramentas */}
-      <DiceBubble initialPosition={{ x: 70, y: 220 }} />
-      <InitiativeBubble initialPosition={{ x: 70, y: 280 }} />
-      <ChatBubble initialPosition={{ x: 70, y: 340 }} />
-      {/* SessionBubble apenas para DM */}
-      {isDM && <SessionBubble initialPosition={{ x: 70, y: 400 }} />}
+      {/* Bubbles - posições iniciais espaçadas, anti-sobreposição automática */}
+      <DiceBubble initialPosition={{ x: 70, y: 120 }} />
+      <InitiativeBubble initialPosition={{ x: 70, y: 178 }} />
+      <ChatBubble initialPosition={{ x: 70, y: 236 }} />
+      {isDM && <SessionBubble initialPosition={{ x: 70, y: 294 }} />}
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 

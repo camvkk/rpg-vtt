@@ -1,13 +1,18 @@
-import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import React, { useState, useRef, useId, useEffect } from 'react';
+import { motion, useDragControls } from 'framer-motion';
+import { useBubbleManager } from '../../contexts/BubbleZIndexContext';
 import './Bubble.css';
 
 /**
  * Bubble - Container flutuante estilo Owlbear Rodeo 2.0
- * Drag gerenciado pelo framer-motion naturalmente
+ * 
+ * Comportamento:
+ * - Arrasta livremente (minimizada ou expandida)
+ * - Anti-sobreposição: ao soltar, ajusta posição se conflitar
+ * - Z-index dinâmico (bring-to-front)
  */
 const Bubble = ({
-  id,
+  id: providedId,
   title = 'Bubble',
   icon = '💬',
   children,
@@ -24,10 +29,41 @@ const Bubble = ({
   className = '',
   badge = 0,
 }) => {
+  const generatedId = useId();
+  const bubbleId = providedId || generatedId;
+  
+  const { 
+    bringToFront, 
+    getZIndex, 
+    updatePosition, 
+    unregisterBubble,
+    findNonOverlappingPosition 
+  } = useBubbleManager();
+  
   const [isMinimized, setIsMinimized] = useState(true);
-  const [wasDragged, setWasDragged] = useState(false);
+  const [position, setPosition] = useState(initialPosition);
+  const [isDragging, setIsDragging] = useState(false);
   const dragControls = useDragControls();
   const constraintsRef = useRef(null);
+  const dragStartTime = useRef(0);
+
+  const zIndex = getZIndex(bubbleId);
+
+  // Registra posição no contexto
+  useEffect(() => {
+    updatePosition(bubbleId, {
+      x: position.x,
+      y: position.y,
+      isMinimized,
+      width: isMinimized ? 48 : minWidth,
+      height: isMinimized ? 48 : 200,
+    });
+  }, [bubbleId, position, isMinimized, minWidth, updatePosition]);
+
+  // Cleanup ao desmontar
+  useEffect(() => {
+    return () => unregisterBubble(bubbleId);
+  }, [bubbleId, unregisterBubble]);
 
   const handleMinimize = () => {
     setIsMinimized(true);
@@ -35,19 +71,44 @@ const Bubble = ({
   };
 
   const handleExpand = () => {
-    // Só expande se não foi um drag (evita abrir ao soltar)
-    if (!wasDragged) {
-      setIsMinimized(false);
-      onExpand?.();
-    }
-    setWasDragged(false);
+    // Só expande se não foi um drag (mais de 150ms ou moveu pouco)
+    const dragDuration = Date.now() - dragStartTime.current;
+    if (isDragging || dragDuration < 50) return;
+    
+    setIsMinimized(false);
+    bringToFront(bubbleId);
+    onExpand?.();
+  };
+
+  const handleDragStart = () => {
+    setIsDragging(true);
+    dragStartTime.current = Date.now();
+    bringToFront(bubbleId);
+  };
+
+  const handleDragEnd = (e, info) => {
+    // Pequeno delay pra não conflitar com click
+    setTimeout(() => setIsDragging(false), 100);
+    
+    // Calcula nova posição
+    const newPos = {
+      x: position.x + info.offset.x,
+      y: position.y + info.offset.y,
+    };
+    
+    // Encontra posição sem sobreposição
+    const size = isMinimized 
+      ? { width: 48, height: 48 }
+      : { width: minWidth, height: 200 };
+    
+    const adjustedPos = findNonOverlappingPosition(bubbleId, newPos, size);
+    setPosition(adjustedPos);
   };
 
   // Minimized icon view
   if (isMinimized) {
     return (
       <>
-        {/* Invisible constraints container */}
         <div 
           ref={constraintsRef} 
           style={{ 
@@ -57,22 +118,27 @@ const Bubble = ({
           }} 
         />
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.8, opacity: 0 }}
+          key={`${bubbleId}-minimized`}
+          initial={false}
+          animate={{ 
+            x: position.x,
+            y: position.y,
+          }}
+          transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 500, damping: 30 }}
           drag
           dragMomentum={false}
           dragConstraints={constraintsRef}
+          dragElastic={0}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onClick={handleExpand}
           style={{
             position: 'fixed',
-            left: initialPosition.x,
-            top: initialPosition.y,
-            zIndex: 1000,
-            cursor: 'grab',
+            left: 0,
+            top: 0,
+            zIndex: zIndex,
+            cursor: isDragging ? 'grabbing' : 'grab',
           }}
-          whileDrag={{ cursor: 'grabbing', scale: 1.1 }}
-          onDragEnd={() => setWasDragged(true)}
-          onClick={handleExpand}
           className="bubble-minimized"
         >
           <motion.div
@@ -92,10 +158,9 @@ const Bubble = ({
             }}
             whileHover={{ scale: 1.1, boxShadow: `0 6px 28px ${accentColor}55` }}
             whileTap={{ scale: 0.95 }}
-            title={`Expandir ${title}`}
+            title={`Abrir ${title}`}
           >
             {icon}
-            {/* Badge de notificação */}
             {badge > 0 && (
               <motion.div
                 initial={{ scale: 0 }}
@@ -130,7 +195,6 @@ const Bubble = ({
   // Expanded bubble view
   return (
     <>
-      {/* Invisible constraints container */}
       <div 
         ref={constraintsRef} 
         style={{ 
@@ -140,30 +204,42 @@ const Bubble = ({
         }} 
       />
       <motion.div
-        initial={{ scale: 0.9, opacity: 0, x: initialPosition.x, y: initialPosition.y }}
-        animate={{ scale: 1, opacity: 1 }}
+        key={`${bubbleId}-expanded`}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ 
+          scale: 1, 
+          opacity: 1,
+          x: position.x,
+          y: position.y,
+        }}
         exit={{ scale: 0.9, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        transition={isDragging ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 25 }}
         drag
         dragControls={dragControls}
         dragMomentum={false}
         dragConstraints={constraintsRef}
         dragListener={false}
+        dragElastic={0}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         style={{
           position: 'fixed',
-          left: initialPosition.x,
-          top: initialPosition.y,
+          left: 0,
+          top: 0,
           minWidth,
           maxWidth,
-          zIndex: 1000,
+          zIndex: zIndex,
         }}
-        whileDrag={{ scale: 1.02 }}
+        onPointerDown={() => bringToFront(bubbleId)}
         className={`bubble ${className}`}
       >
         {/* Header - drag handle */}
         <motion.div 
           className="bubble__header"
-          onPointerDown={(e) => dragControls.start(e)}
+          onPointerDown={(e) => {
+            bringToFront(bubbleId);
+            dragControls.start(e);
+          }}
           style={{
             cursor: 'grab',
             display: 'flex',
