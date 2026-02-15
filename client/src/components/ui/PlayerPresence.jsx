@@ -43,6 +43,7 @@ export default function PlayerPresence() {
       '#e599f7', // pink
       '#20c997', // cyan
     ];
+    if (!name) return colors[0];
     const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   };
