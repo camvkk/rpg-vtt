@@ -737,11 +737,11 @@ function GameBoardInner({ onLeaveRoom }) {
         }}
       />
       
-      {/* Bubbles - Coluna esquerda, espaçamento uniforme */}
-      <DiceBubble initialPosition={{ x: 16, y: 220 }} />
-      <InitiativeBubble initialPosition={{ x: 16, y: 280 }} />
-      <ChatBubble initialPosition={{ x: 16, y: 340 }} />
-      <SessionBubble initialPosition={{ x: 16, y: 400 }} />
+      {/* Bubbles - Coluna esquerda após o menu de ferramentas */}
+      <DiceBubble initialPosition={{ x: 70, y: 220 }} />
+      <InitiativeBubble initialPosition={{ x: 70, y: 280 }} />
+      <ChatBubble initialPosition={{ x: 70, y: 340 }} />
+      <SessionBubble initialPosition={{ x: 70, y: 400 }} />
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 
