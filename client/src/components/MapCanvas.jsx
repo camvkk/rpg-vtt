@@ -234,7 +234,7 @@ export default function MapCanvas({
       app.stage.addChild(bgLayer, gridLayer, tokenLayer, wallLayer, lightingLayer, fogLayer, weatherLayer, uiLayer);
       layersRef.current = { bg: bgLayer, grid: gridLayer, token: tokenLayer, wall: wallLayer, lighting: lightingLayer, fog: fogLayer, weather: weatherLayer, ui: uiLayer };
 
-      drawGrid(gridLayer, app.screen.width, app.screen.height);
+      drawGrid(gridLayer);
       setupInteractions(app);
       } catch (err) {
         console.error('PIXI INIT ERROR:', err);
@@ -305,22 +305,25 @@ export default function MapCanvas({
   }, [map.offsetX, map.offsetY]);
 
   // ── Draw Grid ──
-  const drawGrid = useCallback((layer, w, h) => {
+  const drawGrid = useCallback((layer) => {
     layer.removeChildren();
     if (!gridVisibleRef.current) return;
-    
+
+    // Grid is drawn in WORLD SPACE (fixed coords).
+    // applyTransform moves/scales the entire layer together with the map,
+    // so the grid stays locked to the map — no pan compensation needed here.
     const g = new Graphics();
-    const v = viewRef.current;
     const gs = gridSizeRef.current;
     const gt = gridTypeRef.current;
+    const WORLD_MIN = -2000;
+    const WORLD_MAX = 10000;
 
     if (gt === 'hex') {
-      // Pointy-top hex grid
-      const { horizSpacing, vertSpacing, size } = getHexDimensions(gs);
-      const startCol = Math.floor((-v.panX / v.zoom - horizSpacing) / horizSpacing) - 1;
-      const startRow = Math.floor((-v.panY / v.zoom - vertSpacing) / vertSpacing) - 1;
-      const endCol = startCol + Math.ceil(w / v.zoom / horizSpacing) + 3;
-      const endRow = startRow + Math.ceil(h / v.zoom / vertSpacing) + 3;
+      const { horizSpacing, vertSpacing } = getHexDimensions(gs);
+      const startCol = Math.floor(WORLD_MIN / horizSpacing) - 1;
+      const startRow = Math.floor(WORLD_MIN / vertSpacing) - 1;
+      const endCol = Math.ceil(WORLD_MAX / horizSpacing) + 2;
+      const endRow = Math.ceil(WORLD_MAX / vertSpacing) + 2;
 
       g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.25 });
       for (let row = startRow; row < endRow; row++) {
@@ -328,26 +331,19 @@ export default function MapCanvas({
           const center = hexToPixel(col, row, gs);
           const corners = getHexCorners(center.x, center.y, gs);
           g.moveTo(corners[0].x, corners[0].y);
-          for (let i = 1; i < 6; i++) {
-            g.lineTo(corners[i].x, corners[i].y);
-          }
+          for (let i = 1; i < 6; i++) g.lineTo(corners[i].x, corners[i].y);
           g.lineTo(corners[0].x, corners[0].y);
         }
       }
       g.stroke();
     } else {
-      // Square grid
-      const startX = Math.floor(-v.panX / v.zoom / gs) * gs;
-      const startY = Math.floor(-v.panY / v.zoom / gs) * gs;
-      const endX = startX + w / v.zoom + gs * 2;
-      const endY = startY + h / v.zoom + gs * 2;
-
+      // Square grid — fixed lines from WORLD_MIN to WORLD_MAX
       g.setStrokeStyle({ width: 1, color: 0xe2b714, alpha: 0.25 });
-      for (let x = startX; x < endX; x += gs) {
-        g.moveTo(x, startY).lineTo(x, endY);
+      for (let x = WORLD_MIN; x <= WORLD_MAX; x += gs) {
+        g.moveTo(x, WORLD_MIN).lineTo(x, WORLD_MAX);
       }
-      for (let y = startY; y < endY; y += gs) {
-        g.moveTo(startX, y).lineTo(endX, y);
+      for (let y = WORLD_MIN; y <= WORLD_MAX; y += gs) {
+        g.moveTo(WORLD_MIN, y).lineTo(WORLD_MAX, y);
       }
       g.stroke();
     }
@@ -1225,10 +1221,7 @@ export default function MapCanvas({
       v.panX = mx - wx * newZoom;
       v.panY = my - wy * newZoom;
 
-      applyTransform();
-      if (layersRef.current.grid) {
-        drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
-      }
+      applyTransform(); // grid scales with the layer transform — no redraw needed
     }, { passive: false });
 
     // Pan
@@ -1394,8 +1387,7 @@ export default function MapCanvas({
         v.panX += e.clientX - v.lastPan.x;
         v.panY += e.clientY - v.lastPan.y;
         v.lastPan = { x: e.clientX, y: e.clientY };
-        applyTransform();
-        if (layersRef.current.grid) drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
+        applyTransform(); // grid layer moves with the map — no redraw needed
       } else if (isRevealingFogRef.current && activeToolRef.current === 'fog' && isDMRef.current) {
         // Update fog tool rect preview
         const rect = canvas.getBoundingClientRect();
@@ -1827,7 +1819,7 @@ export default function MapCanvas({
     const app = pixiRef.current;
     const gridLayer = layersRef.current.grid;
     if (app && gridLayer) {
-      drawGrid(gridLayer, app.screen.width, app.screen.height);
+      drawGrid(gridLayer);
     }
   }, [GRID_SIZE, GRID_TYPE, GRID_VISIBLE, drawGrid]);
 
@@ -2466,7 +2458,7 @@ export default function MapCanvas({
       c.scale.set(v.zoom);
       c.position.set(v.panX, v.panY);
     });
-    if (layersRef.current.grid) drawGrid(layersRef.current.grid, app.screen.width, app.screen.height);
+    if (layersRef.current.grid) drawGrid(layersRef.current.grid);
   }, [drawGrid]);
 
   return (
