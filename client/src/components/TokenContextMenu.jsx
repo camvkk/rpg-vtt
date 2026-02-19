@@ -30,11 +30,37 @@ const CONDITION_PRESETS = [
 ];
 
 export default function TokenContextMenu({ token, position, onClose, onUpdate, onDelete, onOpenSheet }) {
-  const [view, setView] = useState('main'); // main | hp | conditions | size | vision
+  const [view, setView] = useState('main'); // main | hp | damage | conditions | size | vision
   const [hpCurrent, setHpCurrent] = useState(token.hp?.current ?? 0);
   const [hpMax, setHpMax] = useState(token.hp?.max ?? 0);
   const [hpTemp, setHpTemp] = useState(token.hp?.temp ?? 0);
   const [visionRadius, setVisionRadius] = useState(token.visionRadius ?? 0);
+  const [damageAmount, setDamageAmount] = useState('');
+  const [damageFlash, setDamageFlash] = useState(null); // 'hit' | 'heal'
+
+  const applyDamage = (amount) => {
+    const cur = token.hp?.current ?? 0;
+    const max = token.hp?.max ?? 0;
+    const temp = token.hp?.temp ?? 0;
+    let newCur, newTemp;
+    // Damage absorbs temp HP first
+    if (amount > 0 && temp > 0) {
+      const absorbed = Math.min(temp, amount);
+      newTemp = temp - absorbed;
+      newCur = Math.max(0, cur - (amount - absorbed));
+    } else if (amount > 0) {
+      newTemp = temp;
+      newCur = Math.max(0, cur - amount);
+    } else {
+      // Heal
+      newTemp = temp;
+      newCur = Math.min(max, cur + Math.abs(amount));
+    }
+    onUpdate(token.id, { hp: { current: newCur, max, temp: newTemp } });
+    setDamageFlash(amount > 0 ? 'hit' : 'heal');
+    setTimeout(() => setDamageFlash(null), 600);
+    setDamageAmount('');
+  };
 
   const handleHpSave = () => {
     onUpdate(token.id, { 
@@ -93,6 +119,12 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
                 <span>📋</span> <span>Abrir Ficha</span>
               </button>
             )}
+            <button className="tcm-item tcm-item-damage" onClick={() => setView('damage')}>
+              <span>⚔️</span> <span>Dano / Cura</span>
+              <span className={`tcm-hp-badge ${damageFlash === 'hit' ? 'tcm-hp-hit' : damageFlash === 'heal' ? 'tcm-hp-heal' : ''}`}>
+                {token.hp ? `${token.hp.current}/${token.hp.max}` : '—'}
+              </span>
+            </button>
             <button className="tcm-item" onClick={() => setView('hp')}>
               <span>❤️</span> <span>Editar HP</span>
               <span className="tcm-value">
@@ -119,6 +151,59 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
             <button className="tcm-item tcm-danger" onClick={handleDelete}>
               <span>🗑️</span> <span>Excluir Token</span>
             </button>
+          </div>
+        )}
+
+        {/* Damage / Heal */}
+        {view === 'damage' && (
+          <div className="tcm-body">
+            <div className="tcm-hp-display">
+              <span className="tcm-hp-cur">{token.hp?.current ?? 0}</span>
+              <span className="tcm-hp-sep">/</span>
+              <span className="tcm-hp-max">{token.hp?.max ?? 0}</span>
+              {(token.hp?.temp ?? 0) > 0 && (
+                <span className="tcm-hp-temp">+{token.hp.temp} tmp</span>
+              )}
+            </div>
+            <div className="tcm-field">
+              <label>Quantidade</label>
+              <input
+                type="number"
+                min="0"
+                value={damageAmount}
+                onChange={e => setDamageAmount(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') applyDamage(parseInt(damageAmount) || 0);
+                }}
+                placeholder="Ex: 12"
+                autoFocus
+              />
+            </div>
+            <div className="tcm-dmg-buttons">
+              <button
+                className="tcm-btn-damage"
+                onClick={() => applyDamage(parseInt(damageAmount) || 0)}
+                disabled={!damageAmount}
+              >
+                ⚔️ Dano
+              </button>
+              <button
+                className="tcm-btn-heal"
+                onClick={() => applyDamage(-(parseInt(damageAmount) || 0))}
+                disabled={!damageAmount}
+              >
+                💚 Cura
+              </button>
+            </div>
+            <div className="tcm-quick-dmg">
+              {[1, 5, 10, 15, 20].map(n => (
+                <button key={n} className="tcm-quick-btn" onClick={() => {
+                  setDamageAmount(String(n));
+                }}>
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

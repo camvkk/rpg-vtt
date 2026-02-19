@@ -203,3 +203,112 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* -- Damage / Heal view -- */
+.tcm-item-damage {
+  border-left: 3px solid rgba(220, 60, 60, 0.5);
+}
+.tcm-hp-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-dim, #888);
+  transition: color 0.3s, transform 0.3s;
+}
+.tcm-hp-hit {
+  color: #ff4d4d !important;
+  transform: scale(1.2);
+}
+.tcm-hp-heal {
+  color: #4dff88 !important;
+  transform: scale(1.2);
+}
+.tcm-hp-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 0 8px;
+}
+.tcm-hp-cur {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e8e8e8;
+}
+.tcm-hp-sep {
+  font-size: 1.2rem;
+  color: #555;
+}
+.tcm-hp-max {
+  font-size: 1.2rem;
+  color: #888;
+}
+.tcm-hp-temp {
+  font-size: 0.75rem;
+  color: #5b9bd5;
+  margin-left: 6px;
+  background: rgba(91, 155, 213, 0.15);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.tcm-dmg-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tcm-btn-damage {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(220, 60, 60, 0.4);
+  background: rgba(220, 60, 60, 0.15);
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tcm-btn-damage:hover:not(:disabled) {
+  background: rgba(220, 60, 60, 0.3);
+  border-color: rgba(220, 60, 60, 0.7);
+}
+.tcm-btn-heal {
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(40, 200, 100, 0.4);
+  background: rgba(40, 200, 100, 0.12);
+  color: #4dff88;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tcm-btn-heal:hover:not(:disabled) {
+  background: rgba(40, 200, 100, 0.25);
+  border-color: rgba(40, 200, 100, 0.6);
+}
+.tcm-btn-damage:disabled,
+.tcm-btn-heal:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tcm-quick-dmg {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  justify-content: center;
+}
+.tcm-quick-btn {
+  width: 36px;
+  height: 28px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #aaa;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.tcm-quick-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #e8e8e8;
+}
