@@ -6,14 +6,11 @@ import './Bubble.css';
 /**
  * Bubble - Container flutuante estilo Owlbear Rodeo 2.0
  *
- * Arquitetura de posicionamento (2026-02-19):
- * - `position` state  → fonte de verdade para o contexto de anti-sobreposição
- * - `motionX/motionY` → controla o DOM via framer-motion (evita bug do 1º drag)
- * - Os dois ficam sincronizados: state muda → motion values atualizam;
- *   drag termina → lê dos motion values, escreve no state.
- *
- * Bug corrigido: usar animate={{ x, y }} + drag fazia o framer-motion trackear
- * o offset a partir de (0,0) no 1º arrasto, jogando o elemento pro topo.
+ * Arquitetura (2026-02-19 v3):
+ * - UM único motion.div — nunca desmonta ao minimizar/expandir
+ *   → evita flash em (0,0) que ocorria ao trocar key entre estados
+ * - useMotionValue para x/y → evita bug do 1º drag com animate={{ x, y }}
+ * - position state → fonte de verdade para o contexto de anti-sobreposição
  */
 const Bubble = ({
   id: providedId,
@@ -51,15 +48,12 @@ const Bubble = ({
   const constraintsRef = useRef(null);
   const dragStartTime = useRef(0);
 
-  // Motion values controlam o DOM — inicializados na posição certa,
-  // sem passar por animate (evita o bug do 1º drag)
   const motionX = useMotionValue(initialPosition.x);
   const motionY = useMotionValue(initialPosition.y);
 
   const zIndex = getZIndex(bubbleId);
 
   // Registra posição no contexto de anti-sobreposição
-  // (disparado no mount e sempre que position ou isMinimized mudam)
   useEffect(() => {
     updatePosition(bubbleId, {
       x: position.x,
@@ -70,19 +64,18 @@ const Bubble = ({
     });
   }, [bubbleId, position, isMinimized, minWidth, updatePosition]);
 
-  // Sincroniza state → motion values quando a posição é ajustada externamente
-  // (ex: anti-sobreposição ao soltar o drag)
+  // Sincroniza state → motion values (anti-overlap pode ajustar o state)
   useEffect(() => {
     motionX.set(position.x);
     motionY.set(position.y);
   }, [position.x, position.y, motionX, motionY]);
 
-  // Cleanup ao desmontar
   useEffect(() => {
     return () => unregisterBubble(bubbleId);
   }, [bubbleId, unregisterBubble]);
 
-  const handleMinimize = () => {
+  const handleMinimize = (e) => {
+    e.stopPropagation();
     setIsMinimized(true);
     onMinimize?.();
   };
@@ -90,7 +83,6 @@ const Bubble = ({
   const handleExpand = () => {
     const dragDuration = Date.now() - dragStartTime.current;
     if (isDragging || dragDuration < 50) return;
-
     setIsMinimized(false);
     bringToFront(bubbleId);
     onExpand?.();
@@ -105,58 +97,54 @@ const Bubble = ({
   const handleDragEnd = () => {
     setTimeout(() => setIsDragging(false), 100);
 
-    // Lê posição real dos motion values (sem depender de info.offset)
-    const newPos = {
-      x: motionX.get(),
-      y: motionY.get(),
-    };
-
+    const newPos = { x: motionX.get(), y: motionY.get() };
     const size = isMinimized
       ? { width: 48, height: 48 }
       : { width: minWidth, height: 200 };
 
-    // Anti-sobreposição: calcula posição ajustada e atualiza state
-    // O useEffect acima sincroniza state → motionValues automaticamente
     const adjustedPos = findNonOverlappingPosition(bubbleId, newPos, size);
     setPosition(adjustedPos);
-
-    // Aplica imediatamente nos motion values também (evita delay visual)
     motionX.set(adjustedPos.x);
     motionY.set(adjustedPos.y);
   };
 
-  // Minimized icon view
-  if (isMinimized) {
-    return (
-      <>
-        <div
-          ref={constraintsRef}
-          style={{
-            position: 'fixed',
-            inset: 8,
-            pointerEvents: 'none',
-          }}
-        />
-        <motion.div
-          key={`${bubbleId}-minimized`}
-          drag
-          dragMomentum={false}
-          dragConstraints={constraintsRef}
-          dragElastic={0}
-          style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            x: motionX,
-            y: motionY,
-            zIndex: zIndex,
-            cursor: isDragging ? 'grabbing' : 'grab',
-          }}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onClick={handleExpand}
-          className="bubble-minimized"
-        >
+  return (
+    <>
+      <div
+        ref={constraintsRef}
+        style={{ position: 'fixed', inset: 8, pointerEvents: 'none' }}
+      />
+
+      {/* UM único motion.div — nunca desmonta */}
+      <motion.div
+        drag
+        dragControls={dragControls}
+        dragMomentum={false}
+        dragConstraints={constraintsRef}
+        dragElastic={0}
+        // Quando minimizado: arrasta clicando em qualquer lugar
+        // Quando expandido: só arrasta via dragControls no header
+        dragListener={isMinimized}
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          x: motionX,
+          y: motionY,
+          zIndex,
+          cursor: isMinimized ? (isDragging ? 'grabbing' : 'grab') : 'default',
+          width: isMinimized ? 48 : undefined,
+          minWidth: isMinimized ? undefined : minWidth,
+          maxWidth: isMinimized ? undefined : maxWidth,
+        }}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onClick={isMinimized ? handleExpand : undefined}
+        onPointerDown={() => bringToFront(bubbleId)}
+        className={isMinimized ? 'bubble-minimized' : `bubble ${className}`}
+      >
+        {isMinimized ? (
+          /* ── Estado minimizado: bolinha com ícone ── */
           <motion.div
             style={{
               width: 48,
@@ -203,138 +191,105 @@ const Bubble = ({
               </motion.div>
             )}
           </motion.div>
-        </motion.div>
-      </>
-    );
-  }
+        ) : (
+          /* ── Estado expandido: painel com header + conteúdo ── */
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            style={{ width: '100%' }}
+          >
+            {/* Header — drag handle */}
+            <div
+              className="bubble__header"
+              onPointerDown={(e) => {
+                bringToFront(bubbleId);
+                dragControls.start(e);
+              }}
+              style={{
+                cursor: 'grab',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}11)`,
+                borderBottom: `1px solid ${accentColor}33`,
+                borderRadius: '12px 12px 0 0',
+                userSelect: 'none',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.1rem' }}>{icon}</span>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
+                  {title}
+                </span>
+              </div>
 
-  // Expanded bubble view
-  return (
-    <>
-      <div
-        ref={constraintsRef}
-        style={{
-          position: 'fixed',
-          inset: 8,
-          pointerEvents: 'none',
-        }}
-      />
-      <motion.div
-        key={`${bubbleId}-expanded`}
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        drag
-        dragControls={dragControls}
-        dragMomentum={false}
-        dragConstraints={constraintsRef}
-        dragListener={false}
-        dragElastic={0}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          x: motionX,
-          y: motionY,
-          minWidth,
-          maxWidth,
-          zIndex: zIndex,
-        }}
-        onPointerDown={() => bringToFront(bubbleId)}
-        className={`bubble ${className}`}
-      >
-        {/* Header - drag handle */}
-        <motion.div
-          className="bubble__header"
-          onPointerDown={(e) => {
-            bringToFront(bubbleId);
-            dragControls.start(e);
-          }}
-          style={{
-            cursor: 'grab',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 12px',
-            background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}11)`,
-            borderBottom: `1px solid ${accentColor}33`,
-            borderRadius: '12px 12px 0 0',
-            userSelect: 'none',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-            <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-text)' }}>
-              {title}
-            </span>
-          </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {minimizable && (
+                  <motion.button
+                    onClick={handleMinimize}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'var(--color-text-dim)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.8rem',
+                    }}
+                    title="Minimizar"
+                  >
+                    −
+                  </motion.button>
+                )}
+                {closable && onClose && (
+                  <motion.button
+                    onClick={(e) => { e.stopPropagation(); onClose(); }}
+                    whileHover={{ scale: 1.1, background: 'rgba(239,68,68,0.3)' }}
+                    whileTap={{ scale: 0.9 }}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      border: 'none',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'var(--color-text-dim)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.8rem',
+                    }}
+                    title="Fechar"
+                  >
+                    ✕
+                  </motion.button>
+                )}
+              </div>
+            </div>
 
-          <div style={{ display: 'flex', gap: 4 }}>
-            {minimizable && (
-              <motion.button
-                onClick={handleMinimize}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'var(--color-text-dim)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.8rem',
-                }}
-                title="Minimizar"
-              >
-                −
-              </motion.button>
-            )}
-            {closable && onClose && (
-              <motion.button
-                onClick={onClose}
-                whileHover={{ scale: 1.1, background: 'rgba(239,68,68,0.3)' }}
-                whileTap={{ scale: 0.9 }}
-                style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: 'rgba(255,255,255,0.1)',
-                  color: 'var(--color-text-dim)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.8rem',
-                }}
-                title="Fechar"
-              >
-                ✕
-              </motion.button>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Content */}
-        <div
-          className="bubble__content"
-          style={{
-            padding: '12px',
-            background: 'var(--bg-surface)',
-            borderRadius: '0 0 12px 12px',
-            maxHeight: '60vh',
-            overflowY: 'auto',
-          }}
-        >
-          {children}
-        </div>
+            {/* Conteúdo */}
+            <div
+              className="bubble__content"
+              style={{
+                padding: '12px',
+                background: 'var(--bg-surface)',
+                borderRadius: '0 0 12px 12px',
+                maxHeight: '60vh',
+                overflowY: 'auto',
+              }}
+            >
+              {children}
+            </div>
+          </motion.div>
+        )}
       </motion.div>
     </>
   );
