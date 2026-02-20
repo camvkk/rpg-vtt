@@ -2533,11 +2533,12 @@ export default function MapCanvas({
 
             let dmgText = '';
             let dmgRolls = [];
+            let totalDmg = 0;
             if (hit) {
               // Parse damage formula (ex: "2d6+3")
               const rollDie = (sides) => Math.floor(Math.random() * sides) + 1;
               const parseDmg = (formula) => {
-                let total = 0;
+                let result = 0;
                 const parts = formula.replace(/\s/g, '').match(/([+-]?\d*d\d+|[+-]?\d+)/gi) || [];
                 parts.forEach(part => {
                   const diceMatch = part.match(/([+-]?\d*)d(\d+)/i);
@@ -2547,19 +2548,33 @@ export default function MapCanvas({
                     for (let i = 0; i < Math.abs(count); i++) {
                       const r = rollDie(sides);
                       dmgRolls.push(r);
-                      total += count < 0 ? -r : r;
+                      result += count < 0 ? -r : r;
                     }
                   } else {
-                    total += parseInt(part) || 0;
+                    result += parseInt(part) || 0;
                   }
                 });
-                return total;
+                return result;
               };
-              const rolls = crit ? parseDmg(dmgFormula) + parseDmg(dmgFormula) : parseDmg(dmgFormula);
+              totalDmg = crit ? parseDmg(dmgFormula) + parseDmg(dmgFormula) : parseDmg(dmgFormula);
               const rollsStr = dmgRolls.join('+');
               dmgText = crit
-                ? ` | 💥 CRÍTICO! ${rolls} de dano [${rollsStr}+${rollsStr}]`
-                : ` | ${rolls} de dano [${rollsStr}]`;
+                ? ` | 💥 CRÍTICO! ${totalDmg} de dano [${rollsStr}+${rollsStr}]`
+                : ` | ${totalDmg} de dano [${rollsStr}]`;
+
+              // ── Apply damage to target HP ──
+              const tgtHp = targetToken.hp ||
+                (targetToken.hp_max > 0
+                  ? { current: targetToken.hp_current ?? targetToken.hp_max, max: targetToken.hp_max, temp: 0 }
+                  : null);
+              if (tgtHp && tgtHp.max > 0) {
+                let tempLeft = Math.max(0, (tgtHp.temp || 0) - totalDmg);
+                const dmgAfterTemp = Math.max(0, totalDmg - (tgtHp.temp || 0));
+                const newCur = Math.max(0, (tgtHp.current || 0) - dmgAfterTemp);
+                actions.updateToken(targetToken.id, {
+                  hp: { current: newCur, max: tgtHp.max, temp: tempLeft }
+                });
+              }
             }
 
             const resultIcon = miss && d20 === 1 ? '💀 FALHA CRÍTICA' : hit ? (crit ? '💥 ACERTO CRÍTICO' : '✅ ACERTO') : '❌ ERRO';

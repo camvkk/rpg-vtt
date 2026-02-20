@@ -901,6 +901,8 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
   const [lightRadius, setLightRadius] = useState(0);
   const [visionRadius, setVisionRadius] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [hpMax, setHpMax] = useState('');
+  const [tokenAc, setTokenAc] = useState('');
   const fileInputRef = useRef(null);
 
   const sizeOptions = {
@@ -964,6 +966,8 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
   const handleCreate = () => {
     if (!tokenName.trim()) return;
     
+    const parsedHp = parseInt(hpMax);
+    const parsedAc = parseInt(tokenAc);
     const token = {
       id: `token_${Date.now()}`,
       name: tokenName.trim(),
@@ -973,6 +977,8 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
       visionRadius: visionRadius,
       x: 0, // Will be set when placed
       y: 0,
+      ...(parsedHp > 0 && { hp: { current: parsedHp, max: parsedHp, temp: 0 } }),
+      ...(parsedAc > 0 && { ac: parsedAc }),
       ...(imageUrl && { imageUrl }) // Include imageUrl if we have one
     };
     
@@ -1226,6 +1232,34 @@ function TokenCreatorModal({ onCreateToken, onClose }) {
               👁️ Visão de {visionRadius * 5} pés (para névoa de guerra)
             </div>
           )}
+        </div>
+
+        {/* HP & CA */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
+          <div>
+            <label className="form-label">❤️ HP Máximo</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Ex: 30"
+              min="1"
+              max="999"
+              value={hpMax}
+              onChange={(e) => setHpMax(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label">🛡️ Classe de Armadura</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="Ex: 14"
+              min="1"
+              max="30"
+              value={tokenAc}
+              onChange={(e) => setTokenAc(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Create Button */}
