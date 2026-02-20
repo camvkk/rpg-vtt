@@ -29,14 +29,17 @@ const CONDITION_PRESETS = [
   { name: 'Em Chamas', icon: '🔥' },
 ];
 
-export default function TokenContextMenu({ token, position, onClose, onUpdate, onDelete, onOpenSheet }) {
-  const [view, setView] = useState('main'); // main | hp | damage | conditions | size | vision
+export default function TokenContextMenu({ token, position, onClose, onUpdate, onDelete, onOpenSheet, tokens = [], onAttack }) {
+  const [view, setView] = useState('main'); // main | hp | damage | attack | conditions | size | vision
   const [hpCurrent, setHpCurrent] = useState(token.hp?.current ?? 0);
   const [hpMax, setHpMax] = useState(token.hp?.max ?? 0);
   const [hpTemp, setHpTemp] = useState(token.hp?.temp ?? 0);
   const [visionRadius, setVisionRadius] = useState(token.visionRadius ?? 0);
   const [damageAmount, setDamageAmount] = useState('');
   const [damageFlash, setDamageFlash] = useState(null); // 'hit' | 'heal'
+  const [atkBonus, setAtkBonus] = useState('0');
+  const [dmgFormula, setDmgFormula] = useState('1d6');
+  const [atkTargetId, setAtkTargetId] = useState('');
 
   const applyDamage = (amount) => {
     const cur = token.hp?.current ?? 0;
@@ -119,6 +122,12 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
                 <span>📋</span> <span>Abrir Ficha</span>
               </button>
             )}
+            {onAttack && tokens.filter(t => t.id !== token.id).length > 0 && (
+              <button className="tcm-item tcm-item-attack" onClick={() => setView('attack')}>
+                <span>🎯</span> <span>Atacar</span>
+                <span className="tcm-value">1d20 + bônus</span>
+              </button>
+            )}
             <button className="tcm-item tcm-item-damage" onClick={() => setView('damage')}>
               <span>⚔️</span> <span>Dano / Cura</span>
               <span className={`tcm-hp-badge ${damageFlash === 'hit' ? 'tcm-hp-hit' : damageFlash === 'heal' ? 'tcm-hp-heal' : ''}`}>
@@ -153,6 +162,71 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
             </button>
           </div>
         )}
+
+        {/* Attack Roll */}
+        {view === 'attack' && (() => {
+          const targets = tokens.filter(t => t.id !== token.id);
+          const target = targets.find(t => t.id === atkTargetId) || targets[0];
+          return (
+            <div className="tcm-body">
+              <div className="tcm-field">
+                <label>Alvo</label>
+                <select
+                  className="tcm-select"
+                  value={atkTargetId || (targets[0]?.id ?? '')}
+                  onChange={e => setAtkTargetId(e.target.value)}
+                >
+                  {targets.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.ac != null ? `(CA ${t.ac})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="tcm-row">
+                <div className="tcm-field">
+                  <label>Bônus de ataque</label>
+                  <input
+                    type="number"
+                    value={atkBonus}
+                    onChange={e => setAtkBonus(e.target.value)}
+                    placeholder="+5"
+                  />
+                </div>
+                <div className="tcm-field">
+                  <label>Dado de dano</label>
+                  <input
+                    type="text"
+                    value={dmgFormula}
+                    onChange={e => setDmgFormula(e.target.value)}
+                    placeholder="1d8+3"
+                  />
+                </div>
+              </div>
+              {target && (
+                <div className="tcm-atk-preview">
+                  🎲 1d20 + {atkBonus} vs CA {target.ac ?? 10}
+                </div>
+              )}
+              <div className="tcm-quick-dmg" style={{marginBottom: 8}}>
+                {['1d4', '1d6', '1d8', '1d10', '2d6', '1d12'].map(f => (
+                  <button key={f} className={`tcm-quick-btn ${dmgFormula === f ? 'tcm-quick-btn-active' : ''}`}
+                    onClick={() => setDmgFormula(f)}>{f}</button>
+                ))}
+              </div>
+              <button
+                className="tcm-btn-atk"
+                onClick={() => {
+                  const tgt = targets.find(t => t.id === (atkTargetId || targets[0]?.id));
+                  if (tgt && onAttack) onAttack(token.name, tgt, parseInt(atkBonus) || 0, dmgFormula || '1d6');
+                }}
+                disabled={targets.length === 0}
+              >
+                ⚔️ Rolar Ataque
+              </button>
+            </div>
+          );
+        })()}
 
         {/* Damage / Heal */}
         {view === 'damage' && (

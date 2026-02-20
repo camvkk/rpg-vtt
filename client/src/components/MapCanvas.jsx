@@ -2486,6 +2486,54 @@ export default function MapCanvas({
           onClose={() => setContextMenu(null)}
           onUpdate={handleTokenContextUpdate}
           onDelete={handleTokenContextDelete}
+          tokens={tokens}
+          onAttack={(attackerName, targetToken, atkBonus, dmgFormula) => {
+            // Roll 1d20 + bonus vs target AC
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + atkBonus;
+            const ac = targetToken.ac ?? 10;
+            const crit = d20 === 20;
+            const hit = crit || total >= ac;
+            const miss = d20 === 1 || (!crit && total < ac);
+
+            let dmgText = '';
+            let dmgRolls = [];
+            if (hit) {
+              // Parse damage formula (ex: "2d6+3")
+              const rollDie = (sides) => Math.floor(Math.random() * sides) + 1;
+              const parseDmg = (formula) => {
+                let total = 0;
+                const parts = formula.replace(/\s/g, '').match(/([+-]?\d*d\d+|[+-]?\d+)/gi) || [];
+                parts.forEach(part => {
+                  const diceMatch = part.match(/([+-]?\d*)d(\d+)/i);
+                  if (diceMatch) {
+                    const count = parseInt(diceMatch[1]) || 1;
+                    const sides = parseInt(diceMatch[2]);
+                    for (let i = 0; i < Math.abs(count); i++) {
+                      const r = rollDie(sides);
+                      dmgRolls.push(r);
+                      total += count < 0 ? -r : r;
+                    }
+                  } else {
+                    total += parseInt(part) || 0;
+                  }
+                });
+                return total;
+              };
+              const rolls = crit ? parseDmg(dmgFormula) + parseDmg(dmgFormula) : parseDmg(dmgFormula);
+              const rollsStr = dmgRolls.join('+');
+              dmgText = crit
+                ? ` | 💥 CRÍTICO! ${rolls} de dano [${rollsStr}+${rollsStr}]`
+                : ` | ${rolls} de dano [${rollsStr}]`;
+            }
+
+            const resultIcon = miss && d20 === 1 ? '💀 FALHA CRÍTICA' : hit ? (crit ? '💥 ACERTO CRÍTICO' : '✅ ACERTO') : '❌ ERRO';
+            const msg = `⚔️ **${attackerName}** ataca **${targetToken.name}** ` +
+              `(CA ${ac}) — 🎲 d20: ${d20} + ${atkBonus} = **${total}** — ${resultIcon}${dmgText}`;
+
+            actions.sendMessage(msg);
+            setContextMenu(null);
+          }}
           onOpenSheet={(token) => {
             const openSheetEvent = new CustomEvent('open-character-sheet', {
               bubbles: true,

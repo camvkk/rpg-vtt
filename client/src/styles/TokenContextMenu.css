@@ -312,3 +312,57 @@
   background: rgba(255,255,255,0.12);
   color: #e8e8e8;
 }
+
+/* -- Attack view -- */
+.tcm-item-attack {
+  border-left: 3px solid rgba(147, 51, 234, 0.5);
+}
+.tcm-select {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: var(--color-text, #e8e8e8);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  outline: none;
+}
+.tcm-select:focus { border-color: rgba(147,51,234,0.5); }
+.tcm-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tcm-atk-preview {
+  text-align: center;
+  font-size: 0.82rem;
+  color: #a78bfa;
+  background: rgba(147,51,234,0.1);
+  border: 1px solid rgba(147,51,234,0.2);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 4px 0 8px;
+}
+.tcm-btn-atk {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(147,51,234,0.4);
+  background: rgba(147,51,234,0.15);
+  color: #a78bfa;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 4px;
+}
+.tcm-btn-atk:hover:not(:disabled) {
+  background: rgba(147,51,234,0.3);
+  border-color: rgba(147,51,234,0.6);
+}
+.tcm-btn-atk:disabled { opacity: 0.4; cursor: not-allowed; }
+.tcm-quick-btn-active {
+  background: rgba(232,65,10,0.2) !important;
+  border-color: rgba(232,65,10,0.5) !important;
+  color: #ff6b35 !important;
+}
