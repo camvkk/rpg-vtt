@@ -1831,7 +1831,9 @@ export default function MapCanvas({
     // Token radius in pixels: fills sizeCells grid cells (minus small padding)
     const baseRadius = (sizeCells * gs / 2) - 2;
     const conditions = token.conditions || [];
-    const hp = token.hp || null;
+    // token.hp is the structured object; fall back to DB snake_case columns
+    const hp = token.hp
+      || (token.hp_max > 0 ? { current: token.hp_current ?? token.hp_max, max: token.hp_max, temp: 0 } : null);
 
     // Store references for animations and cleanup
     const tokenRefs = { 

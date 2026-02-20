@@ -44,9 +44,10 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
   const [atkTargetId, setAtkTargetId] = useState('');
 
   const applyDamage = (amount) => {
-    const cur = token.hp?.current ?? token.hp_current ?? 100;
-    const max = token.hp?.max ?? token.hp_max ?? 100;
-    const temp = token.hp?.temp ?? 0;
+    // Use the live hpCurrent/hpMax state (edited by user or initialized from hpObj)
+    const cur = parseInt(hpCurrent) || 0;
+    const max = parseInt(hpMax) || 0;
+    const temp = parseInt(hpTemp) || 0;
     let newCur, newTemp;
     // Damage absorbs temp HP first
     if (amount > 0 && temp > 0) {
@@ -62,6 +63,9 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
       newCur = Math.min(max, cur + Math.abs(amount));
     }
     onUpdate(token.id, { hp: { current: newCur, max, temp: newTemp } });
+    // Update local state so next hit uses the already-reduced HP
+    setHpCurrent(String(newCur));
+    setHpTemp(String(newTemp));
     setDamageFlash(amount > 0 ? 'hit' : 'heal');
     setTimeout(() => setDamageFlash(null), 600);
     setDamageAmount('');
@@ -133,12 +137,12 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
             <button className="tcm-item tcm-item-damage" onClick={() => setView('damage')}>
               <span>⚔️</span> <span>Dano / Cura</span>
               <span className={`tcm-hp-badge ${damageFlash === 'hit' ? 'tcm-hp-hit' : damageFlash === 'heal' ? 'tcm-hp-heal' : ''}`}>
-                {`${hpObj.current}/${hpObj.max}`}
+                {`${hpCurrent}/${hpMax}`}
               </span>
             </button>
             <button className="tcm-item" onClick={() => setView('hp')}>
               <span>❤️</span> <span>Editar HP</span>
-              <span className="tcm-value">{`${hpObj.current}/${hpObj.max}`}</span>
+              <span className="tcm-value">{`${hpCurrent}/${hpMax}`}</span>
             </button>
             <button className="tcm-item" onClick={() => setView('conditions')}>
               <span>⚡</span> <span>Condições</span>
@@ -232,11 +236,11 @@ export default function TokenContextMenu({ token, position, onClose, onUpdate, o
         {view === 'damage' && (
           <div className="tcm-body">
             <div className="tcm-hp-display">
-              <span className="tcm-hp-cur">{hpObj.current}</span>
+              <span className="tcm-hp-cur">{hpCurrent}</span>
               <span className="tcm-hp-sep">/</span>
-              <span className="tcm-hp-max">{hpObj.max}</span>
-              {(hpObj.temp ?? 0) > 0 && (
-                <span className="tcm-hp-temp">+{hpObj.temp} tmp</span>
+              <span className="tcm-hp-max">{hpMax}</span>
+              {parseInt(hpTemp) > 0 && (
+                <span className="tcm-hp-temp">+{hpTemp} tmp</span>
               )}
             </div>
             <div className="tcm-field">
