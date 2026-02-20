@@ -2202,63 +2202,92 @@ export default function MapCanvas({
       }),
     });
     nameTag.anchor.set(0.5, 1); // anchor bottom center
-    nameTag.position.set(0, -baseRadius - 8); // position ABOVE token
+    nameTag.position.set(0, -baseRadius - 17); // position ABOVE token (moved up to make room for HP bar)
     c.addChild(nameTag);
 
-    // ── HP Bar (ABOVE token, below name) ──
-    if (hp && hp.max > 0) {
+    // ── HP Bar (ALWAYS visible above token, below name) ──
+    {
       const hpBarContainer = new Container();
-      
-      const barWidth = baseRadius * 2;
-      const barHeight = 5;
-      const currentHP = Math.max(0, hp.current || 0);
-      const maxHP = hp.max;
-      const tempHP = hp.temp || 0;
-      const percentage = currentHP / maxHP;
-      
+      const barWidth = Math.max(baseRadius * 2.2, 32);
+      const barHeight = 10;
+      const hpKnown = hp && hp.max > 0;
+      const currentHP = hpKnown ? Math.max(0, hp.current || 0) : null;
+      const maxHP = hpKnown ? hp.max : null;
+      const tempHP = hpKnown ? (hp.temp || 0) : 0;
+      const percentage = hpKnown ? (currentHP / maxHP) : 1;
+
+      // Outer shadow/border for visibility on any background
+      const bgBorder = new Graphics();
+      bgBorder.roundRect(-barWidth / 2 - 1, -1, barWidth + 2, barHeight + 2, 3)
+        .fill({ color: 0x000000, alpha: 0.75 });
+      hpBarContainer.addChild(bgBorder);
+
       // Background bar
       const bgBar = new Graphics();
-      bgBar.roundRect(-barWidth / 2, 0, barWidth, barHeight, 2).fill({ color: 0x222222, alpha: 0.9 });
+      bgBar.roundRect(-barWidth / 2, 0, barWidth, barHeight, 2).fill({ color: 0x1a1a1a, alpha: 1 });
       hpBarContainer.addChild(bgBar);
-      
-      // HP fill with color gradient
-      if (currentHP > 0) {
-        const hpBar = new Graphics();
-        let hpColor;
-        if (percentage > 0.75) hpColor = 0x44cc44; // Green
-        else if (percentage > 0.5) hpColor = 0xcccc44; // Yellow
-        else if (percentage > 0.25) hpColor = 0xcc8844; // Orange
-        else hpColor = 0xcc4444; // Red
-        
-        const fillWidth = (currentHP / maxHP) * barWidth;
-        hpBar.roundRect(-barWidth / 2, 0, fillWidth, barHeight, 2).fill({ color: hpColor, alpha: 0.95 });
-        hpBarContainer.addChild(hpBar);
-      }
-      
-      // Temp HP (additional blue bar on right side)
-      if (tempHP > 0) {
-        const tempBar = new Graphics();
-        const tempWidth = Math.min((tempHP / maxHP) * barWidth, barWidth * 0.3); // Cap temp HP visual
-        tempBar.roundRect(barWidth / 2 - tempWidth, 0, tempWidth, barHeight, 2).fill({ color: 0x4488cc, alpha: 0.8 });
-        hpBarContainer.addChild(tempBar);
+
+      if (hpKnown) {
+        // HP fill with color based on percentage
+        if (currentHP > 0) {
+          const hpBar = new Graphics();
+          let hpColor;
+          if (percentage > 0.75) hpColor = 0x22c55e; // Green
+          else if (percentage > 0.5) hpColor = 0xeab308; // Yellow
+          else if (percentage > 0.25) hpColor = 0xf97316; // Orange
+          else hpColor = 0xef4444; // Red (critical)
+
+          const fillWidth = percentage * barWidth;
+          hpBar.roundRect(-barWidth / 2, 0, fillWidth, barHeight, 2).fill({ color: hpColor, alpha: 1 });
+          hpBarContainer.addChild(hpBar);
+        }
+
+        // Temp HP (blue overlay on right side)
+        if (tempHP > 0) {
+          const tempBar = new Graphics();
+          const tempWidth = Math.min((tempHP / maxHP) * barWidth, barWidth * 0.3);
+          tempBar.roundRect(barWidth / 2 - tempWidth, 0, tempWidth, barHeight, 2)
+            .fill({ color: 0x60a5fa, alpha: 0.85 });
+          hpBarContainer.addChild(tempBar);
+        }
+
+        // HP text: "current/max"
+        const hpText = new Text({
+          text: `${currentHP}/${maxHP}`,
+          style: new TextStyle({
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 9,
+            fill: 0xffffff,
+            fontWeight: 'bold',
+            stroke: { color: 0x000000, width: 2 },
+          }),
+        });
+        hpText.anchor.set(0.5, 0.5);
+        hpText.position.set(0, barHeight / 2);
+        hpBarContainer.addChild(hpText);
+      } else {
+        // HP not configured — gray bar with "? HP" hint
+        const dimBar = new Graphics();
+        dimBar.roundRect(-barWidth / 2, 0, barWidth * 0.25, barHeight, 2)
+          .fill({ color: 0x444444, alpha: 0.9 });
+        hpBarContainer.addChild(dimBar);
+
+        const hpText = new Text({
+          text: '? HP',
+          style: new TextStyle({
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 9,
+            fill: 0x888888,
+            fontWeight: 'bold',
+          }),
+        });
+        hpText.anchor.set(0.5, 0.5);
+        hpText.position.set(0, barHeight / 2);
+        hpBarContainer.addChild(hpText);
       }
 
-      // HP text overlay (current/max)
-      const hpText = new Text({
-        text: `${currentHP}/${maxHP}`,
-        style: new TextStyle({
-          fontFamily: 'Inter, sans-serif',
-          fontSize: 7,
-          fill: 0xffffff,
-          fontWeight: 'bold',
-        }),
-      });
-      hpText.anchor.set(0.5, 0.5);
-      hpText.position.set(0, barHeight / 2);
-      hpBarContainer.addChild(hpText);
-      
-      // Position HP bar ABOVE token, below name tag
-      hpBarContainer.position.set(0, -baseRadius - 6);
+      // Position: 3px above token top, below name tag
+      hpBarContainer.position.set(0, -baseRadius - 13);
       c.addChild(hpBarContainer);
     }
 
@@ -2408,6 +2437,8 @@ export default function MapCanvas({
       const needsRecreate = sprite && (
         JSON.stringify(sprite._lastConditions) !== JSON.stringify(token.conditions) ||
         JSON.stringify(sprite._lastHP) !== JSON.stringify(token.hp) ||
+        sprite._lastHpCurrent !== (token.hp_current ?? null) ||
+        sprite._lastHpMax !== (token.hp_max ?? null) ||
         sprite._lastSize !== (token.size || 'medium') ||
         sprite._lastVisionRadius !== (token.visionRadius || 0)
       );
@@ -2421,6 +2452,8 @@ export default function MapCanvas({
         sprite = createTokenSprite(token);
         sprite._lastConditions = JSON.parse(JSON.stringify(token.conditions || []));
         sprite._lastHP = JSON.parse(JSON.stringify(token.hp || null));
+        sprite._lastHpCurrent = token.hp_current ?? null;
+        sprite._lastHpMax = token.hp_max ?? null;
         sprite._lastSize = token.size || 'medium';
         sprite._lastVisionRadius = token.visionRadius || 0;
         
