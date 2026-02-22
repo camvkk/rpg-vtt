@@ -1608,11 +1608,13 @@ io.on('connection', (socket) => {
             const player = connectedPlayers.get(socket.id);
             if (!player) throw new Error('Player not authenticated');
             
-            const { notation, isSecret = false } = data;
+            const { notation, isSecret = false, rollContext = '', character = '' } = data;
             const rollResult = rollDice(notation, player.name);
             rollResult.playerId = player.id;
             rollResult.isSecret = isSecret;
             rollResult.type = getRollType(notation);
+            if (rollContext) rollResult.rollContext = rollContext;
+            if (character) rollResult.character = character;
             
             console.log(`🎲 ${player.name} rolled: ${notation} = ${rollResult.total}`);
             

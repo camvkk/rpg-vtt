@@ -69,7 +69,8 @@ const ChatPanel = ({
           message.type = 'dice_command';
           message.diceNotation = args.join(' ');
           // Parse roll context from notation (e.g., "1d20+5 Ataque com Espada")
-          const notationParts = message.diceNotation.match(/^([0-9d+\-*/\s]+)(.*)$/i);
+          // Context must start with a letter to avoid capturing trailing numbers
+          const notationParts = message.diceNotation.match(/^([0-9d+\-*/\s]+)\s+([a-zA-ZÀ-ÿ].*)$/i);
           if (notationParts && notationParts[2]) {
             message.rollContext = notationParts[2].trim();
             message.diceNotation = notationParts[1].trim();
@@ -312,8 +313,20 @@ const ChatPanel = ({
           marginBottom: 'var(--spacing-xs)',
           textAlign: 'center'
         }}>
-          🎲 Detalhes da Rolagem
+          {hoveredRoll.rollContext 
+            ? `⚔️ ${hoveredRoll.rollContext}` 
+            : '🎲 Detalhes da Rolagem'}
         </div>
+        {hoveredRoll.formula && (
+          <div style={{ 
+            fontSize: '0.7rem', 
+            color: 'var(--text-dim)', 
+            textAlign: 'center',
+            marginBottom: 'var(--spacing-xs)'
+          }}>
+            {hoveredRoll.formula} → <strong style={{ color: 'var(--text-primary)' }}>{hoveredRoll.total}</strong>
+          </div>
+        )}
         
         {/* Individual dice */}
         <div style={{ 

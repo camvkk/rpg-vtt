@@ -282,7 +282,20 @@ function GameBoardInner({ onLeaveRoom }) {
 
   // ── Dice roll handler ──
   const handleDiceRoll = useCallback((rollData) => {
-    actions.rollDice(rollData.notation);
+    // Build rollContext from character sheet roll data
+    let rollContext = '';
+    if (rollData.type === 'ability_check' && rollData.skill) {
+      rollContext = `Teste de ${rollData.skill}`;
+    } else if (rollData.type === 'skill_check' && rollData.skill) {
+      rollContext = `Perícia: ${rollData.skill}`;
+    } else if (rollData.type === 'saving_throw' && rollData.save) {
+      rollContext = `Salvaguarda: ${rollData.save}`;
+    } else if (rollData.type === 'attack' && rollData.attack) {
+      rollContext = `Ataque: ${rollData.attack}`;
+    } else if (rollData.type === 'damage' && rollData.attack) {
+      rollContext = `Dano: ${rollData.attack}`;
+    }
+    actions.rollDice(rollData.notation, false, rollContext, rollData.character);
   }, [actions]);
 
   // ── Map upload handler (HTTP upload, not base64 via socket) ──

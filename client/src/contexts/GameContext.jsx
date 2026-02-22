@@ -596,8 +596,9 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
       let rollContext = data.rollContext || '';
       
       // Check if formula contains context (e.g., "1d20+5 Ataque: Espada Longa")
+      // The context must start with a letter to avoid capturing trailing numbers as context
       if (!rollContext && formula) {
-        const match = formula.match(/^([0-9d+\-*/\s]+)(.+)$/i);
+        const match = formula.match(/^([0-9d+\-*/\s]+)\s+([a-zA-ZÀ-ÿ].*)$/i);
         if (match && match[2]) {
           formula = match[1].trim();
           rollContext = match[2].trim();
@@ -986,14 +987,14 @@ export function GameProvider({ children, serverUrl = defaultServerUrl }) {
     },
 
     // Dice
-    rollDice: (notation, isSecret = false) => {
+    rollDice: (notation, isSecret = false, rollContext = '', character = '') => {
       // Cancel any pending result display from previous roll
       if (pendingRollTimeoutRef.current) {
         clearTimeout(pendingRollTimeoutRef.current);
         pendingRollTimeoutRef.current = null;
       }
       localRollStartTimeRef.current = Date.now();
-      return emit('dice:roll', { notation, isSecret });
+      return emit('dice:roll', { notation, isSecret, rollContext, character });
     },
 
     // Initiative (legacy)
