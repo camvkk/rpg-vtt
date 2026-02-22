@@ -89,6 +89,7 @@ function GameBoardInner({ onLeaveRoom }) {
   const [codeCopied, setCodeCopied] = useState(false);
   
   const [showCharSheet, setShowCharSheet] = useState(false);
+  const [ownSheetMinimized, setOwnSheetMinimized] = useState(false);
   const [showMapUpload, setShowMapUpload] = useState(false);
   const [showTokenCreator, setShowTokenCreator] = useState(false);
   const [showGoogleDocs, setShowGoogleDocs] = useState(false);
@@ -762,7 +763,7 @@ function GameBoardInner({ onLeaveRoom }) {
 
       {/* Note: Initiative Tracker is now in FloatingWindow above */}
 
-      {/* Character Sheet Modal (own character - full-page) */}
+      {/* Character Sheet Window (own character - draggable) */}
       {showCharSheet && (
         <CharacterSheet
           character={character}
@@ -771,8 +772,12 @@ function GameBoardInner({ onLeaveRoom }) {
           isOtherCharacter={false}
           onUpdateCharacter={(char) => actions.updateCharacter(char)}
           onRollDice={handleDiceRoll}
-          onClose={() => setShowCharSheet(false)}
-          windowMode={false}
+          onClose={() => { setShowCharSheet(false); setOwnSheetMinimized(false); }}
+          onMinimize={(min) => setOwnSheetMinimized(min)}
+          isMinimized={ownSheetMinimized}
+          windowMode={true}
+          initialPosition={{ x: Math.max(60, window.innerWidth / 2 - 300), y: 60 }}
+          zIndex={900}
         />
       )}
 
