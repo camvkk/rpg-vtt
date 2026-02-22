@@ -766,7 +766,7 @@ function GameBoardInner({ onLeaveRoom }) {
       {showCharSheet && (
         <CharacterSheet
           character={character}
-          isEditable={!isDM}
+          isEditable={true}
           isDM={isDM}
           isOtherCharacter={false}
           onUpdateCharacter={(char) => actions.updateCharacter(char)}
@@ -782,7 +782,7 @@ function GameBoardInner({ onLeaveRoom }) {
           key={sheet.id}
           sheetId={sheet.id}
           character={sheet.character}
-          isEditable={false}
+          isEditable={isDM}
           isDM={isDM}
           isOtherCharacter={true}
           onUpdateCharacter={(char) => updateSheetCharacter(sheet.id, char)}
