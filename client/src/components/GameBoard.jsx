@@ -690,7 +690,42 @@ function GameBoardInner({ onLeaveRoom }) {
                   </div>
                   <div className="gb-player-list" style={{ marginBottom: 'var(--spacing-md)' }}>
                     {players.map((p) => (
-                      <div key={p.id} className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}>
+                      <div 
+                        key={p.id} 
+                        className={`gb-player-item ${p.is_dm ? 'dm' : ''}`}
+                        style={{ cursor: p.is_dm ? 'default' : 'pointer' }}
+                        onClick={() => {
+                          if (p.is_dm) return;
+                          // If it's the current player, toggle own sheet
+                          if (p.id === player.id) {
+                            setShowCharSheet(prev => !prev);
+                            return;
+                          }
+                          // For other players (DM can view), open their sheet
+                          if (isDM && allCharacters.has(p.name)) {
+                            const charData = allCharacters.get(p.name);
+                            const existingIdx = openSheets.findIndex(s => s.playerName === p.name);
+                            if (existingIdx >= 0) {
+                              setOpenSheets(prev => prev.map((s, i) => 
+                                i === existingIdx ? { ...s, isMinimized: false, zIndex: nextSheetZIndex } : s
+                              ));
+                              setNextSheetZIndex(z => z + 1);
+                            } else {
+                              setOpenSheets(prev => [...prev, {
+                                id: `player-${p.name}`,
+                                tokenId: null,
+                                character: charData,
+                                playerName: p.name,
+                                isMinimized: false,
+                                position: { x: 100 + openSheets.length * 30, y: 100 + openSheets.length * 30 },
+                                zIndex: nextSheetZIndex,
+                              }]);
+                              setNextSheetZIndex(z => z + 1);
+                            }
+                          }
+                        }}
+                        title={p.is_dm ? 'Mestre' : (p.id === player.id ? 'Abrir sua ficha' : (isDM ? 'Ver ficha do jogador' : p.name))}
+                      >
                         <div className="gb-player-avatar">{p.name?.[0]?.toUpperCase()}</div>
                         <div className="gb-player-info">
                           <div className="gb-player-name">{p.name}</div>
@@ -699,10 +734,67 @@ function GameBoardInner({ onLeaveRoom }) {
                             {p.id === player.id && ' (Você)'}
                           </div>
                         </div>
-                        <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {!p.is_dm && (
+                            <span style={{ fontSize: '0.75rem', opacity: 0.5 }} title="Ver ficha">📋</span>
+                          )}
+                          <span>{p.is_connected !== false ? '🟢' : '🔴'}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
+
+                  {/* Character list for quick access */}
+                  {isDM && allCharacters.size > 0 && (
+                    <>
+                      <div className="panel-header" style={{ marginBottom: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
+                        <h3 className="heading-sm">📋 Personagens</h3>
+                        <span style={{ fontSize: '0.8rem' }} className="text-dim">{allCharacters.size}</span>
+                      </div>
+                      <div className="gb-player-list">
+                        {[...allCharacters.entries()].map(([pName, charData]) => (
+                          <div
+                            key={pName}
+                            className="gb-player-item"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              const existingIdx = openSheets.findIndex(s => s.playerName === pName);
+                              if (existingIdx >= 0) {
+                                setOpenSheets(prev => prev.map((s, i) => 
+                                  i === existingIdx ? { ...s, isMinimized: false, zIndex: nextSheetZIndex } : s
+                                ));
+                                setNextSheetZIndex(z => z + 1);
+                              } else {
+                                setOpenSheets(prev => [...prev, {
+                                  id: `player-${pName}`,
+                                  tokenId: null,
+                                  character: charData,
+                                  playerName: pName,
+                                  isMinimized: false,
+                                  position: { x: 100 + openSheets.length * 30, y: 100 + openSheets.length * 30 },
+                                  zIndex: nextSheetZIndex,
+                                }]);
+                                setNextSheetZIndex(z => z + 1);
+                              }
+                            }}
+                            title={`Abrir ficha de ${charData?.name || pName}`}
+                          >
+                            <div className="gb-player-avatar" style={{ background: charData?.tokenColor || 'var(--color-primary)' }}>
+                              {(charData?.name || pName)?.[0]?.toUpperCase()}
+                            </div>
+                            <div className="gb-player-info">
+                              <div className="gb-player-name">{charData?.name || pName}</div>
+                              <div className="gb-player-role text-dim">
+                                {charData?.race || ''} {charData?.class || ''}
+                                {charData?.level ? ` Nv.${charData.level}` : ''}
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>📋</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             case 'scenes':

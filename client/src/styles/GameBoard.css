@@ -153,6 +153,11 @@
   background: var(--bg-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  transition: background 0.15s, border-color 0.15s;
+}
+.gb-player-item:hover {
+  background: var(--bg-elevated, rgba(255,255,255,0.08));
+  border-color: var(--color-primary);
 }
 .gb-player-item.dm {
   border-color: var(--color-primary);
