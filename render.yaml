@@ -8,6 +8,8 @@ services:
     name: rpg-vtt
     runtime: docker
     plan: free
+    # A região do Render mais perto do Brasil; crie o bucket B2 em US East pra ficar ao lado.
+    region: virginia
     branch: v2
     healthCheckPath: /api/health
     envVars:
