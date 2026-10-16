@@ -1,18 +1,28 @@
-# Deploy no Render como um único serviço (cliente + servidor + WebSocket).
-# O disco persistente guarda o banco e os uploads entre deploys (a v1 perdia tudo).
+# Deploy no Render como um único serviço (cliente + servidor + WebSocket), no plano GRÁTIS.
+# O plano grátis não tem disco: o sistema de arquivos é apagado a cada deploy, reinício e "soneca"
+# (15 min sem ninguém). Por isso o banco e os uploads ficam num bucket S3 grátis (Backblaze B2) —
+# veja server/src/backup.ts. Para usar um disco pago em vez do bucket: plan: starter + bloco disk
+# (mountPath /data) e apague as variáveis S3_*.
 services:
   - type: web
     name: rpg-vtt
     runtime: docker
-    plan: starter
+    plan: free
+    branch: v2
     healthCheckPath: /api/health
-    disk:
-      name: vtt-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: DATA_DIR
         value: /data
+      # Backblaze B2 → Buckets → Endpoint (ex: s3.us-east-005.backblazeb2.com)
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      # Backblaze B2 → Application Keys (keyID / applicationKey), com acesso só a esse bucket
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
       - key: MOONSHOT_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY

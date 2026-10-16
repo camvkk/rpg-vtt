@@ -3,6 +3,7 @@ import path from 'node:path';
 import express, { type Request, type Response } from 'express';
 import type { CreateCampaignRequest } from '../../shared/src/protocol.ts';
 import { newId } from '../../shared/src/util.ts';
+import { backupAsset, backupEnabled, backupStatus, fetchAsset } from './backup.ts';
 import { aiEnabled, config } from './config.ts';
 import { imageSize, sniff } from './images.ts';
 import { RateLimiter } from './ratelimit.ts';
@@ -61,7 +62,7 @@ export function createApp(): express.Express {
   }
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, version: '2.0.0', ai: aiEnabled() });
+    res.json({ ok: true, version: '2.0.0', ai: aiEnabled(), backup: backupStatus() });
   });
 
   app.post('/api/campaigns', express.json({ limit: '16kb' }), (req, res) => {
@@ -104,7 +105,7 @@ export function createApp(): express.Express {
   });
 
   // Uploads: raw body, sniffed by magic bytes, stored under DATA_DIR/assets/<campaignId>/.
-  app.post('/api/assets', express.raw({ type: () => true, limit: `${config.maxUploadMb}mb` }), (req, res) => {
+  app.post('/api/assets', express.raw({ type: () => true, limit: `${config.maxUploadMb}mb` }), async (req, res) => {
     if (limited(req, res, 'upload', 40)) return;
     const auth = authPlayer(req);
     if (!auth) {
@@ -134,6 +135,14 @@ export function createApp(): express.Express {
     const dir = path.join(config.dataDir, 'assets', auth.room.id);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, file), buf);
+    try {
+      await backupAsset(auth.room.id, file, buf, kind.mime);
+    } catch (e) {
+      console.error('[backup] falha ao enviar upload', e);
+      fs.rmSync(path.join(dir, file), { force: true });
+      res.status(503).json({ ok: false, error: 'Não foi possível guardar o arquivo agora. Tente de novo.' });
+      return;
+    }
     store.insertAsset({ id, campaignId: auth.room.id, kind: kind.kind, mime: kind.mime, size: buf.length, file });
     const size = kind.kind === 'image' ? imageSize(buf, kind.mime) : null;
     res.json({ ok: true, url: `/assets/${auth.room.id}/${file}`, mime: kind.mime, ...(size ?? {}) });
@@ -150,16 +159,29 @@ export function createApp(): express.Express {
     });
   }
 
+  const assetHeaders = (res: Response) => {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+  };
   app.use('/assets', express.static(path.join(config.dataDir, 'assets'), {
     immutable: true,
     maxAge: '365d',
     index: false,
     dotfiles: 'deny',
-    setHeaders: (res) => {
-      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-      res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-    },
+    setHeaders: assetHeaders,
   }));
+  if (backupEnabled()) {
+    // Not on local disk (the server restarted on an empty filesystem): bring it back from the bucket.
+    app.get('/assets/:campaign/:file', async (req, res, next) => {
+      const { campaign, file } = req.params;
+      if (!/^[\w-]{1,64}$/.test(campaign) || !/^[\w-]{1,64}\.[a-z0-9]{2,5}$/.test(file)) return next();
+      const buf = await fetchAsset(campaign, file);
+      if (!buf) return next();
+      assetHeaders(res);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.type(path.extname(file)).send(buf);
+    });
+  }
 
   // Production: serve the built client (also serves /maps built-ins from client/public).
   if (fs.existsSync(config.clientDist)) {

@@ -55,7 +55,9 @@ Copie `.env.example` para `.env` e defina `MOONSHOT_API_KEY` ou `OPENROUTER_API_
 
 ### Deploy
 
-Um único serviço (cliente + API + WebSocket). Há `Dockerfile` e `render.yaml` (Render com disco persistente em `/data`). Qualquer host que rode Docker com volume persistente serve.
+Um único serviço (cliente + API + WebSocket). Há `Dockerfile` e `render.yaml` (Render no plano grátis). Qualquer host que rode Docker serve.
+
+Sem disco persistente (Render grátis), defina `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` de um bucket S3 (ex: Backblaze B2, 10 GB grátis): o banco é restaurado do bucket ao ligar, salvo lá a cada mudança (~30 s) e no desligamento, e os uploads vão direto pra lá. Nunca use o mesmo bucket em dois servidores ao mesmo tempo. Com disco/volume persistente em `DATA_DIR`, não precisa de bucket.
 
 ## Estrutura
 

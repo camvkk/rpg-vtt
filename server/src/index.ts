@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { Server } from 'socket.io';
+import { backupEnabled, flushBackup, restoreBackup, startBackups } from './backup.ts';
 import { aiEnabled, config } from './config.ts';
 import { closeDb, getDb } from './db.ts';
 import { createApp } from './http.ts';
@@ -7,7 +8,10 @@ import type { VttServer } from './room.ts';
 import { saveAll, sweepRooms } from './rooms.ts';
 import { registerSocketHandlers } from './socket.ts';
 
+// No persistent disk? The database lives in a bucket and must be back before it's opened.
+await restoreBackup();
 getDb();
+startBackups();
 
 const app = createApp();
 const server = http.createServer(app);
@@ -26,7 +30,7 @@ const autosave = setInterval(() => saveAll(), 15_000);
 
 server.listen(config.port, config.host, () => {
   console.log(`\n  ⚔️  RPG VTT v2 rodando em http://localhost:${config.port}`);
-  console.log(`  📦 Dados em ${config.dataDir}`);
+  console.log(`  📦 Dados em ${config.dataDir}${backupEnabled() ? ` (cópia no bucket ${config.s3.bucket})` : ''}`);
   console.log(`  🔮 Oráculo (IA): ${aiEnabled() ? 'ligado' : 'desligado (defina MOONSHOT_API_KEY ou OPENROUTER_API_KEY)'}\n`);
 });
 
@@ -39,14 +43,12 @@ function shutdown(signal: string): void {
   clearInterval(autosave);
   saveAll();
   void io.close();
-  server.close(() => {
+  const exit = () => {
     closeDb();
     process.exit(0);
-  });
-  setTimeout(() => {
-    closeDb();
-    process.exit(0);
-  }, 3_000).unref();
+  };
+  void Promise.allSettled([new Promise((r) => server.close(r)), flushBackup()]).then(exit);
+  setTimeout(exit, backupEnabled() ? 25_000 : 3_000).unref();
 }
 // Last line of defense: a game server should log a bug, keep running and keep everyone's session alive.
 process.on('uncaughtException', (err) => {

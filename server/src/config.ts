@@ -28,7 +28,23 @@ export const config = {
     /** Override model name if needed. */
     model: env.AI_MODEL ?? '',
   },
+  /** Off-site copy of the database + uploads, for hosts without a persistent disk (see backup.ts). */
+  s3: {
+    endpoint: s3Endpoint(env.S3_ENDPOINT ?? ''),
+    region: env.S3_REGION || /^https:\/\/s3\.([a-z0-9-]+)\./.exec(s3Endpoint(env.S3_ENDPOINT ?? ''))?.[1] || 'us-east-1',
+    bucket: env.S3_BUCKET ?? '',
+    accessKeyId: env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '',
+    prefix: (env.S3_PREFIX ?? '').replace(/^\/+|\/+$/g, ''),
+    snapshotIntervalMs: Number(env.SNAPSHOT_INTERVAL_MS ?? 30_000),
+  },
 };
+
+/** Backblaze shows the endpoint without a scheme ("s3.us-east-005.backblazeb2.com"). */
+function s3Endpoint(raw: string): string {
+  const s = raw.trim().replace(/\/+$/, '');
+  return !s || /^https?:\/\//.test(s) ? s : `https://${s}`;
+}
 
 export function aiEnabled(): boolean {
   return !!(config.ai.moonshotKey || config.ai.openrouterKey);
