@@ -3,7 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import type { ActionPayload, ActionType } from '@shared/actions/index.ts';
 import type {
   ActResponse, AiRequest, AiResponse, ClientFx, ClientToServerEvents, FxEvent, JoinRequest, JoinResponse,
-  ServerToClientEvents,
+  ServerToClientEvents, SystemParseProgress, SystemParseRequest, SystemParseResponse,
 } from '@shared/protocol.ts';
 import { toast } from '../ui/index.tsx';
 import { useGame } from '../store/game.ts';
@@ -28,6 +28,7 @@ export function emitLocalFx(e: FxEvent): void {
 }
 
 const aiListeners = new Map<string, (chunk: string) => void>();
+const systemListeners = new Map<string, (p: SystemParseProgress) => void>();
 
 let socket: VttClientSocket | null = null;
 
@@ -61,6 +62,7 @@ export function getSocket(): VttClientSocket {
   s.on('me', (me) => game().setMe(me));
   s.on('fx', (e) => emitLocalFx(e));
   s.on('ai.chunk', (id, chunk) => aiListeners.get(id)?.(chunk));
+  s.on('system.progress', (id, p) => systemListeners.get(id)?.(p));
   s.on('kicked', (reason) => {
     toast(reason || 'Você foi removido da mesa.', 'danger');
     game().leave();
@@ -160,6 +162,20 @@ export function askAi(req: AiRequest, onChunk: (chunk: string) => void): Promise
     s.timeout(180_000).emit('ai', id, req, (err: Error | null, res: AiResponse) => {
       aiListeners.delete(id);
       resolve(err ? { ok: false, error: 'O Oráculo não respondeu a tempo.' } : res);
+    });
+  });
+}
+
+let systemSeq = 0;
+/** DM: send documents to the AI and get a parsed (unsaved) system back. Can take a few minutes. */
+export function parseSystem(req: SystemParseRequest, onProgress: (p: SystemParseProgress) => void): Promise<SystemParseResponse> {
+  const s = getSocket();
+  const id = `sys${Date.now()}${systemSeq++}`;
+  systemListeners.set(id, onProgress);
+  return new Promise((resolve) => {
+    s.timeout(420_000).emit('system.parse', id, req, (err: Error | null, res: SystemParseResponse) => {
+      systemListeners.delete(id);
+      resolve(err ? { ok: false, error: 'A IA não respondeu a tempo. Tente com menos documentos.' } : res);
     });
   });
 }

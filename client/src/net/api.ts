@@ -1,4 +1,6 @@
-import type { CreateCampaignRequest, CreateCampaignResponse } from '@shared/protocol.ts';
+import type {
+  CreateCampaignRequest, CreateCampaignResponse, ExtractDocResponse, SystemSourcesResponse,
+} from '@shared/protocol.ts';
 import { useGame } from '../store/game.ts';
 import { SERVER_URL } from './socket.ts';
 
@@ -68,6 +70,35 @@ export async function setDmPassword(password: string | null): Promise<boolean> {
     body: JSON.stringify({ password }),
   });
   return res.ok;
+}
+
+/** Custom system importer: the server extracts the text of a PDF/DOCX/TXT (DM only). */
+export async function extractDocument(file: Blob, name: string): Promise<ExtractDocResponse> {
+  const { code, token } = useGame.getState();
+  if (!code || !token) return { ok: false, error: 'Sem sessão.' };
+  try {
+    const res = await fetch(`${SERVER_URL}/api/system/extract?name=${encodeURIComponent(name.slice(0, 120))}`, {
+      method: 'POST',
+      headers: { 'x-vtt-code': code, 'x-vtt-token': token, 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    if (res.status === 413) return { ok: false, error: 'Arquivo grande demais.' };
+    return await json<ExtractDocResponse>(res);
+  } catch {
+    return { ok: false, error: 'Falha no envio.' };
+  }
+}
+
+/** Documents of the last system import, kept on the server for re-processing. */
+export async function loadSystemSources(): Promise<SystemSourcesResponse> {
+  const { code, token } = useGame.getState();
+  if (!code || !token) return { ok: false, error: 'Sem sessão.' };
+  try {
+    const res = await fetch(`${SERVER_URL}/api/system/sources`, { headers: { 'x-vtt-code': code, 'x-vtt-token': token } });
+    return await json<SystemSourcesResponse>(res);
+  } catch {
+    return { ok: false, error: 'Não foi possível falar com o servidor.' };
+  }
 }
 
 /** Resolve asset URLs (relative server paths) for split deployments. */

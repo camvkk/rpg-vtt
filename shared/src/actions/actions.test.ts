@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { enablePatches, produceWithPatches } from 'immer';
+import { normalizeCustomSystem } from '../customSystem.ts';
 import { createCampaign, createCharacter, createToken } from '../defaults.ts';
 import { roll } from '../dice.ts';
 import { applyOps, opsForViewer, projectChat, projectState } from '../projection.ts';
-import type { CampaignState, ChatMessage, PlayerInfo } from '../types.ts';
+import type { CampaignState, ChatMessage, CustomSystem, PlayerInfo } from '../types.ts';
 import type { Monster } from '../data5e/types.ts';
 import { getAction, type ActionCtx } from './index.ts';
 
@@ -220,4 +221,86 @@ test('damage drops a PC to 0 and death saves resolve', () => {
   assert.equal(t.state.characters[c]!.conditions.includes('unconscious'), false);
   void createCharacter;
   void createToken;
+});
+
+// ---------------------------------------------------------------------------
+// Custom systems
+// ---------------------------------------------------------------------------
+
+function sampleSystem(): CustomSystem {
+  const r = normalizeCustomSystem({
+    name: 'Brasas',
+    modifier: 'value',
+    checkFormula: '1d20+@atr',
+    skillFormula: '1d20+@atr+@pericia',
+    stats: [{ key: 'vigor', name: 'Vigor', short: 'VIG', min: 0, max: 5, default: 1 }, { key: 'astucia', name: 'Astúcia', short: 'AST', min: 0, max: 5, default: 1 }],
+    skills: [{ key: 'luta', name: 'Luta', stat: 'vigor' }],
+    resources: [{ key: 'brasa', name: 'Brasa', max: 3 }],
+    races: [{ name: 'Anão', statBonuses: { vigor: 1 } }],
+    mechanics: [{ name: 'Fôlego', formula: '2d6' }, { name: 'Lenda', description: 'sem dados' }],
+  }, { now: 1, sources: ['brasas.md'] });
+  if ('error' in r) throw new Error(r.error);
+  return r.system;
+}
+
+test('custom system: only the DM saves, activates and clears it', () => {
+  const t = setup();
+  const system = sampleSystem();
+  assert.equal(t.run(t.p1, 'system.save', { system }).ok, false);
+  assert.equal(t.run(t.dm, 'settings.update', { system: 'custom' }).ok, false, 'nothing to activate yet');
+  assert.throws(() => t.run(t.dm, 'system.save', { system: { ...system, stats: [{ ...system.stats[0]!, key: 'Vigor!' }] } }), 'schema rejects bad keys');
+
+  const r = t.run(t.dm, 'system.save', { system });
+  assert.equal(r.ok, true);
+  assert.equal(t.state.customSystem?.name, 'Brasas');
+  assert.equal(t.state.settings.system, 'custom');
+  assert.ok(t.chat.some((m) => m.kind === 'system' && m.text.includes('Brasas')));
+
+  assert.equal(t.run(t.p1, 'settings.update', { system: 'dnd5e' }).ok, false);
+  assert.equal(t.run(t.dm, 'settings.update', { system: 'dnd5e' }).ok, true);
+  assert.equal(t.state.customSystem?.name, 'Brasas', 'switching back keeps the imported system');
+  assert.equal(t.run(t.dm, 'settings.update', { system: 'custom' }).ok, true);
+
+  assert.equal(t.run(t.p1, 'system.clear', {}).ok, false);
+  assert.equal(t.run(t.dm, 'system.clear', {}).ok, true);
+  assert.equal(t.state.customSystem, null);
+  assert.equal(t.state.settings.system, 'dnd5e');
+  assert.equal(t.run(t.dm, 'system.clear', {}).ok, false, 'nothing left to clear');
+});
+
+test('custom system: players see it and roll from their own custom sheet', () => {
+  const t = setup();
+  const viewer = { id: 'p1', role: 'player' as const };
+  let view = projectState(t.state, viewer);
+  const saved = t.run(t.dm, 'system.save', { system: sampleSystem() });
+  view = applyOps(view, opsForViewer(t.state, saved.patches, viewer) as never);
+  assert.equal(view.customSystem?.name, 'Brasas', 'the system reaches players through patches');
+  assert.equal(view.settings.system, 'custom');
+  assert.equal(projectState(t.state, viewer).customSystem?.stats.length, 2);
+
+  t.run(t.p1, 'character.create', { character: { name: 'Tora', race: 'Anão' } });
+  const charId = Object.keys(t.state.characters)[0]!;
+  assert.equal(t.state.characters[charId]!.custom, null, 'sheets start without custom values');
+  const upd = t.run(t.p1, 'character.update', { id: charId, patch: { custom: { stats: { vigor: 3, astucia: 2 }, skills: { luta: 2 }, resources: { brasa: { cur: 2, max: 3 } } } } });
+  assert.equal(upd.ok, true);
+  assert.throws(() => t.run(t.p1, 'character.update', { id: charId, patch: { custom: { stats: { 'não-pode': 1 }, skills: {}, resources: {} } } }));
+
+  const stat = t.run(t.p1, 'roll.custom', { characterId: charId, kind: 'stat', key: 'vigor' });
+  assert.equal(stat.ok, true);
+  const card = t.chat[t.chat.length - 1]!.card as Extract<NonNullable<ChatMessage['card']>, { type: 'check' }>;
+  assert.equal(card.type, 'check');
+  assert.equal(card.title, 'Teste de Vigor');
+  assert.equal(card.roll.formula, '1d20+4', 'vigor 3 + 1 from Anão');
+
+  t.run(t.p1, 'roll.custom', { characterId: charId, kind: 'skill', key: 'luta' });
+  const skillCard = t.chat[t.chat.length - 1]!.card as typeof card;
+  assert.equal(skillCard.roll.formula, '1d20+4+2');
+
+  assert.equal(t.run(t.p1, 'roll.custom', { characterId: charId, kind: 'mechanic', key: 'folego' }).ok, true);
+  assert.equal(t.run(t.p1, 'roll.custom', { characterId: charId, kind: 'mechanic', key: 'lenda' }).ok, false, 'no formula to roll');
+  assert.equal(t.run(t.p2, 'roll.custom', { characterId: charId, kind: 'stat', key: 'vigor' }).ok, false, 'not your sheet');
+  assert.equal(t.run(t.dm, 'roll.custom', { characterId: charId, kind: 'stat', key: 'vigor' }).ok, true, 'the DM rolls any sheet');
+
+  t.run(t.dm, 'settings.update', { system: 'dnd5e' });
+  assert.equal(t.run(t.p1, 'roll.custom', { characterId: charId, kind: 'stat', key: 'vigor' }).ok, false, 'inactive system cannot roll');
 });

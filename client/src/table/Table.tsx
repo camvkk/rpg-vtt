@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useGame } from '../store/game.ts';
+import { useActiveCustomSystem } from '../store/hooks.ts';
 import { useUi } from '../store/ui.ts';
 import { TableCanvas } from '../engine/TableCanvas.tsx';
 import { TopBar } from './TopBar.tsx';
@@ -16,6 +17,7 @@ import './table.css';
 
 const SceneSettingsModal = lazy(() => import('../features/dm/SceneSettingsModal.tsx'));
 const CharacterWizard = lazy(() => import('../features/character/CharacterWizard.tsx'));
+const CustomCharacterCreate = lazy(() => import('../features/character/CustomCharacterCreate.tsx'));
 const HandoutModal = lazy(() => import('../features/journal/HandoutModal.tsx'));
 
 export default function Table() {
@@ -24,6 +26,7 @@ export default function Table() {
   const sceneSettingsId = useUi((s) => s.sceneSettingsId);
   const wizardOpen = useUi((s) => s.wizardOpen);
   const handoutId = useUi((s) => s.handoutId);
+  const customSystem = useActiveCustomSystem();
   useShortcuts();
 
   useEffect(() => {
@@ -53,7 +56,9 @@ export default function Table() {
       )}
       <Suspense fallback={null}>
         {sceneSettingsId && <SceneSettingsModal sceneId={sceneSettingsId} onClose={() => useUi.getState().set({ sceneSettingsId: null })} />}
-        {wizardOpen && <CharacterWizard onClose={() => useUi.getState().set({ wizardOpen: false })} />}
+        {wizardOpen && (customSystem
+          ? <CustomCharacterCreate system={customSystem} onClose={() => useUi.getState().set({ wizardOpen: false })} />
+          : <CharacterWizard onClose={() => useUi.getState().set({ wizardOpen: false })} />)}
         {handoutId && <HandoutModal journalId={handoutId} onClose={() => useUi.getState().set({ handoutId: null })} />}
       </Suspense>
     </div>

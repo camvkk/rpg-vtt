@@ -1,5 +1,5 @@
 // Socket.io protocol between client and server.
-import type { CampaignState, ChatMessage, ID, PlayerInfo, Presence, Role } from './types.ts';
+import type { CampaignState, ChatMessage, CustomSystem, ID, PlayerInfo, Presence, Role } from './types.ts';
 
 /** A state patch op: set (v present) or delete (d) the value at path. Paths are entity roots. */
 export interface PatchOp {
@@ -71,6 +71,34 @@ export type AiResponse =
   | { ok: true; kind: AiRequest['kind']; text: string; data?: unknown }
   | Fail;
 
+// Custom system importer (DM only) ----------------------------------------------
+
+export interface SystemDocument {
+  name: string;
+  text: string;
+}
+
+export interface SystemParseRequest {
+  documents: SystemDocument[];
+  /** Optional hints for the AI ("perícias usam d10", "ignore o capítulo de magia"...). */
+  instructions?: string;
+}
+
+export type SystemParseResponse = { ok: true; system: CustomSystem; warnings: string[] } | Fail;
+
+/** Streamed while the AI works: reasoning first, then the JSON being written. */
+export interface SystemParseProgress {
+  phase: 'thinking' | 'writing';
+  chars: number;
+}
+
+/** Limits enforced by the server for a parse request. */
+export const SYSTEM_DOC_LIMITS = { maxDocs: 12, maxDocChars: 150_000, maxTotalChars: 400_000 } as const;
+
+export type ExtractDocResponse = { ok: true; name: string; text: string; kind: 'pdf' | 'docx' | 'text'; truncated: boolean } | Fail;
+
+export type SystemSourcesResponse = { ok: true; documents: SystemDocument[]; updatedAt: number | null } | Fail;
+
 export interface ServerToClientEvents {
   patch: (ops: PatchOp[]) => void;
   snapshot: (state: CampaignState) => void;
@@ -81,6 +109,7 @@ export interface ServerToClientEvents {
   presence: (p: Presence[]) => void;
   fx: (e: FxEvent) => void;
   'ai.chunk': (requestId: string, text: string) => void;
+  'system.progress': (requestId: string, p: SystemParseProgress) => void;
   kicked: (reason: string) => void;
   me: (me: PlayerInfo) => void;
 }
@@ -91,6 +120,7 @@ export interface ClientToServerEvents {
   fx: (e: ClientFx) => void;
   'chat.history': (before: number, ack: (msgs: ChatMessage[]) => void) => void;
   ai: (requestId: string, req: AiRequest, ack: (res: AiResponse) => void) => void;
+  'system.parse': (requestId: string, req: SystemParseRequest, ack: (res: SystemParseResponse) => void) => void;
 }
 
 export interface SocketData {

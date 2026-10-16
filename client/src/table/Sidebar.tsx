@@ -10,7 +10,8 @@ export function Sidebar() {
   const open = useUi((s) => s.sidebarOpen);
   const tab = useUi((s) => s.sidebarTab);
   const isDM = useIsDM();
-  const panels = PANELS.filter((p) => !p.dmOnly || isDM);
+  const customActive = useGame((s) => s.state?.settings.system === 'custom' && !!s.state.customSystem);
+  const panels = PANELS.filter((p) => (!p.dmOnly || isDM) && (!p.customSystem || isDM || customActive));
   const active = panels.find((p) => p.id === tab) ?? panels[0]!;
   const unread = useUnreadChat(open && tab === 'chat');
   // Keep visited panels mounted so their state (scroll, drafts) survives tab switches.

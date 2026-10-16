@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Download, Dices, KeyRound, Keyboard, Shield, Sparkles } from 'lucide-react';
+import { BookMarked, Download, Dices, KeyRound, Keyboard, Shield, Sparkles } from 'lucide-react';
 import { setDmPassword } from '../../net/api.ts';
 import { getPref, setPref } from '../../net/session.ts';
 import { act } from '../../net/socket.ts';
 import { useGame } from '../../store/game.ts';
 import { useIsDM } from '../../store/hooks.ts';
-import { Button, Field, Toggle, toast } from '../../ui/index.tsx';
+import { useUi } from '../../store/ui.ts';
+import { Button, Field, Segmented, Toggle, toast } from '../../ui/index.tsx';
 import './dm.css';
 
 const SHORTCUTS: [string, string][] = [
@@ -21,6 +22,7 @@ export default function SettingsPanel() {
   const isDM = useIsDM();
   const settings = useGame((s) => s.state?.settings);
   const name = useGame((s) => s.state?.name ?? '');
+  const customSystem = useGame((s) => s.state?.customSystem ?? null);
   const [dice3d, setDice3d] = useState(() => getPref('dice3d', true));
   const [campaignName, setCampaignName] = useState(name);
   const [pw, setPw] = useState('');
@@ -44,6 +46,29 @@ export default function SettingsPanel() {
             <Toggle checked={settings.playerDrawing} onChange={(v) => set({ playerDrawing: v })} label="Jogadores podem desenhar no mapa" />
             <Toggle checked={settings.playerTemplates} onChange={(v) => set({ playerTemplates: v })} label="Jogadores podem criar áreas de efeito" />
             <Toggle checked={settings.dice3d} onChange={(v) => set({ dice3d: v })} label="Dados 3D para todos" />
+          </div>
+
+          <div className="section-title u-mt-3"><BookMarked size={13} /> Sistema de regras</div>
+          <div className="u-col u-gap-3">
+            <Segmented
+              value={settings.system}
+              options={[
+                { value: 'dnd5e', label: 'D&D 5e', icon: <Shield /> },
+                { value: 'custom', label: customSystem ? customSystem.name.slice(0, 24) : 'Sistema customizado', icon: <BookMarked /> },
+              ]}
+              onChange={(v) => {
+                if (v === 'custom' && !customSystem) useUi.getState().openSidebar('system');
+                else set({ system: v });
+              }}
+            />
+            <span className="u-xs u-muted">
+              {customSystem
+                ? 'As fichas seguem o sistema escolhido. O sistema importado fica guardado mesmo usando D&D 5e.'
+                : 'Importe as regras do seu próprio RPG (PDF, DOCX ou texto) e a IA monta fichas para ele.'}
+            </span>
+            <Button icon={<BookMarked />} onClick={() => useUi.getState().openSidebar('system')}>
+              {customSystem ? 'Abrir sistema customizado' : 'Importar sistema customizado'}
+            </Button>
           </div>
 
           <div className="section-title u-mt-3"><Sparkles size={13} /> Campanha</div>

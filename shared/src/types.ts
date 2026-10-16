@@ -421,8 +421,119 @@ export interface Character {
   notes: string;
   /** For NPCs created from a compendium monster. */
   monsterId: string | null;
+  /** Values for the campaign's custom system (null until the sheet is used with one). */
+  custom: CustomSheet | null;
   createdAt: number;
   updatedAt: number;
+}
+
+// ---------------------------------------------------------------------------
+// Custom systems (homebrew rules imported by the DM, parsed by the AI)
+// ---------------------------------------------------------------------------
+// Keys are ASCII identifiers ([a-z][a-z0-9_]*) so they can be used as dice variables: a stat "forca"
+// is available as @forca in any formula of the system. Names/descriptions keep the document's language.
+
+/** How a stat value becomes the modifier used in rolls (@atr / @<stat>). */
+export type CustomModifierRule = 'value' | 'dnd' | 'half';
+
+export interface CustomStat {
+  key: string;
+  name: string;
+  /** Abbreviation shown on the sheet (e.g. "FOR"). */
+  short: string;
+  description: string;
+  min: number;
+  max: number;
+  default: number;
+}
+
+export interface CustomSkill {
+  key: string;
+  name: string;
+  /** Stat key used for the roll, null when the skill stands alone. */
+  stat: string | null;
+  description: string;
+}
+
+/** Extra tracked pools besides hit points (mana, sanity, stress...). */
+export interface CustomResource {
+  key: string;
+  name: string;
+  /** Starting maximum for new sheets. */
+  max: number;
+  description: string;
+}
+
+export interface CustomRace {
+  key: string;
+  name: string;
+  description: string;
+  /** Stat key → bonus added to the base value. */
+  statBonuses: Record<string, number>;
+  traits: string[];
+}
+
+export interface CustomClass {
+  key: string;
+  name: string;
+  description: string;
+  /** Hit die faces (0 = the system has no hit dice). */
+  hitDie: number;
+  primaryStats: string[];
+  /** Skill keys the class favours. */
+  skills: string[];
+  features: string[];
+}
+
+/** Equipment, powers/spells and special mechanics share one shape: a named entry with an optional roll. */
+export interface CustomEntry {
+  key: string;
+  name: string;
+  /** Category (weapon, armor...) for items, level/circle for powers, empty otherwise. */
+  tag: string;
+  /** Cost / properties line (e.g. "2 PM", "versátil, pesada"). */
+  detail: string;
+  description: string;
+  /** Dice formula with @variables, or null when nothing is rolled. */
+  formula: string | null;
+}
+
+export interface CustomRule {
+  name: string;
+  description: string;
+}
+
+export interface CustomSystem {
+  name: string;
+  description: string;
+  modifier: CustomModifierRule;
+  /** Formula for stat checks. Variables: @atr (modifier), @valor (value), @nivel, @<stat>. */
+  checkFormula: string;
+  /** Formula for skill checks: same variables plus @pericia (the skill's value on the sheet). */
+  skillFormula: string;
+  /** Labels for the two numbers tokens use. */
+  hpName: string;
+  defenseName: string;
+  stats: CustomStat[];
+  skills: CustomSkill[];
+  resources: CustomResource[];
+  races: CustomRace[];
+  classes: CustomClass[];
+  equipment: CustomEntry[];
+  powers: CustomEntry[];
+  mechanics: CustomEntry[];
+  rules: CustomRule[];
+  /** Names of the documents it was imported from. */
+  sources: string[];
+  importedAt: number;
+}
+
+export interface CustomSheet {
+  /** Base stat values (race bonuses are added on top). */
+  stats: Record<string, number>;
+  /** Skill values (ranks / bonus), used as @pericia. */
+  skills: Record<string, number>;
+  resources: Record<string, { cur: number; max: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -527,8 +638,8 @@ export interface CampaignSettings {
   autoRollNpcInitiative: boolean;
   /** Roll 3D dice animations. */
   dice3d: boolean;
-  /** Language/system flavour. */
-  system: 'dnd5e';
+  /** Rules used by character sheets: D&D 5e or the DM's imported system (CampaignState.customSystem). */
+  system: 'dnd5e' | 'custom';
 }
 
 export interface CampaignState {
@@ -547,6 +658,8 @@ export interface CampaignState {
   journal: Record<ID, JournalEntry>;
   audio: AudioState;
   settings: CampaignSettings;
+  /** Homebrew system imported by the DM (kept when switching back to 5e, cleared explicitly). */
+  customSystem: CustomSystem | null;
 }
 
 // ---------------------------------------------------------------------------

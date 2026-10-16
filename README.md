@@ -25,6 +25,7 @@ Mesa virtual para D&D 5e (SRD 5.1) feita para abrir e jogar: sem cadastro, em te
 - Diário/handouts com markdown, compartilhamento por jogador e "mostrar para todos".
 - Áudio sincronizado: trilhas, ambientes procedurais (taverna, floresta, masmorra, tempestade…) e efeitos sonoros.
 - Oráculo do Mestre (IA via Kimi): NPCs com ficha, descrição de cena, encontros balanceados, regras, resumo da sessão, nomes e tesouros.
+- Sistema customizado: o Mestre envia as regras do próprio RPG (PDF, DOCX, TXT/MD ou texto colado), a IA monta atributos, perícias, raças, classes, equipamentos e mecânicas, e as fichas passam a rolar por essas regras (também importa/exporta JSON).
 
 **Base sólida**
 - Servidor autoritativo: toda ação passa por validação (zod) e checagem de permissão; jogadores recebem só o que podem ver.
@@ -51,7 +52,7 @@ Isso compila o cliente e serve tudo em http://localhost:3001. Exponha a porta co
 
 ### IA (opcional)
 
-Copie `.env.example` para `.env` e defina `MOONSHOT_API_KEY` ou `OPENROUTER_API_KEY`. Sem chave, tudo funciona e só o Oráculo fica desligado.
+Copie `.env.example` para `.env` e defina `MOONSHOT_API_KEY` ou `OPENROUTER_API_KEY`. Sem chave, tudo funciona e só o Oráculo e a importação de sistemas por IA ficam desligados (importar um sistema em JSON continua funcionando).
 
 ### Deploy
 

@@ -158,6 +158,19 @@ export function rollCheck(characterId: ID, kind: 'ability' | 'save' | 'skill', k
   });
 }
 
+/** Roll from a custom-system sheet: stat/skill check or an item, power or mechanic formula. */
+export function rollCustom(characterId: ID, kind: ActionPayload<'roll.custom'>['kind'], key: string, e?: ModEvent): void {
+  const tok = findCharacterToken(characterId);
+  void act('roll.custom', {
+    characterId,
+    tokenId: tok?.token.id,
+    kind,
+    key,
+    mode: rollModeFrom(e),
+    visibility: visibility(),
+  });
+}
+
 export function rollAttack(characterId: ID, attackId: ID, e?: ModEvent): void {
   const tok = findCharacterToken(characterId);
   const scene = getViewScene();

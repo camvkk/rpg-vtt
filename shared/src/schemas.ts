@@ -1,8 +1,9 @@
 // Zod schemas used to validate everything clients send. They mirror types.ts (checked with `satisfies`).
 import { z } from 'zod';
 import type {
-  Attack, Character, Drawing, FogArea, GridConfig, LightEmission, LightSource, MapNote, Template, Token, Wall,
-  JournalEntry, Track, Playlist, Shape,
+  Attack, Character, CustomClass, CustomEntry, CustomRace, CustomResource, CustomRule, CustomSheet, CustomSkill, CustomStat,
+  CustomSystem, Drawing, FogArea, GridConfig, LightEmission, LightSource, MapNote, Template, Token, Wall, JournalEntry, Track,
+  Playlist, Shape,
 } from './types.ts';
 
 const id = z.string().min(1).max(64);
@@ -171,6 +172,72 @@ export const zAttack = z.object({
 
 const slot = z.object({ max: z.number().int().min(0).max(20), used: z.number().int().min(0).max(20) });
 
+// ---------------------------------------------------------------------------
+// Custom systems
+// ---------------------------------------------------------------------------
+
+/** ASCII identifier usable as a dice variable (@key). */
+export const zCustomKey = z.string().regex(/^[a-z][a-z0-9_]{0,23}$/, 'chave inválida');
+const sysValue = z.number().int().min(-1_000).max(1_000);
+const desc = z.string().max(1_500);
+const label = z.string().max(80);
+const formula = z.string().max(120);
+
+export const CUSTOM_LIMITS = {
+  stats: 16, skills: 80, resources: 8, races: 40, classes: 40, equipment: 150, powers: 200, mechanics: 60, rules: 80,
+  traits: 20, features: 30,
+} as const;
+
+export const zCustomSheet = z.object({
+  stats: z.record(zCustomKey, sysValue).refine((r) => Object.keys(r).length <= CUSTOM_LIMITS.stats, 'atributos demais'),
+  skills: z.record(zCustomKey, sysValue).refine((r) => Object.keys(r).length <= CUSTOM_LIMITS.skills, 'perícias demais'),
+  resources: z.record(zCustomKey, z.object({ cur: z.number().int().min(-10_000).max(100_000), max: z.number().int().min(0).max(100_000) }))
+    .refine((r) => Object.keys(r).length <= CUSTOM_LIMITS.resources, 'recursos demais'),
+}) satisfies z.ZodType<CustomSheet>;
+
+const zCustomEntry = z.object({
+  key: zCustomKey, name: label, tag: z.string().max(60), detail: z.string().max(200), description: desc, formula: formula.nullable(),
+}) satisfies z.ZodType<CustomEntry>;
+
+/** Unique keys inside a list (keys are how sheets and roll actions refer to entries). */
+function uniqueKeys<T extends { key: string }>(list: T[]): boolean {
+  return new Set(list.map((x) => x.key)).size === list.length;
+}
+
+export const zCustomSystem = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().max(3_000),
+  modifier: z.enum(['value', 'dnd', 'half']),
+  checkFormula: formula.min(1),
+  skillFormula: formula.min(1),
+  hpName: z.string().min(1).max(30),
+  defenseName: z.string().min(1).max(30),
+  stats: z.array(z.object({
+    key: zCustomKey, name: label, short: z.string().max(6), description: desc,
+    min: sysValue, max: sysValue, default: sysValue,
+  }) satisfies z.ZodType<CustomStat>).max(CUSTOM_LIMITS.stats).refine(uniqueKeys, 'atributos repetidos'),
+  skills: z.array(z.object({ key: zCustomKey, name: label, stat: zCustomKey.nullable(), description: desc }) satisfies z.ZodType<CustomSkill>)
+    .max(CUSTOM_LIMITS.skills).refine(uniqueKeys, 'perícias repetidas'),
+  resources: z.array(z.object({ key: zCustomKey, name: z.string().max(40), max: z.number().int().min(0).max(100_000), description: desc }) satisfies z.ZodType<CustomResource>)
+    .max(CUSTOM_LIMITS.resources).refine(uniqueKeys, 'recursos repetidos'),
+  races: z.array(z.object({
+    key: zCustomKey, name: label, description: desc,
+    statBonuses: z.record(zCustomKey, z.number().int().min(-100).max(100)),
+    traits: z.array(z.string().max(300)).max(CUSTOM_LIMITS.traits),
+  }) satisfies z.ZodType<CustomRace>).max(CUSTOM_LIMITS.races).refine(uniqueKeys, 'raças repetidas'),
+  classes: z.array(z.object({
+    key: zCustomKey, name: label, description: desc, hitDie: z.number().int().min(0).max(100),
+    primaryStats: z.array(zCustomKey).max(CUSTOM_LIMITS.stats), skills: z.array(zCustomKey).max(CUSTOM_LIMITS.skills),
+    features: z.array(z.string().max(300)).max(CUSTOM_LIMITS.features),
+  }) satisfies z.ZodType<CustomClass>).max(CUSTOM_LIMITS.classes).refine(uniqueKeys, 'classes repetidas'),
+  equipment: z.array(zCustomEntry).max(CUSTOM_LIMITS.equipment).refine(uniqueKeys, 'itens repetidos'),
+  powers: z.array(zCustomEntry).max(CUSTOM_LIMITS.powers).refine(uniqueKeys, 'poderes repetidos'),
+  mechanics: z.array(zCustomEntry).max(CUSTOM_LIMITS.mechanics).refine(uniqueKeys, 'mecânicas repetidas'),
+  rules: z.array(z.object({ name: label, description: z.string().max(4_000) }) satisfies z.ZodType<CustomRule>).max(CUSTOM_LIMITS.rules),
+  sources: z.array(z.string().max(120)).max(20),
+  importedAt: z.number(),
+}) satisfies z.ZodType<CustomSystem>;
+
 export const zCharacter = z.object({
   id,
   kind: z.enum(['pc', 'npc']),
@@ -242,6 +309,7 @@ export const zCharacter = z.object({
   backstory: longText,
   notes: longText,
   monsterId: z.string().max(80).nullable(),
+  custom: zCustomSheet.nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 }) satisfies z.ZodType<Character>;

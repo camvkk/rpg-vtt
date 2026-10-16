@@ -9,9 +9,10 @@ import {
 } from '@shared/rules5e.ts';
 import type { Ability, SkillId } from '@shared/types.ts';
 import { signed } from '@shared/util.ts';
+import { prettyFormula } from '@shared/customSystem.ts';
 import { act, sendFx } from '../net/socket.ts';
 import { useGame } from '../store/game.ts';
-import { useIsDM, useMyCharacter, useSelectedTokens, useViewSceneId } from '../store/hooks.ts';
+import { useActiveCustomSystem, useIsDM, useMyCharacter, useSelectedTokens, useViewSceneId } from '../store/hooks.ts';
 import { useUi, type RollMode } from '../store/ui.ts';
 import { IconButton, Popover, toast } from '../ui/index.tsx';
 
@@ -146,6 +147,7 @@ function QuickActions() {
   const characters = useGame((s) => s.state?.characters);
   const sceneId = useViewSceneId();
   const isDM = useIsDM();
+  const system = useActiveCustomSystem();
   const [checkAnchor, setCheckAnchor] = useState<HTMLElement | null>(null);
 
   const single = selected.length === 1 ? selected[0]! : null;
@@ -156,7 +158,28 @@ function QuickActions() {
 
   const targets = () => useUi.getState().targets;
   const items: { key: string; label: string; sub: string; icon: React.ReactNode; run: (e: React.MouseEvent) => void }[] = [];
-  if (character) {
+  const custom = character && system ? system : null;
+  const rollCustom = (kind: 'stat' | 'skill' | 'equipment' | 'mechanic', key: string, e: React.MouseEvent) => {
+    if (!character) return;
+    void act('roll.custom', {
+      characterId: character.id, tokenId: single?.characterId === character.id ? single.id : undefined, kind, key, mode: rollMode(e),
+    });
+    setCheckAnchor(null);
+  };
+  if (custom && character) {
+    // Custom system: the sheet's rollable items and the system's mechanics.
+    const owned = new Set(character.inventory.map((i) => (i.ref?.startsWith('sys:') ? i.ref.slice(4) : '')));
+    const short = (f: string) => {
+      const p = prettyFormula(f, custom);
+      return p.length <= 12 ? p : '';
+    };
+    for (const e of custom.equipment.filter((x) => x.formula && owned.has(x.key)).slice(0, 2)) {
+      items.push({ key: `eq-${e.key}`, label: e.name, sub: short(e.formula!), icon: <Sword />, run: (ev) => rollCustom('equipment', e.key, ev) });
+    }
+    for (const m of custom.mechanics.filter((x) => x.formula).slice(0, 2)) {
+      items.push({ key: `mc-${m.key}`, label: m.name, sub: short(m.formula!), icon: <Sparkles />, run: (ev) => rollCustom('mechanic', m.key, ev) });
+    }
+  } else if (character) {
     const st = computeStats(character);
     for (const a of character.attacks.slice(0, 6)) {
       items.push({
@@ -225,26 +248,43 @@ function QuickActions() {
       )}
       {checkAnchor && (
         <Popover anchor={checkAnchor} onClose={() => setCheckAnchor(null)} placement="top">
-          <div className="check-grid">
-            <div className="menu__label">Salvaguardas</div>
-            <div className="check-grid__row">
-              {ABILITY_LIST.map((a: Ability) => (
-                <button key={a} type="button" className="chip" data-tip={`Salvaguarda de ${ABILITY_NAME[a]}`} onClick={(e) => check('save', a, e)}>{ABILITY_SHORT[a]}</button>
-              ))}
+          {custom ? (
+            <div className="check-grid">
+              {custom.stats.length > 0 && <div className="menu__label">Atributos</div>}
+              <div className="check-grid__row">
+                {custom.stats.map((st) => (
+                  <button key={st.key} type="button" className="chip" data-tip={`Teste de ${st.name}`} onClick={(e) => rollCustom('stat', st.key, e)}>{st.short}</button>
+                ))}
+              </div>
+              {custom.skills.length > 0 && <div className="menu__label">Perícias</div>}
+              <div className="check-grid__skills">
+                {custom.skills.map((sk) => (
+                  <button key={sk.key} type="button" className="menu__item" onClick={(e) => rollCustom('skill', sk.key, e)}>{sk.name}</button>
+                ))}
+              </div>
             </div>
-            <div className="menu__label">Atributos</div>
-            <div className="check-grid__row">
-              {ABILITY_LIST.map((a: Ability) => (
-                <button key={a} type="button" className="chip" data-tip={`Teste de ${ABILITY_NAME[a]}`} onClick={(e) => check('ability', a, e)}>{ABILITY_SHORT[a]}</button>
-              ))}
+          ) : (
+            <div className="check-grid">
+              <div className="menu__label">Salvaguardas</div>
+              <div className="check-grid__row">
+                {ABILITY_LIST.map((a: Ability) => (
+                  <button key={a} type="button" className="chip" data-tip={`Salvaguarda de ${ABILITY_NAME[a]}`} onClick={(e) => check('save', a, e)}>{ABILITY_SHORT[a]}</button>
+                ))}
+              </div>
+              <div className="menu__label">Atributos</div>
+              <div className="check-grid__row">
+                {ABILITY_LIST.map((a: Ability) => (
+                  <button key={a} type="button" className="chip" data-tip={`Teste de ${ABILITY_NAME[a]}`} onClick={(e) => check('ability', a, e)}>{ABILITY_SHORT[a]}</button>
+                ))}
+              </div>
+              <div className="menu__label">Perícias</div>
+              <div className="check-grid__skills">
+                {SKILL_LIST.map((s: SkillId) => (
+                  <button key={s} type="button" className="menu__item" onClick={(e) => check('skill', s, e)}>{SKILL_NAME[s]}</button>
+                ))}
+              </div>
             </div>
-            <div className="menu__label">Perícias</div>
-            <div className="check-grid__skills">
-              {SKILL_LIST.map((s: SkillId) => (
-                <button key={s} type="button" className="menu__item" onClick={(e) => check('skill', s, e)}>{SKILL_NAME[s]}</button>
-              ))}
-            </div>
-          </div>
+          )}
         </Popover>
       )}
     </div>

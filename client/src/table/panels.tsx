@@ -1,7 +1,7 @@
 // Sidebar tab registry. Each panel is lazy-loaded from its feature folder.
 import { lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react';
 import {
-  BookOpen, Library, Map as MapIcon, MessageSquare, Music, ScrollText, Settings2, Sparkles, Swords, Users,
+  BookMarked, BookOpen, Library, Map as MapIcon, MessageSquare, Music, ScrollText, Settings2, Sparkles, Swords, Users,
 } from 'lucide-react';
 import type { SidebarTab } from '../store/ui.ts';
 
@@ -10,6 +10,8 @@ export interface PanelDef {
   label: string;
   icon: ReactNode;
   dmOnly?: boolean;
+  /** Players only see it while the campaign uses a custom system (the DM always does). */
+  customSystem?: boolean;
   component: LazyExoticComponent<ComponentType>;
 }
 
@@ -21,6 +23,7 @@ export const PANELS: PanelDef[] = [
   { id: 'journal', label: 'Diário', icon: <BookOpen />, component: lazy(() => import('../features/journal/JournalPanel.tsx')) },
   { id: 'audio', label: 'Áudio', icon: <Music />, component: lazy(() => import('../features/audio/AudioPanel.tsx')) },
   { id: 'oracle', label: 'Oráculo', icon: <Sparkles />, dmOnly: true, component: lazy(() => import('../features/oracle/OraclePanel.tsx')) },
+  { id: 'system', label: 'Sistema', icon: <BookMarked />, customSystem: true, component: lazy(() => import('../features/system/SystemPanel.tsx')) },
   { id: 'scenes', label: 'Cenas', icon: <MapIcon />, dmOnly: true, component: lazy(() => import('../features/dm/ScenesPanel.tsx')) },
   { id: 'players', label: 'Mesa', icon: <Users />, component: lazy(() => import('../features/dm/PlayersPanel.tsx')) },
   { id: 'settings', label: 'Ajustes', icon: <Settings2 />, component: lazy(() => import('../features/dm/SettingsPanel.tsx')) },

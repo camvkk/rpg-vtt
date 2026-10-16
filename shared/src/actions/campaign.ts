@@ -1,6 +1,6 @@
-// Journal, audio, settings and player profile actions.
+// Journal, audio, settings, custom system and player profile actions.
 import { z } from 'zod';
-import { zColor, zId, zJournal, zPlaylist, zUrl } from '../schemas.ts';
+import { zColor, zCustomSystem, zId, zJournal, zPlaylist, zUrl } from '../schemas.ts';
 import { defineAction, DM_ONLY, dmOnly, isDM, NOT_FOUND } from './define.ts';
 
 export const campaignActions = {
@@ -20,10 +20,40 @@ export const campaignActions = {
       hpStatusForPlayers: z.boolean(),
       autoRollNpcInitiative: z.boolean(),
       dice3d: z.boolean(),
+      system: z.enum(['dnd5e', 'custom']),
     }).partial(),
-    permit: dmOnly,
+    permit: (s, p, ctx) => dmOnly(s, p, ctx) ?? (p.system === 'custom' && !s.customSystem ? 'Importe um sistema antes de ativá-lo.' : null),
     apply: (s, p) => {
       Object.assign(s.settings, p);
+    },
+  }),
+
+  // Custom system --------------------------------------------------------------
+  /** Save the DM's imported system (from the AI importer or a JSON file) and switch the sheets to it. */
+  'system.save': defineAction({
+    schema: z.object({ system: zCustomSystem, activate: z.boolean().optional() }),
+    rate: 10,
+    permit: dmOnly,
+    apply: (s, p, ctx) => {
+      const replacing = !!s.customSystem;
+      s.customSystem = p.system;
+      // Sheets keep their values by key; missing ones fall back to the system defaults when read.
+      if (p.activate ?? true) {
+        s.settings.system = 'custom';
+        ctx.chat.post({ kind: 'system', text: `📜 Sistema ${replacing ? 'atualizado' : 'ativado'}: ${p.system.name}. As fichas agora usam as regras dele.` });
+      }
+      return { name: p.system.name };
+    },
+  }),
+
+  'system.clear': defineAction({
+    schema: z.object({}),
+    permit: (s, p, ctx) => dmOnly(s, p, ctx) ?? (s.customSystem ? null : 'Não há sistema customizado.'),
+    apply: (s, _p, ctx) => {
+      const wasActive = s.settings.system === 'custom';
+      s.customSystem = null;
+      s.settings.system = 'dnd5e';
+      if (wasActive) ctx.chat.post({ kind: 'system', text: '📕 Sistema customizado removido. As fichas voltaram ao D&D 5e.' });
     },
   }),
 

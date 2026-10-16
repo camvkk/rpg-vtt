@@ -3,7 +3,7 @@ import type {
 } from './types.ts';
 import { newId } from './util.ts';
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export const DEFAULT_GRID: GridConfig = {
   type: 'square',
@@ -133,6 +133,7 @@ export function createCharacter(partial: Partial<Character> & { name: string }):
     backstory: '',
     notes: '',
     monsterId: null,
+    custom: null,
     createdAt: now,
     updatedAt: now,
     ...partial,
@@ -174,5 +175,6 @@ export function createCampaign(opts: { id: ID; code: string; name: string }): Ca
     journal: {},
     audio: structuredClone(DEFAULT_AUDIO),
     settings: { ...DEFAULT_SETTINGS },
+    customSystem: null,
   };
 }

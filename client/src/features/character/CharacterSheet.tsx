@@ -1,4 +1,4 @@
-// Character sheet (D&D 5e). Used embedded in the sidebar and inside floating windows.
+// Character sheet (D&D 5e, or the campaign's custom system). Used embedded in the sidebar and inside floating windows.
 import { memo, useMemo, useState, type ReactNode } from 'react';
 import {
   Backpack, Dices, Eye, EyeOff, HeartPulse, ScrollText, Star, Swords, WandSparkles,
@@ -7,6 +7,7 @@ import type { Character, ID } from '@shared/types.ts';
 import { computeStats, type CharacterStats } from '@shared/rules5e.ts';
 import { getPref, setPref } from '../../net/session.ts';
 import { useGame } from '../../store/game.ts';
+import { useActiveCustomSystem } from '../../store/hooks.ts';
 import { useUi } from '../../store/ui.ts';
 import { Empty } from '../../ui/index.tsx';
 import {
@@ -18,6 +19,7 @@ import { CombatTab } from './SheetCombat.tsx';
 import { SpellsTab } from './SheetSpells.tsx';
 import { InventoryTab } from './SheetInventory.tsx';
 import { TraitsTab } from './SheetTraits.tsx';
+import { CustomCharacterSheet } from './CustomSheet.tsx';
 import './character.css';
 
 export type SheetTab = 'main' | 'abilities' | 'combat' | 'spells' | 'inventory' | 'traits';
@@ -33,10 +35,21 @@ const TABS: { id: SheetTab; label: string; icon: ReactNode }[] = [
 
 const TAB_IDS = new Set<string>(TABS.map((t) => t.id));
 
-export function CharacterSheet({ characterId, mode, headerActions }: {
+export function CharacterSheet(props: {
   characterId: ID;
   mode: 'embedded' | 'window';
   /** Extra buttons rendered in the sheet header (e.g. the panel's character menu). */
+  headerActions?: ReactNode;
+}) {
+  // A campaign on a custom system renders every sheet with that system's rules.
+  const system = useActiveCustomSystem();
+  if (system) return <CustomCharacterSheet {...props} system={system} />;
+  return <Dnd5eSheet {...props} />;
+}
+
+function Dnd5eSheet({ characterId, mode, headerActions }: {
+  characterId: ID;
+  mode: 'embedded' | 'window';
   headerActions?: ReactNode;
 }) {
   const c = useLiveCharacter(characterId);

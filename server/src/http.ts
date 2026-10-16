@@ -5,6 +5,7 @@ import type { CreateCampaignRequest } from '../../shared/src/protocol.ts';
 import { newId } from '../../shared/src/util.ts';
 import { backupAsset, backupEnabled, backupStatus, fetchAsset } from './backup.ts';
 import { aiEnabled, config } from './config.ts';
+import { DocumentError, extractDocumentText } from './documents.ts';
 import { imageSize, sniff } from './images.ts';
 import { RateLimiter } from './ratelimit.ts';
 import { createCampaignFromRequest, getRoom, setCampaignPassword } from './rooms.ts';
@@ -146,6 +147,43 @@ export function createApp(): express.Express {
     store.insertAsset({ id, campaignId: auth.room.id, kind: kind.kind, mime: kind.mime, size: buf.length, file });
     const size = kind.kind === 'image' ? imageSize(buf, kind.mime) : null;
     res.json({ ok: true, url: `/assets/${auth.room.id}/${file}`, mime: kind.mime, ...(size ?? {}) });
+  });
+
+  // Custom system importer: text from PDF/DOCX/TXT (the AI only sees text) and the last documents parsed.
+  app.post('/api/system/extract', express.raw({ type: () => true, limit: `${config.maxUploadMb}mb` }), async (req, res) => {
+    if (limited(req, res, 'extract', 30)) return;
+    const auth = authPlayer(req);
+    if (!auth || auth.role !== 'dm') {
+      res.status(403).json({ ok: false, error: 'Apenas o Mestre.' });
+      return;
+    }
+    const buf = req.body as Buffer;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({ ok: false, error: 'Arquivo vazio.' });
+      return;
+    }
+    const name = String(req.query.name ?? '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120) || 'Documento';
+    try {
+      const out = await extractDocumentText(buf);
+      res.json({ ok: true, name, ...out });
+    } catch (e) {
+      if (e instanceof DocumentError) {
+        res.status(422).json({ ok: false, error: e.message });
+        return;
+      }
+      console.error('[http] document extraction failed', e);
+      res.status(500).json({ ok: false, error: 'Falha ao ler o documento.' });
+    }
+  });
+
+  app.get('/api/system/sources', (req, res) => {
+    const auth = authPlayer(req);
+    if (!auth || auth.role !== 'dm') {
+      res.status(403).json({ ok: false, error: 'Apenas o Mestre.' });
+      return;
+    }
+    const saved = store.loadSystemSources(auth.room.id);
+    res.json({ ok: true, documents: saved?.documents ?? [], updatedAt: saved?.updatedAt ?? null });
   });
 
   if (!config.production) {

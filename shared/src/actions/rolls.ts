@@ -1,5 +1,6 @@
 // Chat + rules automation: commands, checks, attacks vs AC, spells, save requests, applying damage.
 import { z } from 'zod';
+import { customRoll } from '../customSystem.ts';
 import { critFormula, parseFormula } from '../dice.ts';
 import {
   ABILITY_NAME, attackAbilityMod, attackSaveDc, attackToHit, characterVars, computeStats, mod, monsterSave,
@@ -286,6 +287,42 @@ export const rollActions = {
       const roll = ctx.roll(`1d20${signedNum(bonus)}`, { mode: p.mode });
       const hidden = actor.hidden && isDM(ctx);
       postCard(ctx, { type: 'check', actorName: actor.name, title, roll, dc: p.dc ?? null }, actor.name, {
+        ...visibilityFields(hidden ? 'gm' : p.visibility, ctx),
+      });
+      return { total: roll.total };
+    },
+  }),
+
+  /** Stat / skill check or an entry's formula (item, power, mechanic) from a custom-system sheet. */
+  'roll.custom': defineAction({
+    schema: z.object({
+      characterId: zId,
+      tokenId: zId.optional(),
+      kind: z.enum(['stat', 'skill', 'equipment', 'power', 'mechanic']),
+      key: z.string().max(30),
+      mode: zMode,
+      visibility: zVisibility,
+    }),
+    rate: 30,
+    permit: (s, p, ctx) => {
+      if (!s.customSystem || s.settings.system !== 'custom') return 'Nenhum sistema customizado ativo.';
+      const denied = canActAs(s, { characterId: p.characterId }, ctx);
+      if (denied) return denied;
+      try {
+        const r = customRoll(s.customSystem, s.characters[p.characterId]!, p.kind, p.key);
+        return typeof r === 'string' ? r : null;
+      } catch (e) {
+        return e instanceof Error ? e.message : 'Fórmula inválida.';
+      }
+    },
+    apply: (s, p, ctx) => {
+      const c = s.characters[p.characterId]!;
+      const r = customRoll(s.customSystem!, c, p.kind, p.key);
+      if (typeof r === 'string') throw new Error(r);
+      const roll = ctx.roll(r.formula, { mode: p.mode, vars: r.vars });
+      const actor = actorFrom(s, p.characterId, p.tokenId);
+      const hidden = actor.hidden && isDM(ctx);
+      postCard(ctx, { type: 'check', actorName: actor.name, title: r.title, roll, dc: null }, actor.name, {
         ...visibilityFields(hidden ? 'gm' : p.visibility, ctx),
       });
       return { total: roll.total };

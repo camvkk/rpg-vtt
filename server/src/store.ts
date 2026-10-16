@@ -1,5 +1,6 @@
 // Persistence: campaigns (JSON state), sessions, chat log, assets.
 import { STATE_VERSION } from '../../shared/src/defaults.ts';
+import type { SystemDocument } from '../../shared/src/protocol.ts';
 import type { CampaignState, ChatMessage, ID } from '../../shared/src/types.ts';
 import { hashToken } from './auth.ts';
 import { getDb } from './db.ts';
@@ -57,9 +58,14 @@ export function setDmPassword(campaignId: ID, hash: string | null): void {
 }
 
 /** Forward-compatible migrations of the stored JSON state. */
-function migrateState(state: CampaignState): CampaignState {
+export function migrateState(state: CampaignState): CampaignState {
   if (!state.version) state.version = 1;
-  // future: if (state.version < 2) { ... }
+  if (state.version < 2) {
+    // v2: custom systems (campaign-level system + per-sheet values).
+    state.customSystem ??= null;
+    state.settings.system ??= 'dnd5e';
+    for (const c of Object.values(state.characters ?? {})) c.custom ??= null;
+  }
   state.version = STATE_VERSION;
   return state;
 }
@@ -113,6 +119,21 @@ export function recentChat(campaignId: ID, limit: number, before = Number.MAX_SA
 export function getChat(id: ID): ChatMessage | null {
   const row = getDb().prepare('SELECT data FROM chat WHERE id = ?').get(id) as { data: string } | undefined;
   return row ? (JSON.parse(row.data) as ChatMessage) : null;
+}
+
+// Custom system sources ----------------------------------------------------------
+
+export function saveSystemSources(campaignId: ID, documents: SystemDocument[]): void {
+  getDb()
+    .prepare('INSERT INTO system_sources (campaign_id, documents, updated_at) VALUES (?, ?, ?) ON CONFLICT(campaign_id) DO UPDATE SET documents = excluded.documents, updated_at = excluded.updated_at')
+    .run(campaignId, JSON.stringify(documents), Date.now());
+}
+
+export function loadSystemSources(campaignId: ID): { documents: SystemDocument[]; updatedAt: number } | null {
+  const row = getDb().prepare('SELECT documents, updated_at FROM system_sources WHERE campaign_id = ?').get(campaignId) as
+    | { documents: string; updated_at: number }
+    | undefined;
+  return row ? { documents: JSON.parse(row.documents) as SystemDocument[], updatedAt: Number(row.updated_at) } : null;
 }
 
 // Assets -----------------------------------------------------------------------

@@ -9,7 +9,7 @@ import { computeStats } from '@shared/rules5e.ts';
 import { act } from '../../net/socket.ts';
 import { setDragPayload } from '../../engine/api.ts';
 import { useGame } from '../../store/game.ts';
-import { useIsDM, useMyCharacter } from '../../store/hooks.ts';
+import { useActiveCustomSystem, useIsDM, useMyCharacter } from '../../store/hooks.ts';
 import { useUi } from '../../store/ui.ts';
 import { Button, confirmDialog, HpBar, IconButton, MenuItem, Popover, toast } from '../../ui/index.tsx';
 import { CharacterSheet } from './CharacterSheet.tsx';
@@ -107,6 +107,7 @@ function PlayerMenu({ c }: { c: Character }) {
 }
 
 function CreateHero() {
+  const customSystem = useActiveCustomSystem();
   const [quick, setQuick] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -139,7 +140,11 @@ function CreateHero() {
           </svg>
         </div>
         <h2 className="cs-p-hero__title">Sua lenda começa aqui</h2>
-        <p className="cs-p-hero__text">Forje um herói passo a passo — raça, classe, antecedente e equipamento — ou comece com uma ficha em branco.</p>
+        <p className="cs-p-hero__text">
+          {customSystem
+            ? <>Monte seu herói nas regras de <strong>{customSystem.name}</strong> ou comece com uma ficha em branco.</>
+            : 'Forje um herói passo a passo — raça, classe, antecedente e equipamento — ou comece com uma ficha em branco.'}
+        </p>
         <Button variant="primary" size="lg" block icon={<Sparkles />} onClick={openWizard}>Criar personagem</Button>
         {!quick ? (
           <Button variant="ghost" block icon={<FilePlus2 />} onClick={() => setQuick(true)}>Ficha rápida em branco</Button>

@@ -4,7 +4,7 @@ import type { DrawingKind, ID, TemplateKind, WallKind } from '@shared/types.ts';
 import { getPref, setPref } from '../net/session.ts';
 
 export type Tool = 'select' | 'measure' | 'ping' | 'draw' | 'template' | 'wall' | 'light' | 'fog' | 'note';
-export type SidebarTab = 'chat' | 'character' | 'combat' | 'compendium' | 'journal' | 'audio' | 'oracle' | 'scenes' | 'players' | 'settings';
+export type SidebarTab = 'chat' | 'character' | 'combat' | 'compendium' | 'journal' | 'audio' | 'oracle' | 'system' | 'scenes' | 'players' | 'settings';
 export type RollMode = 'normal' | 'adv' | 'dis';
 
 export interface ToolOptions {

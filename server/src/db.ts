@@ -42,6 +42,14 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX assets_campaign ON assets(campaign_id);
   `,
+  // 2 — source documents of the custom system importer (kept out of the campaign state: big and DM-only)
+  `
+  CREATE TABLE system_sources (
+    campaign_id TEXT PRIMARY KEY,
+    documents TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 let db: DatabaseSync | null = null;

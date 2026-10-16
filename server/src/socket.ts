@@ -1,12 +1,17 @@
-import type { ClientFx } from '../../shared/src/protocol.ts';
-import { runAi } from './ai.ts';
+import { SYSTEM_DOC_LIMITS, type ClientFx, type SystemDocument, type SystemParseRequest } from '../../shared/src/protocol.ts';
+import { parseCustomSystem, runAi } from './ai.ts';
+import { aiEnabled } from './config.ts';
 import { RateLimiter } from './ratelimit.ts';
 import type { VttServer, VttSocket } from './room.ts';
 import { joinRoom, roomOfSocket } from './rooms.ts';
+import * as store from './store.ts';
 
 const joinLimiter = new RateLimiter(12, 60_000);
 const fxLimiter = new RateLimiter(60, 5_000);
 const aiLimiter = new RateLimiter(12, 60_000);
+const systemLimiter = new RateLimiter(6, 10 * 60_000);
+/** Rooms with a system import running (one at a time: it is slow and expensive). */
+const parsing = new Set<string>();
 
 function num(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e6;
@@ -28,6 +33,25 @@ function validFx(e: ClientFx): boolean {
     default:
       return false;
   }
+}
+
+/** Validate an importer request; returns the cleaned documents or a PT-BR error. */
+export function systemDocsFrom(req: SystemParseRequest | undefined): SystemDocument[] | string {
+  const docs = Array.isArray(req?.documents) ? req.documents : [];
+  if (!docs.length) return 'Adicione pelo menos um documento.';
+  if (docs.length > SYSTEM_DOC_LIMITS.maxDocs) return `No máximo ${SYSTEM_DOC_LIMITS.maxDocs} documentos por vez.`;
+  const out: SystemDocument[] = [];
+  let total = 0;
+  for (const d of docs) {
+    const text = typeof d?.text === 'string' ? d.text.trim() : '';
+    if (!text) continue;
+    if (text.length > SYSTEM_DOC_LIMITS.maxDocChars) return `"${String(d.name).slice(0, 60)}" é longo demais.`;
+    total += text.length;
+    out.push({ name: (typeof d.name === 'string' ? d.name.trim() : '').slice(0, 120) || `Documento ${out.length + 1}`, text });
+  }
+  if (!out.length) return 'Os documentos estão vazios.';
+  if (total > SYSTEM_DOC_LIMITS.maxTotalChars) return 'Os documentos somados são grandes demais — envie menos de uma vez.';
+  return out;
 }
 
 export function registerSocketHandlers(io: VttServer): void {
@@ -106,6 +130,40 @@ export function registerSocketHandlers(io: VttServer): void {
       runAi(room, String(requestId).slice(0, 40), req, (chunk) => socket.emit('ai.chunk', String(requestId), chunk))
         .then(ack)
         .catch((err: unknown) => ack({ ok: false, error: err instanceof Error ? err.message : 'Falha no Oráculo.' }));
+    });
+
+    socket.on('system.parse', (requestId, req, ack) => {
+      if (typeof ack !== 'function') return;
+      const room = roomOfSocket(socket);
+      if (!room || socket.data.role !== 'dm') {
+        ack({ ok: false, error: 'Apenas o Mestre pode importar um sistema.' });
+        return;
+      }
+      if (!aiEnabled()) {
+        ack({ ok: false, error: 'IA desligada: configure MOONSHOT_API_KEY ou OPENROUTER_API_KEY no servidor.' });
+        return;
+      }
+      const docs = systemDocsFrom(req);
+      if (typeof docs === 'string') {
+        ack({ ok: false, error: docs });
+        return;
+      }
+      if (parsing.has(room.id)) {
+        ack({ ok: false, error: 'Já existe um sistema sendo processado nesta mesa.' });
+        return;
+      }
+      if (!systemLimiter.take(room.id)) {
+        ack({ ok: false, error: 'Muitas importações seguidas. Espere alguns minutos.' });
+        return;
+      }
+      // Keep the documents so the DM can re-process later (even from another device).
+      store.saveSystemSources(room.id, docs);
+      parsing.add(room.id);
+      const id = String(requestId).slice(0, 40);
+      parseCustomSystem(docs, typeof req.instructions === 'string' ? req.instructions : '', (p) => socket.emit('system.progress', id, p))
+        .then(ack)
+        .catch((err: unknown) => ack({ ok: false, error: err instanceof Error ? err.message : 'Falha ao processar o sistema.' }))
+        .finally(() => parsing.delete(room.id));
     });
 
     socket.on('disconnect', () => {

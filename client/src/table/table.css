@@ -131,7 +131,7 @@
 .sidebar[data-open='true'] { transform: none; }
 .sidebar__tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 6px 0; }
 .sidebar__tab {
-  position: relative; flex: 1 0 34px; height: 36px; display: grid; place-items: center; border: 0; border-radius: var(--r-md) var(--r-md) 0 0;
+  position: relative; flex: 1 0 31px; height: 36px; display: grid; place-items: center; border: 0; border-radius: var(--r-md) var(--r-md) 0 0;
   background: transparent; color: var(--text-muted); transition: color var(--t-fast), background var(--t-fast);
 }
 .sidebar__tab svg { width: 17px; height: 17px; }

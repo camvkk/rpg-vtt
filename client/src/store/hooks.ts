@@ -1,11 +1,15 @@
 // Convenience selectors.
 import { useMemo } from 'react';
 import { computeStats } from '@shared/rules5e.ts';
-import type { Character, ID, Scene, Token } from '@shared/types.ts';
+import type { Character, CustomSystem, ID, Scene, Token } from '@shared/types.ts';
 import { useGame } from './game.ts';
 import { useUi } from './ui.ts';
 
 export const useIsDM = () => useGame((s) => s.me?.role === 'dm');
+
+/** The campaign's custom system while sheets use it (settings.system === 'custom'), else null. */
+export const useActiveCustomSystem = (): CustomSystem | null =>
+  useGame((s) => (s.state?.settings.system === 'custom' ? s.state.customSystem ?? null : null));
 export const useMe = () => useGame((s) => s.me);
 export const useCampaign = () => useGame((s) => s.state);
 
