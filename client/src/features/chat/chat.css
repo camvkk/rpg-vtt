@@ -1,0 +1,113 @@
+.chat { display: flex; flex-direction: column; height: 100%; position: relative; }
+.chat__list { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 10px 6px; display: flex; flex-direction: column; gap: 6px; }
+.chat__older { align-self: center; }
+.chat__empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; color: var(--text-soft); padding: 30px 10px; }
+.chat__empty svg { width: 36px; height: 36px; color: var(--gold-700); }
+.chat__jump {
+  position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line-strong); background: var(--surface-raised); color: var(--gold-300); font-size: 12px;
+  box-shadow: var(--shadow-md);
+}
+
+.msg { padding: 6px 8px 7px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.022); border: 1px solid transparent; position: relative; animation: msg-in var(--t-med) var(--ease-out); }
+.msg[data-grouped='true'] { margin-top: -5px; padding-top: 2px; border-top-left-radius: 2px; border-top-right-radius: 2px; }
+.msg[data-whisper='true'] { background: rgba(155, 123, 255, 0.07); border-color: rgba(155, 123, 255, 0.2); }
+.msg[data-gm='true'] { background: rgba(155, 123, 255, 0.05); border-style: dashed; border-color: rgba(155, 123, 255, 0.25); }
+.msg__head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; min-width: 0; }
+.msg__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--author); box-shadow: 0 0 8px var(--author); flex: none; }
+.msg__name { font-weight: 700; font-size: 12.5px; color: var(--author); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg__by { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.msg__time { margin-left: auto; font-size: 10.5px; color: var(--text-dim); flex: none; }
+.msg__del { border: 0; background: none; color: var(--text-dim); padding: 2px; opacity: 0; transition: opacity var(--t-fast); }
+.msg:hover .msg__del { opacity: 1; }
+.msg__del:hover { color: var(--blood-400); }
+.msg__text { font-size: 13.5px; color: var(--text); line-height: 1.5; word-wrap: break-word; }
+.msg__text p { margin: 0; }
+.msg__emote { font-style: italic; color: var(--gold-300); font-size: 13px; }
+.msg__ooc { color: var(--text-muted); font-size: 12.5px; }
+.msg--system { background: none; text-align: center; font-size: 11.5px; color: var(--text-muted); padding: 2px 8px; white-space: pre-line; display: flex; justify-content: center; gap: 5px; align-items: center; }
+.msg--system[data-gm='true'] { color: var(--arcane-400); }
+.msg--narration { background: linear-gradient(180deg, rgba(224, 180, 90, 0.07), rgba(224, 180, 90, 0.02)); border: 1px solid rgba(224, 180, 90, 0.18); padding: 10px 14px; }
+.msg--narration .markdown { font-family: var(--font-flavor); font-style: italic; font-size: 15px; color: var(--text); line-height: 1.55; }
+.msg--narration .ornament { margin-bottom: 4px; }
+
+/* Rolls */
+.roll__label { font-size: 12px; color: var(--text-soft); font-weight: 600; margin-bottom: 3px; }
+.roll__body { display: flex; align-items: center; gap: 8px; }
+.roll-terms { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px; flex: 1; min-width: 0; font-size: 12px; }
+.roll-term { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.roll-term__label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dim); margin-right: 2px; }
+.roll-term__flavor { font-size: 10.5px; color: var(--text-muted); font-style: italic; }
+.roll-op { color: var(--text-dim); font-weight: 700; padding: 0 1px; }
+.roll-num { font-family: var(--font-mono); color: var(--text-soft); }
+.die-chip {
+  min-width: 20px; height: 20px; padding: 0 4px; border-radius: 5px; display: inline-grid; place-items: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-soft); color: var(--text);
+}
+.die-chip[data-dropped='true'] { opacity: 0.35; text-decoration: line-through; }
+.die-chip[data-max='true'] { color: var(--gold-300); border-color: rgba(224, 180, 90, 0.45); }
+.die-chip[data-min='true'] { color: var(--blood-400); border-color: rgba(226, 85, 77, 0.45); }
+.roll-total {
+  flex: none; min-width: 40px; height: 34px; padding: 0 8px; border-radius: 9px; display: inline-grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 19px; color: var(--text);
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0.35)); border: 1px solid var(--line-strong);
+  animation: total-in var(--t-slow) var(--ease-spring);
+}
+.roll-total--lg { min-width: 46px; height: 40px; font-size: 22px; }
+.roll-total[data-crit='true'] { color: #1b1306; background: linear-gradient(180deg, var(--gold-300), var(--gold-600)); border-color: var(--gold-300); box-shadow: 0 0 18px rgba(224, 180, 90, 0.6); }
+.roll-total[data-fumble='true'] { color: #fff; background: linear-gradient(180deg, var(--blood-400), var(--blood-600)); border-color: var(--blood-400); box-shadow: 0 0 18px rgba(226, 85, 77, 0.5); }
+.roll-total[data-pending='true'] { color: var(--gold-400); animation: none; }
+.roll-total__spin { width: 18px; height: 18px; animation: spin 0.8s linear infinite; }
+.roll-total--dmg { color: var(--blood-400); }
+.roll-total--dmg[data-heal='true'] { color: var(--emerald-400); }
+
+/* Cards */
+.card--attack, .card--save, .card--check, .card--spell, .card--death {
+  padding: 0; overflow: hidden; background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.18)); border-color: var(--line);
+}
+.card--attack[data-crit='true'] { border-color: rgba(236, 201, 118, 0.6); box-shadow: 0 0 22px rgba(224, 180, 90, 0.18); }
+.card__head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.card__icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: rgba(224, 180, 90, 0.1); color: var(--gold-400); flex: none; }
+.card__icon svg { width: 16px; height: 16px; }
+.card__title { font-size: 14.5px; font-weight: 700; line-height: 1.2; }
+.card__sub { font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.card__desc { padding: 0 10px 8px; font-size: 12px; color: var(--text-soft); white-space: pre-line; max-height: 200px; overflow: auto; }
+.card__row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line-soft); }
+.card__label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 700; width: 64px; flex: none; }
+.card__row .roll-terms { flex: 1; }
+.dmg-part { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; }
+.dmg-part__type { font-size: 10.5px; font-weight: 700; color: var(--dmg, var(--text-muted)); text-transform: lowercase; }
+.card__targets { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px 8px; border-top: 1px solid var(--line-soft); }
+.card-target { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.2); font-size: 12.5px; min-height: 30px; }
+.card-target[data-outcome='hit'], .card-target[data-outcome='fail'] { box-shadow: inset 2px 0 0 var(--blood-500); }
+.card-target[data-outcome='crit'] { box-shadow: inset 2px 0 0 var(--gold-400); }
+.card-target[data-outcome='miss'], .card-target[data-outcome='success'] { box-shadow: inset 2px 0 0 var(--ink-500); }
+.card-target__ac { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--azure-400); font-weight: 700; }
+.card-target__roll { font-weight: 700; padding: 0 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+.card-target__apply { display: inline-flex; gap: 2px; }
+.card-target__applied { font-size: 11px; font-weight: 700; color: var(--blood-400); }
+.mini-btn { min-width: 24px; height: 22px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--text-soft); font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+.mini-btn:hover { border-color: var(--line-strong); color: var(--text); }
+.mini-btn--dmg { color: var(--blood-400); }
+.mini-btn--heal { color: var(--emerald-400); }
+.card__verdict { padding: 0 10px 8px; font-weight: 700; font-size: 12px; }
+.card--death[data-result='crit'] { border-color: rgba(63, 191, 143, 0.5); }
+.card--death[data-result='fumble'] { border-color: rgba(226, 85, 77, 0.5); }
+.death-pips { display: flex; align-items: center; gap: 4px; padding: 0 10px 8px; font-size: 10.5px; color: var(--text-dim); }
+.death-pips span { margin: 0 4px 0 8px; }
+.death-pips span:first-child { margin-left: 0; }
+.death-pips i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ink-500); }
+.death-pips i[data-on='ok'] { background: var(--emerald-500); border-color: var(--emerald-500); }
+.death-pips i[data-on='bad'] { background: var(--blood-500); border-color: var(--blood-500); }
+
+/* Input */
+.chat__input { position: relative; padding: 8px 10px 10px; border-top: 1px solid var(--line-soft); background: rgba(0, 0, 0, 0.2); }
+.chat__meta { display: flex; gap: 6px; margin-bottom: 6px; overflow: hidden; }
+.chat__meta .chip { max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat__box { display: flex; align-items: flex-end; gap: 6px; padding: 4px 4px 4px 10px; border-radius: var(--r-lg); border: 1px solid var(--line-soft); background: rgba(0, 0, 0, 0.3); transition: border-color var(--t-fast); }
+.chat__box:focus-within { border-color: rgba(236, 201, 118, 0.45); }
+.chat__box textarea { flex: 1; resize: none; border: 0; background: transparent; outline: none; padding: 7px 0; max-height: 140px; line-height: 1.4; font-size: 13.5px; }
+.chat__hints { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 4px); padding: 6px; border-radius: var(--r-lg); background: var(--surface-raised); border: 1px solid var(--line-strong); box-shadow: var(--shadow-lg); z-index: 3; }
+
+@keyframes msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes total-in { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }

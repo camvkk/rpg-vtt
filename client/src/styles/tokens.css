@@ -1,0 +1,133 @@
+/* Design tokens — RPG VTT v2 "Grimório Noturno".
+   Dark fantasy, refined: ink-black surfaces, gold hairlines, arcane violet for DM-only things. */
+:root {
+  color-scheme: dark;
+
+  /* Ink (surfaces) */
+  --ink-950: #09080c;
+  --ink-900: #0f0e13;
+  --ink-850: #14121a;
+  --ink-800: #1a1822;
+  --ink-750: #211e2a;
+  --ink-700: #2a2634;
+  --ink-600: #3a3546;
+  --ink-500: #4f4960;
+
+  /* Parchment (text) */
+  --text: #ede6d8;
+  --text-soft: #c9c1b2;
+  --text-muted: #9a9284;
+  --text-dim: #6c665c;
+
+  /* Accents */
+  --gold-300: #f6dc9a;
+  --gold-400: #ecc976;
+  --gold-500: #e0b45a;
+  --gold-600: #c39443;
+  --gold-700: #8d6a2d;
+  --arcane-400: #b8a2ff;
+  --arcane-500: #9b7bff;
+  --arcane-600: #7a5ae6;
+  --blood-400: #f0726a;
+  --blood-500: #e2554d;
+  --blood-600: #b43a34;
+  --blood-900: #3a1416;
+  --emerald-400: #5fd6a8;
+  --emerald-500: #3fbf8f;
+  --emerald-900: #10291f;
+  --azure-400: #86c0ff;
+  --azure-500: #5fa8f5;
+  --amber-500: #f0a43a;
+
+  /* Semantic */
+  --bg: var(--ink-950);
+  --surface: rgba(20, 18, 26, 0.9);
+  --surface-solid: var(--ink-850);
+  --surface-raised: rgba(33, 30, 42, 0.94);
+  --surface-hover: rgba(255, 255, 255, 0.045);
+  --surface-active: rgba(224, 180, 90, 0.12);
+  --line: rgba(236, 201, 118, 0.13);
+  --line-strong: rgba(236, 201, 118, 0.28);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --focus: 0 0 0 2px rgba(236, 201, 118, 0.55);
+  --primary: var(--gold-500);
+  --primary-text: #1b1306;
+  --danger: var(--blood-500);
+  --success: var(--emerald-500);
+  --info: var(--azure-500);
+  --dm: var(--arcane-500);
+
+  /* Type */
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-flavor: 'IM Fell English', Georgia, serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'SFMono-Regular', Menlo, monospace;
+  --fs-2xs: 0.6875rem;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.625rem;
+  --fs-3xl: 2.25rem;
+
+  /* Space & shape */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --glow-gold: 0 0 0 1px rgba(236, 201, 118, 0.5), 0 0 18px rgba(224, 180, 90, 0.35);
+  --glow-arcane: 0 0 0 1px rgba(155, 123, 255, 0.5), 0 0 18px rgba(155, 123, 255, 0.3);
+  --blur: blur(14px) saturate(1.2);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --t-slow: 420ms;
+
+  /* Layout */
+  --topbar-h: 52px;
+  --sidebar-w: 380px;
+  --rail-w: 52px;
+  --z-canvas: 0;
+  --z-hud: 20;
+  --z-panels: 30;
+  --z-dice: 900;
+  --z-popover: 1000;
+  --z-modal: 1100;
+  --z-toast: 1200;
+
+  /* Subtle paper grain for large surfaces */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 .7 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-w: 100vw;
+    --topbar-h: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-med: 0ms;
+    --t-slow: 0ms;
+  }
+}

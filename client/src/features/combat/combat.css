@@ -1,0 +1,46 @@
+.combatbar {
+  position: absolute;
+  top: 68px;
+  left: var(--center-x);
+  transform: translateX(-50%);
+  max-width: min(760px, calc(var(--center-x) * 2 - 120px));
+  min-width: 300px;
+  animation: drop-in var(--t-slow) var(--ease-out);
+}
+.combatbar__inner { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-xl); }
+.combatbar__round { display: flex; flex-direction: column; align-items: center; color: var(--gold-400); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 0 6px; line-height: 1.1; }
+.combatbar__round strong { font-family: var(--font-display); font-size: 18px; color: var(--gold-300); }
+.combatbar__list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding: 4px 2px; }
+.combatbar__list::-webkit-scrollbar { display: none; }
+.combatbar__controls { display: flex; align-items: center; gap: 2px; }
+.cb-portrait { position: relative; width: 46px; flex: none; border: 0; background: none; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: transform var(--t-med) var(--ease-spring); }
+.cb-portrait__img { width: 42px; height: 42px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--ink-700); border: 2px solid var(--ink-500); font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--text-soft); position: relative; }
+.cb-portrait__img img { width: 100%; height: 100%; object-fit: cover; }
+.cb-portrait[data-active='true'] { transform: translateY(2px) scale(1.12); }
+.cb-portrait[data-active='true'] .cb-portrait__img { border-color: var(--gold-300); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 18px rgba(224, 180, 90, 0.7); }
+.cb-portrait[data-defeated='true'] { opacity: 0.45; filter: grayscale(1); }
+.cb-portrait[data-hidden='true'] .cb-portrait__img { border-style: dashed; border-color: var(--arcane-500); }
+.cb-portrait__dead { position: absolute; width: 22px; height: 22px; color: var(--blood-400); }
+.cb-portrait__hid { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; color: var(--arcane-400); background: var(--ink-900); border-radius: 50%; padding: 1px; }
+.cb-portrait__init { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; border-radius: 99px; background: var(--ink-900); border: 1px solid var(--line-strong); font-size: 10px; font-weight: 700; display: grid; place-items: center; color: var(--gold-300); padding: 0 3px; }
+.cb-portrait__hp { width: 36px; height: 4px; border-radius: 4px; background: rgba(0, 0, 0, 0.6); overflow: hidden; }
+.cb-portrait__hp i { display: block; height: 100%; border-radius: 4px; transition: width var(--t-slow); }
+
+.combat-panel { display: flex; flex-direction: column; height: 100%; }
+.combat-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+.combat-panel__tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
+.combat-panel__list { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.combat-panel__foot { padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+.cp-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-md); border: 1px solid transparent; background: rgba(255, 255, 255, 0.02); }
+.cp-row[data-active='true'] { border-color: rgba(236, 201, 118, 0.45); background: rgba(224, 180, 90, 0.09); box-shadow: inset 3px 0 0 var(--gold-400); }
+.cp-row[data-defeated='true'] { opacity: 0.5; }
+.cp-row__init { width: 46px; flex: none; }
+.cp-row__init--ro { text-align: center; font-family: var(--font-display); font-weight: 700; color: var(--gold-300); }
+.cp-row__name { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: var(--text); font-weight: 600; font-size: 13px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-row__timers { display: flex; gap: 3px; flex-wrap: wrap; }
+.cp-row__actions { display: flex; }
+
+@keyframes drop-in { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (max-width: 900px) {
+  .combatbar { top: 58px; max-width: calc(100% - 16px); min-width: 0; }
+}

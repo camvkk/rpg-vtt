@@ -1,10 +1,19 @@
+# Deploy no Render como um único serviço (cliente + servidor + WebSocket).
+# O disco persistente guarda o banco e os uploads entre deploys (a v1 perdia tudo).
 services:
   - type: web
-    name: rpg-vtt-backend
-    runtime: node
-    plan: free
-    buildCommand: npm install
-    startCommand: node server/index.js
+    name: rpg-vtt
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    disk:
+      name: vtt-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
-      - key: NODE_ENV
-        value: production
+      - key: DATA_DIR
+        value: /data
+      - key: MOONSHOT_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false

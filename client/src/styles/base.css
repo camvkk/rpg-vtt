@@ -1,0 +1,121 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--gold-400);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+::selection {
+  background: rgba(224, 180, 90, 0.35);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-600) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ink-600);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Utilities */
+.u-row { display: flex; align-items: center; gap: var(--sp-2); }
+.u-col { display: flex; flex-direction: column; gap: var(--sp-2); }
+.u-grow { flex: 1 1 auto; min-width: 0; }
+.u-wrap { flex-wrap: wrap; }
+.u-between { justify-content: space-between; }
+.u-center { display: flex; align-items: center; justify-content: center; }
+.u-muted { color: var(--text-muted); }
+.u-dim { color: var(--text-dim); }
+.u-gold { color: var(--gold-400); }
+.u-dm { color: var(--arcane-400); }
+.u-danger { color: var(--blood-400); }
+.u-success { color: var(--emerald-400); }
+.u-display { font-family: var(--font-display); letter-spacing: 0.03em; }
+.u-flavor { font-family: var(--font-flavor); font-style: italic; }
+.u-mono { font-family: var(--font-mono); }
+.u-xs { font-size: var(--fs-xs); }
+.u-sm { font-size: var(--fs-sm); }
+.u-lg { font-size: var(--fs-lg); }
+.u-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-tabular { font-variant-numeric: tabular-nums; }
+.u-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.u-scroll { overflow: auto; min-height: 0; }
+.u-gap-1 { gap: var(--sp-1); }
+.u-gap-3 { gap: var(--sp-3); }
+.u-gap-4 { gap: var(--sp-4); }
+.u-mt-2 { margin-top: var(--sp-2); }
+.u-mt-3 { margin-top: var(--sp-3); }
+.u-p-3 { padding: var(--sp-3); }
+.u-p-4 { padding: var(--sp-4); }

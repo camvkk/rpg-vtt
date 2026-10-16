@@ -1,301 +1,70 @@
-# RPG VTT Backend
+# RPG VTT v2 — Mesa Virtual Dark Fantasy
 
-A modern Virtual Tabletop backend for D&D and other tabletop RPGs. Built with Node.js, Express, Socket.io, and SQLite.
+Mesa virtual para D&D 5e (SRD 5.1) feita para abrir e jogar: sem cadastro, em tempo real, no navegador (computador ou celular).
 
-## Features
+## O que tem
 
-- **Room Management**: Create and join rooms with 6-character codes
-- **Real-time Multiplayer**: WebSocket-based synchronization
-- **Token System**: Add, move, and manage character/monster tokens
-- **Map Support**: Upload and change battle maps
-- **Fog of War**: Reveal areas as players explore
-- **Advanced Dice Roller**: Supports complex notation (2d20kh1, 4d6kh3, etc.)
-- **Initiative Tracker**: Roll initiative and track turn order
-- **Chat System**: In-game chat with whisper support
-- **Ambiance Control**: Background music and sound effects
+**Mapa vivo (PixiJS 8)**
+- Iluminação dinâmica: tochas, lampiões, magias de luz e luar recortados por paredes, com chama tremulando e brilho colorido.
+- Visão por jogador: cada um vê o que seus tokens veem (linha de visão + luz + visão no escuro), com memória das áreas já exploradas.
+- Paredes, portas (abrir/fechar/trancar, portas secretas que parecem paredes), janelas e véus.
+- Névoa manual do Mestre (retângulo, círculo, polígono), ciclo dia/noite, clima com partículas (chuva, tempestade com relâmpagos, neve, neblina, brasas, cinzas, folhas, areia).
+- Grade quadrada ou hexagonal com alinhamento fino, régua compartilhada com as regras de diagonal do 5e, pings, desenhos e notas no mapa.
+- Áreas de magia (esfera, cone, linha, cubo) que destacam as casas atingidas e já marcam os alvos.
 
-## Quick Start
+**Regras automatizadas (5e)**
+- Ficha completa com cálculo automático (modificadores, perícias, CA com armadura/escudo/Defesa sem Armadura, CD de magia) e rolagem com um clique (Shift = vantagem, Ctrl = desvantagem).
+- Ataques contra a CA de cada alvo com card no chat (acerto/erro/crítico), dano dobrado no crítico e botão do Mestre para aplicar dano (½, ×1, ×2).
+- Magias com espaços de magia, conjuração em nível superior, salvaguardas automáticas dos NPCs e pendentes para os jogadores.
+- Combate com iniciativa, turnos, rodadas, condições com duração, testes de morte e lembrete de concentração.
+- Compêndio SRD em PT-BR: 319 magias, monstros, itens, condições, raças, classes e antecedentes.
+
+**Mesa**
+- Dados 3D com física (o resultado vem do servidor e todos veem o mesmo rolar).
+- Chat com comandos (`/r`, `/gr`, `/br`, `/w`, `/me`, `/ooc`, `/desc`), falar como personagem e sussurros.
+- Diário/handouts com markdown, compartilhamento por jogador e "mostrar para todos".
+- Áudio sincronizado: trilhas, ambientes procedurais (taverna, floresta, masmorra, tempestade…) e efeitos sonoros.
+- Oráculo do Mestre (IA via Kimi): NPCs com ficha, descrição de cena, encontros balanceados, regras, resumo da sessão, nomes e tesouros.
+
+**Base sólida**
+- Servidor autoritativo: toda ação passa por validação (zod) e checagem de permissão; jogadores recebem só o que podem ver.
+- Reconexão automática com token de sessão; SQLite embutido do Node (sem dependências nativas); uploads verificados por assinatura de arquivo.
+
+## Rodando
+
+Requer **Node 24+**.
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
-
-# Or start production server
-npm start
 ```
 
-Server runs on port 3001 by default.
+Abra http://localhost:5173. O servidor roda em :3001 (o Vite faz o proxy).
 
-## API Endpoints
+Para jogar com amigos pela internet a partir do seu PC:
 
-### Health Checks
-- `GET /` - Server status and health check
-- `GET /api/rooms` - List all active rooms (for debugging)
-
-## Socket.io Events
-
-### Client → Server
-
-#### Room Management
-- `room:create` - Create a new room
-  ```js
-  socket.emit('room:create', { dmName: 'GameMaster' }, (response) => {
-    // response.success, response.room
-  });
-  ```
-
-- `room:join` - Join an existing room
-  ```js
-  socket.emit('room:join', { 
-    code: 'ABC123', 
-    playerName: 'Player1', 
-    avatar: 'wizard.png' 
-  }, (response) => {
-    // response.success, response.room
-  });
-  ```
-
-#### Token Management
-- `token:add` - Add new token to map (DM only)
-  ```js
-  socket.emit('token:add', {
-    name: 'Goblin',
-    x: 100,
-    y: 150,
-    image_url: '/tokens/goblin.png',
-    hp_current: 25,
-    hp_max: 25
-  });
-  ```
-
-- `token:move` - Move token on map
-  ```js
-  socket.emit('token:move', {
-    tokenId: 'token-uuid',
-    x: 200,
-    y: 300
-  });
-  ```
-
-- `token:update` - Update token properties
-  ```js
-  socket.emit('token:update', {
-    tokenId: 'token-uuid',
-    updates: {
-      hp_current: 15,
-      conditions: ['poisoned', 'prone']
-    }
-  });
-  ```
-
-- `token:remove` - Remove token from map
-  ```js
-  socket.emit('token:remove', { tokenId: 'token-uuid' });
-  ```
-
-#### Map Control
-- `map:set` - Change active map (DM only)
-  ```js
-  socket.emit('map:set', { mapUrl: '/maps/dungeon.jpg' });
-  ```
-
-#### Fog of War
-- `fog:reveal` - Reveal area of map (DM only)
-  ```js
-  socket.emit('fog:reveal', {
-    x: 250,
-    y: 300,
-    radius: 100
-  });
-  ```
-
-- `fog:clear` - Clear all fog (DM only)
-  ```js
-  socket.emit('fog:clear');
-  ```
-
-#### Dice Rolling
-- `dice:roll` - Roll dice
-  ```js
-  socket.emit('dice:roll', {
-    notation: '1d20+5',
-    isSecret: false  // DM can roll secretly
-  });
-  ```
-
-#### Chat
-- `chat:send` - Send chat message
-  ```js
-  socket.emit('chat:send', {
-    message: 'Hello everyone!',
-    isWhisper: false,
-    targetPlayer: null  // for whispers
-  });
-  ```
-
-#### Initiative Tracking
-- `initiative:roll` - Roll initiative for player
-  ```js
-  socket.emit('initiative:roll', {
-    playerId: 'player-uuid',  // optional, defaults to current player
-    modifier: 3
-  });
-  ```
-
-- `initiative:next` - Advance to next turn (DM only)
-  ```js
-  socket.emit('initiative:next');
-  ```
-
-- `initiative:clear` - Clear initiative tracker (DM only)
-  ```js
-  socket.emit('initiative:clear');
-  ```
-
-#### Ambiance
-- `ambiance:set` - Set background music (DM only)
-  ```js
-  socket.emit('ambiance:set', {
-    trackUrl: '/music/tavern.mp3'
-  });
-  ```
-
-### Server → Client
-
-#### Room Events
-- `room:joined` - Player joined room
-- `room:left` - Player left room
-- `room:state` - Complete room state update
-
-#### Game State Events
-- `token:add` - Token added to map
-- `token:move` - Token moved
-- `token:update` - Token updated
-- `token:remove` - Token removed
-- `map:update` - Map changed
-- `fog:reveal` - Fog area revealed
-- `fog:clear` - All fog cleared
-
-#### Dice & Chat
-- `dice:result` - Dice roll result
-- `chat:message` - Chat message received
-
-#### Initiative
-- `initiative:update` - Initiative tracker updated
-
-#### Ambiance
-- `ambiance:change` - Background music changed
-
-## Dice Notation
-
-The system supports advanced dice notation:
-
-### Basic Rolls
-- `1d20` - Single twenty-sided die
-- `2d6` - Two six-sided dice
-- `1d8+3` - One eight-sided die plus 3
-
-### Advantage/Disadvantage
-- `2d20kh1` - Roll 2d20, keep highest (advantage)
-- `2d20kl1` - Roll 2d20, keep lowest (disadvantage)
-
-### Drop/Keep Modifiers
-- `4d6kh3` - Roll 4d6, keep highest 3 (ability scores)
-- `4d6dl1` - Roll 4d6, drop lowest 1 (same as above)
-
-### Rerolls
-- `1d20r1` - Reroll 1s
-- `1d20r<=2` - Reroll 2 or lower
-
-### Exploding Dice
-- `1d6x` - Explode on 6 (roll additional die)
-- `1d10x8` - Explode on 8+ (roll additional die)
-
-### Complex Examples
-- `8d6r1` - Fireball with reroll 1s
-- `2d20kh1+5` - Attack with advantage and +5 bonus
-- `4d6kh3+2d8+1d4` - Multiple dice types
-
-## Database Schema
-
-The backend uses SQLite with the following tables:
-
-### rooms
-- id, code, dm_name, created_at, is_active
-- current_map, ambiance_track, initiative_turn
-
-### players
-- id, room_id, name, avatar, is_dm, socket_id
-- joined_at, is_connected
-
-### tokens
-- id, room_id, owner_id, name, x, y
-- image_url, size, hp_current, hp_max
-- conditions, initiative, is_visible
-
-### maps
-- id, room_id, name, image_url
-- width, height, grid_size, is_active
-
-### chat_messages
-- id, room_id, player_id, player_name
-- message, message_type, is_whisper, target_player
-
-### fog_of_war
-- id, room_id, x, y, radius, revealed_at
-
-## Architecture
-
-```
-server/
-├── index.js          # Main Express + Socket.io server
-├── db.js             # SQLite database setup and helpers
-├── rooms.js          # Room management (create, join, leave)
-├── game-state.js     # Game state synchronization
-└── dice.js           # Advanced dice parsing and rolling
+```bash
+npm run play
 ```
 
-## Development
+Isso compila o cliente e serve tudo em http://localhost:3001. Exponha a porta com um túnel (ex: `cloudflared tunnel --url http://localhost:3001`) e mande o link.
 
-The server automatically creates a SQLite database in `server/data/rpg-vtt.db` on first run.
+### IA (opcional)
 
-For development, use `npm run dev` which enables auto-restart on file changes.
+Copie `.env.example` para `.env` e defina `MOONSHOT_API_KEY` ou `OPENROUTER_API_KEY`. Sem chave, tudo funciona e só o Oráculo fica desligado.
 
-## Frontend Integration
+### Deploy
 
-This backend is designed to work with a React frontend using Socket.io client. The frontend should connect to `http://localhost:3001` and implement the corresponding client-side event handlers.
+Um único serviço (cliente + API + WebSocket). Há `Dockerfile` e `render.yaml` (Render com disco persistente em `/data`). Qualquer host que rode Docker com volume persistente serve.
 
-Example client connection:
-```js
-import io from 'socket.io-client';
+## Estrutura
 
-const socket = io('http://localhost:3001');
-
-// Join room
-socket.emit('room:join', {
-  code: roomCode,
-  playerName: name,
-  avatar: selectedAvatar
-}, (response) => {
-  if (response.success) {
-    // Update UI with room state
-    setRoomState(response.room);
-  }
-});
-
-// Listen for game events
-socket.on('token:move', (data) => {
-  // Update token position in UI
-});
-
-socket.on('dice:result', (result) => {
-  // Display dice result
-});
+```
+shared/   tipos, protocolo, ações (schema + permissão + reducer), dados, geometria, regras 5e, compêndio
+server/   Express + Socket.IO, salas, projeção por jogador, SQLite, uploads, IA
+client/   React 19 + Vite, motor do mapa (Pixi), painéis, dados 3D, áudio
 ```
 
-## License
+Testes: `npm test` · Tipos: `npm run typecheck`
 
-MIT License
+Conteúdo de regras: System Reference Document 5.1 (CC-BY-4.0).
